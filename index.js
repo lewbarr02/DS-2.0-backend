@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 const express = require('express');
 const { Pool } = require('pg');
@@ -12,7 +13,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-// Simple test route
+// Root route
 app.get('/', (req, res) => {
   res.send('Deli Sandwich API is running!');
 });
@@ -23,25 +24,37 @@ app.get('/leads', async (req, res) => {
     const result = await pool.query('SELECT * FROM leads ORDER BY id DESC');
     res.json(result.rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server error');
+    console.error('Error fetching leads:', err);
+    res.status(500).json({ error: 'Failed to fetch leads' });
   }
 });
 
-// Add a new lead
+// Post a new lead
 app.post('/leads', async (req, res) => {
-  const { name, company, arr, lifecycle_stage } = req.body;
+  const {
+    name, city, state, company, tags, cadence, notes,
+    website, status, net_new, size, arr, obstacle, self_sourced
+  } = req.body;
+
   try {
     const result = await pool.query(
-      'INSERT INTO leads (name, company, arr, lifecycle_stage) VALUES ($1, $2, $3, $4) RETURNING *',
-      [name, company, arr, lifecycle_stage]
+      `INSERT INTO leads (
+        name, city, state, company, tags, cadence, notes,
+        website, status, net_new, size, arr, obstacle, self_sourced
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+      RETURNING *`,
+      [name, city, state, company, tags, cadence, notes,
+        website, status, net_new, size, arr, obstacle, self_sourced]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server error');
+    console.error('Error inserting lead:', err);
+    res.status(500).json({ error: 'Failed to insert lead' });
   }
 });
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+  console.log('Deli Sandwich API is running!');
+  console.log(`Server running on port ${PORT}`);
+});
