@@ -8,6 +8,19 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// 🔐 Token-based auth middleware
+app.use((req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.split(' ')[1];
+
+  if (!token || token !== process.env.API_TOKEN) {
+    return res.status(403).json({ error: 'Forbidden: Invalid API token' });
+  }
+
+  next();
+});
+
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
