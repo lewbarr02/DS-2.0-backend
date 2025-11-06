@@ -6,18 +6,23 @@ const cors = require('cors');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
-
-// 🔐 Token-based auth middleware
+// ✅ Token middleware (toggleable via DISABLE_AUTH)
 app.use((req, res, next) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.split(' ')[1];
+  // TEMP: disable authentication when Railway var is set
+  if (process.env.DISABLE_AUTH === "true") {
+    return next();
+  }
+
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
 
   if (!token || token !== process.env.API_TOKEN) {
-    return res.status(403).json({ error: 'Forbidden: Invalid API token' });
+    return res.status(403).json({ error: "Forbidden: Invalid API token" });
   }
 
   next();
+});
+
 });
 
 
