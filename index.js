@@ -1,78 +1,19 @@
-
-require('dotenv').config();
-const express = require('express');
-const { Pool } = require('pg');
-const cors = require('cors');
+// index.js — minimal starter
+import express from "express";
+import cors from "cors";
+import morgan from "morgan";
 
 const app = express();
 app.use(cors());
-// ✅ Token middleware (toggleable via DISABLE_AUTH)
-app.use((req, res, next) => {
-  // TEMP: disable authentication when Railway var is set
-  if (process.env.DISABLE_AUTH === "true") {
-    return next();
-  }
+app.use(express.json({ limit: "2mb" }));
+app.use(morgan("dev"));
 
-  const authHeader = req.headers.authorization || "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-
-  if (!token || token !== process.env.API_TOKEN) {
-    return res.status(403).json({ error: "Forbidden: Invalid API token" });
-  }
-
-  next();
+app.get("/health", (_req, res) => {
+  res.json({ ok: true, service: "ds-backend", ts: new Date().toISOString() });
 });
 
+const PORT = parseInt(process.env.PORT || "3000", 10);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`[DS] Listening on :${PORT}`);
 });
 
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
-
-// Root route
-app.get('/', (req, res) => {
-  res.send('Deli Sandwich API is running!');
-});
-
-// Get all leads
-app.get('/leads', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM leads ORDER BY id DESC');
-    res.json(result.rows);
-  } catch (err) {
-    console.error('Error fetching leads:', err);
-    res.status(500).json({ error: 'Failed to fetch leads' });
-  }
-});
-
-// Post a new lead
-app.post('/leads', async (req, res) => {
-  const {
-    name, city, state, company, tags, cadence, notes,
-    website, status, net_new, size, arr, obstacle, self_sourced
-  } = req.body;
-
-  try {
-    const result = await pool.query(
-      `INSERT INTO leads (
-        name, city, state, company, tags, cadence, notes,
-        website, status, net_new, size, arr, obstacle, self_sourced
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-      RETURNING *`,
-      [name, city, state, company, tags, cadence, notes,
-        website, status, net_new, size, arr, obstacle, self_sourced]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error('Error inserting lead:', err);
-    res.status(500).json({ error: 'Failed to insert lead' });
-  }
-});
-
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log('Deli Sandwich API is running!');
-  console.log(`Server running on port ${PORT}`);
-});
