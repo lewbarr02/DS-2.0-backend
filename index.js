@@ -1,19 +1,1743 @@
-// index.js — minimal starter
-import express from "express";
-import cors from "cors";
-import morgan from "morgan";
-
+// index.js
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const { Pool } = require('pg');
+const multer = require('multer');
+const { parse } = require('csv-parse');
+const path = require('path');
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "2mb" }));
-app.use(morgan("dev"));
+app.use(express.json());
+app.set('json spaces', 2);
 
-app.get("/health", (_req, res) => {
-  res.json({ ok: true, service: "ds-backend", ts: new Date().toISOString() });
+// ---- Static frontend serving ----
+// All your HTML/JS/images live in ./public now
+const FRONT_DIR = path.join(__dirname, 'public');
+
+// Serve everything in /public (index.html, summary.html, JS, icons, images, etc.)
+app.use(express.static(FRONT_DIR));
+
+// Root -> index page
+app.get('/', (_req, res) => {
+  res.sendFile(path.join(FRONT_DIR, 'index.html'));
 });
 
-const PORT = parseInt(process.env.PORT || "3000", 10);
-app.listen(PORT, "0.0.0.0", () => {
+// Pretty routes that load the same HTML files
+app.get('/launch-summary', (_req, res) => {
+  res.sendFile(path.join(FRONT_DIR, 'summary.html'));
+});
+
+app.get('/daily-queue', (_req, res) => {
+  res.sendFile(path.join(FRONT_DIR, 'daily-queue.html'));
+});
+
+
+// === GEO-CODER HELPERS (AUTO LAT/LONG FILLER) ===
+const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org/search';
+const CONTACT_EMAIL = process.env.NOMINATIM_EMAIL || 'lewis.barr@finexio.com';
+const USER_AGENT = process.env.NOMINATIM_USER_AGENT || `DeliSandwich/1.0 (${CONTACT_EMAIL})`;
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// --- Query-param Boolean helper ---
+function qpBool(v, def = true) {
+  if (v === undefined || v === null || v === '') return def;
+  const s = String(v).toLowerCase();
+  return s === '1' || s === 'true' || s === 'yes';
+}
+// leads | accounts
+function qpCountMode(v) {
+  const s = String(v || 'leads').toLowerCase();
+  return s === 'accounts' ? 'accounts' : 'leads';
+}
+
+
+// === SINGLE ADDRESS GEOCODER ===
+// Calls OpenStreetMap Nominatim and returns { lat, lon } or null
+async function geocodeOne({ company, city, state }) {
+  try {
+    // Build the query string
+    const qParts = [company, city, state].filter(Boolean);
+    const query = encodeURIComponent(qParts.join(', '));
+
+    const url = `${NOMINATIM_BASE}?format=json&q=${query}&limit=1&addressdetails=0&email=${encodeURIComponent(CONTACT_EMAIL)}`;
+    const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const results = await response.json();
+    if (!Array.isArray(results) || results.length === 0) return null;
+
+    const { lat, lon } = results[0];
+    if (!lat || !lon) return null;
+
+    return { lat: parseFloat(lat), lon: parseFloat(lon) };
+  } catch (err) {
+    console.error('geocodeOne() failed:', err.message);
+    return null;
+  }
+}
+
+// Uses only `id` (no uuid column needed)
+async function geocodeMissingLeads({ limit = 25, delayMs = 1000 } = {}) {
+  const client = await pool.connect();
+  let success = 0, failed = 0, processed = 0;
+
+  try {
+    const selectSql = `
+      SELECT id, company, city, state
+      FROM leads
+      WHERE (latitude IS NULL OR longitude IS NULL)
+        AND (COALESCE(city,'') <> '' OR COALESCE(state,'') <> '' OR COALESCE(company,'') <> '')
+      ORDER BY updated_at DESC NULLS LAST
+      LIMIT $1
+    `;
+    const { rows } = await client.query(selectSql, [limit]);
+
+    for (const row of rows) {
+      processed++;
+      try {
+        const geo = await geocodeOne({ company: row.company, city: row.city, state: row.state });
+        if (geo) {
+          await client.query(
+            `UPDATE leads SET latitude=$1, longitude=$2, updated_at=NOW() WHERE id=$3`,
+            [geo.lat, geo.lon, row.id]
+          );
+          success++;
+        } else {
+          failed++;
+        }
+      } catch {
+        failed++;
+      }
+      await new Promise(r => setTimeout(r, delayMs)); // polite throttle
+    }
+  } finally {
+    client.release();
+  }
+
+  return { processed, success, failed };
+}
+
+// --- PG POOL ---
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PG_CONN_STRING,
+  ssl: process.env.PGSSL === 'disable' ? false : { rejectUnauthorized: false }
+});
+
+// --- HEALTH ---
+app.get('/health', (_req, res) => {
+  res.status(200).json({ ok: true, service: 'Deli Sandwich Backend', ts: new Date().toISOString() });
+});
+
+// --- /summary (Finexio-focused, aligned with /api/oneonone) ---
+app.get('/summary', async (req, res) => {
+  try {
+    const { from, to, status } = req.query;
+    const pinnedOnly = qpBool(req.query.pinned_only, true); // default true
+    const countMode  = qpCountMode(req.query.count_mode);
+
+    // Date window – same style as /api/oneonone (to = exclusive)
+    const today = new Date();
+    const end = to ? new Date(to) : today;
+    const start = from ? new Date(from) : new Date(end);
+    if (!from) start.setDate(end.getDate() - 7);
+
+    const pad = n => (n < 10 ? '0' + n : '' + n);
+    const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    const fromStr = ymd(start);
+    const endExclusive = new Date(end);
+    endExclusive.setDate(endExclusive.getDate() + 1);
+    const toStr = ymd(endExclusive);
+
+    const params = [fromStr, toStr];
+
+    // Optional status filter
+    let statusSql = '';
+    if (status && status.trim() !== '') {
+      statusSql = 'AND LOWER(status) = LOWER($3)';
+      params.push(status);
+    }
+
+    // Base set = created_at within window, optional status + pinned filter
+    const baseDedupe = (countMode === 'accounts')
+      ? `
+        base_final AS (
+          SELECT DISTINCT ON (LOWER(company))
+                 id, name, company, status, city, state, arr,
+                 industry, forecast_month, lead_type, source_channel, owner,
+                 last_contacted_at, next_action_at, last_status_change,
+                 tags, created_at, updated_at, latitude, longitude
+          FROM (
+            SELECT *
+            FROM leads
+            WHERE created_at >= $1::date
+              AND created_at <  $2::date
+              ${statusSql}
+              ${pinnedOnly ? 'AND latitude IS NOT NULL AND longitude IS NOT NULL' : ''}
+          ) t
+          ORDER BY LOWER(company), updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+        )
+      `
+      : `
+        base_final AS (
+          SELECT
+            id, name, company, status, city, state, arr,
+            industry, forecast_month, lead_type, source_channel, owner,
+            last_contacted_at, next_action_at, last_status_change,
+            tags, created_at, updated_at, latitude, longitude
+          FROM leads
+          WHERE created_at >= $1::date
+            AND created_at <  $2::date
+            ${statusSql}
+            ${pinnedOnly ? 'AND latitude IS NOT NULL AND longitude IS NOT NULL' : ''}
+        )
+      `;
+
+    const unplacedExpr = (countMode === 'accounts')
+      ? `COUNT(DISTINCT LOWER(company))::int`
+      : `COUNT(*)::int`;
+
+    const sql = `
+      WITH
+      ${baseDedupe},
+      unplaced AS (
+        SELECT ${unplacedExpr} AS unplaced_count
+        FROM leads
+        WHERE created_at >= $1::date
+          AND created_at <  $2::date
+          ${statusSql}
+          AND (latitude IS NULL OR longitude IS NULL)
+      ),
+      activity AS (
+        SELECT
+          COUNT(*) AS total_leads_considered,
+          COUNT(*) FILTER (
+            WHERE last_contacted_at BETWEEN $1::timestamptz AND $2::timestamptz
+          ) AS leads_contacted_window
+        FROM base_final
+      ),
+      arrs AS (
+        SELECT
+          SUM(CASE WHEN LOWER(status) = 'hot'
+                   THEN COALESCE(arr,0) ELSE 0 END) AS hot_arr,
+          SUM(CASE WHEN LOWER(status) = 'warm'
+                   THEN COALESCE(arr,0) ELSE 0 END) AS warm_arr,
+          SUM(
+            CASE WHEN LOWER(status) IN ('converted','hot','warm')
+                      AND COALESCE(arr,0) > 0
+                 THEN COALESCE(arr,0) ELSE 0 END
+          ) AS arr_for_avg,
+          COUNT(*) FILTER (
+            WHERE LOWER(status) IN ('converted','hot','warm')
+              AND COALESCE(arr,0) > 0
+          ) AS deals_for_avg
+        FROM base_final
+      ),
+      by_industry AS (
+        SELECT
+          COALESCE(industry,'—') AS key,
+          COUNT(*) AS leads,
+          ROUND(
+            100.0 * AVG(
+              CASE WHEN LOWER(status) IN ('converted','hot','warm')
+                   THEN 1 ELSE 0 END
+            ),
+            1
+          ) AS conv_pct
+        FROM base_final
+        GROUP BY 1
+        ORDER BY conv_pct DESC, leads DESC
+        LIMIT 8
+      ),
+      by_state AS (
+        SELECT
+          COALESCE(state,'—') AS key,
+          SUM(
+            CASE WHEN LOWER(status) IN ('hot','warm')
+                 THEN COALESCE(arr,0) ELSE 0 END
+          ) AS hw_arr
+        FROM base_final
+        GROUP BY 1
+        ORDER BY hw_arr DESC NULLS LAST
+        LIMIT 12
+      ),
+      counts AS (
+        SELECT
+          COUNT(*) FILTER (WHERE LOWER(status) = 'warm')      AS warm_count,
+          COUNT(*) FILTER (WHERE LOWER(status) = 'hot')       AS hot_count,
+          COUNT(*) FILTER (WHERE LOWER(status) = 'converted') AS converted_count
+        FROM base_final
+      ),
+      status_moves AS (
+        WITH ranked AS (
+          SELECT
+            h.lead_id,
+            h.old_status,
+            h.new_status,
+            h.changed_at,
+            l.tags,
+            CASE
+              WHEN LOWER(COALESCE(h.old_status,'')) = 'converted' THEN 1
+              WHEN LOWER(COALESCE(h.old_status,'')) = 'hot'       THEN 2
+              WHEN LOWER(COALESCE(h.old_status,'')) = 'warm'      THEN 3
+              WHEN LOWER(COALESCE(h.old_status,'')) = 'follow-up' THEN 4
+              WHEN LOWER(COALESCE(h.old_status,'')) = 'research'  THEN 5
+              WHEN LOWER(COALESCE(h.old_status,'')) = 'cold'      THEN 6
+              ELSE 7
+            END AS old_rank,
+            CASE
+              WHEN LOWER(COALESCE(h.new_status,'')) = 'converted' THEN 1
+              WHEN LOWER(COALESCE(h.new_status,'')) = 'hot'       THEN 2
+              WHEN LOWER(COALESCE(h.new_status,'')) = 'warm'      THEN 3
+              WHEN LOWER(COALESCE(h.new_status,'')) = 'follow-up' THEN 4
+              WHEN LOWER(COALESCE(h.new_status,'')) = 'research'  THEN 5
+              WHEN LOWER(COALESCE(h.new_status,'')) = 'cold'      THEN 6
+              ELSE 7
+            END AS new_rank
+          FROM lead_status_history h
+          JOIN leads l ON l.id = h.lead_id
+          WHERE h.changed_at::date >= $1::date
+            AND h.changed_at::date <= ($2::date - INTERVAL '1 day')
+        )
+        SELECT
+          COUNT(*) FILTER (WHERE new_rank < old_rank) AS upgrades,
+          COUNT(*) FILTER (WHERE new_rank > old_rank) AS downgrades,
+          (
+            SELECT t
+            FROM (
+              SELECT LOWER(TRIM(unnest(tags))) AS t
+              FROM ranked
+              WHERE new_rank < old_rank
+                AND tags IS NOT NULL
+            ) up
+            GROUP BY t
+            ORDER BY COUNT(*) DESC
+            LIMIT 1
+          ) AS top_tag_upgrade,
+          (
+            SELECT t
+            FROM (
+              SELECT LOWER(TRIM(unnest(tags))) AS t
+              FROM ranked
+              WHERE new_rank > old_rank
+                AND tags IS NOT NULL
+            ) down
+            GROUP BY t
+            ORDER BY COUNT(*) DESC
+            LIMIT 1
+          ) AS top_tag_downgrade
+        FROM ranked
+      )
+      SELECT
+        (SELECT row_to_json(activity) FROM activity) AS activity,
+        (SELECT json_build_object(
+           'hot_arr',  COALESCE(hot_arr, 0),
+           'warm_arr', COALESCE(warm_arr, 0),
+           'corpv',    COALESCE(hot_arr, 0) + COALESCE(warm_arr, 0),
+           'avg_deal', CASE
+                         WHEN deals_for_avg > 0
+                           THEN ROUND(arr_for_avg / deals_for_avg)
+                         ELSE 0
+                       END
+         ) FROM arrs) AS arr,
+        (SELECT json_agg(row_to_json(r)) FROM by_industry r) AS perf_by_industry,
+        (SELECT json_agg(row_to_json(r)) FROM by_state r)    AS perf_by_state,
+        '[]'::json                                           AS perf_by_tag,
+        (SELECT row_to_json(counts)        FROM counts)      AS counts,
+        (SELECT row_to_json(status_moves)  FROM status_moves) AS pipeline,
+        (SELECT unplaced_count FROM unplaced)                AS unplaced_count,
+        (SELECT json_agg(row_to_json(s)) FROM base_final s)  AS leads
+      ;
+    `;
+
+    const { rows } = await pool.query(sql, params);
+    const payload = rows[0] || {};
+
+    // If tags is not TEXT[] in DB, derive a tag summary from the leads[]
+    if (!payload.perf_by_tag || payload.perf_by_tag.length === 0) {
+      const tagCounter = {};
+      (payload.leads || []).forEach(l => {
+        let tags = [];
+        if (Array.isArray(l.tags)) tags = l.tags;
+        else if (typeof l.tags === 'string') {
+          tags = l.tags.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        tags.forEach(t => {
+          const k = t.toLowerCase();
+          tagCounter[k] = (tagCounter[k] || 0) + 1;
+        });
+      });
+      payload.perf_by_tag = Object.entries(tagCounter)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([key, cnt]) => ({ key, cnt }));
+    }
+
+    res.json({
+      filters: { from: fromStr, to: ymd(end), status: status || '' },
+      metrics: {
+        activity:         payload.activity || {},
+        arr:              payload.arr || { hot_arr:0, warm_arr:0, corpv:0, avg_deal:0 },
+        counts:           payload.counts || { warm_count:0, hot_count:0, converted_count:0 },
+        pipeline:         payload.pipeline || { upgrades:0, downgrades:0, top_tag_upgrade:null, top_tag_downgrade:null },
+        perf_by_industry: payload.perf_by_industry || [],
+        perf_by_state:    payload.perf_by_state || [],
+        perf_by_tag:      payload.perf_by_tag || []
+      },
+      leads:          payload.leads || [],
+      unplaced_count: payload.unplaced_count || 0
+    });
+  } catch (err) {
+    console.error('SUMMARY ERR:', err);
+    res.status(500).json({ error: 'summary_failed' });
+  }
+});
+
+
+
+app.get('/map/summary', async (req, res) => {
+  try {
+    const pinnedOnly = qpBool(req.query.pinned_only, true);
+    const countMode  = qpCountMode(req.query.count_mode);
+
+    const pinnedSqlWhere = pinnedOnly
+      ? 'WHERE latitude IS NOT NULL AND longitude IS NOT NULL'
+      : '';
+
+    // Build ONE SQL string depending on count mode
+    const sql =
+      countMode === 'accounts'
+        ? `
+          SELECT DISTINCT ON (LOWER(company)) *
+          FROM leads
+          ${pinnedSqlWhere}
+          ORDER BY
+            LOWER(company),
+            updated_at DESC NULLS LAST,
+            created_at DESC NULLS LAST
+          LIMIT 2000;
+        `
+        : `
+          SELECT *
+          FROM leads
+          ${pinnedSqlWhere}
+          ORDER BY
+            updated_at DESC NULLS LAST,
+            created_at DESC NULLS LAST
+          LIMIT 2000;
+        `;
+
+    const { rows } = await pool.query(sql);
+    res.json({ count: rows.length, data: rows });
+  } catch (err) {
+    console.error('MAP SUMMARY ERR:', err);
+    res.status(500).json({ error: 'Failed to fetch map rows' });
+  }
+});
+
+
+// ===== 1-on-1 Summary API =====
+// GET /api/oneonone?from=YYYY-MM-DD&to=YYYY-MM-DD  (to is exclusive)
+app.get('/api/oneonone', async (req, res) => {
+  try {
+    const { from, to } = req.query;
+	const pinnedOnly = qpBool(req.query.pinned_only, true); // default true
+	const countMode = qpCountMode(req.query.count_mode);
+
+
+
+    // Defaults: last 7 days if not provided
+    const today = new Date();
+    const end = to ? new Date(to) : today; // we'll make this exclusive
+    const start = from ? new Date(from) : new Date(end);
+    if (!from) start.setDate(end.getDate() - 7);
+
+    const pad = n => (n < 10 ? '0' + n : '' + n);
+    const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    const fromStr = ymd(start);
+    const endExclusive = new Date(end);
+    endExclusive.setDate(endExclusive.getDate() + 1); // make 'to' exclusive
+    const toStr = ymd(endExclusive);
+
+const baseDedupe = (countMode === 'accounts')
+  ? `
+    base_final AS (
+      SELECT DISTINCT ON (LOWER(company))
+             lead_type, industry, status, ap_spend
+      FROM (
+        SELECT
+          COALESCE(lead_type, 'Unspecified') AS lead_type,
+          COALESCE(industry, 'Unspecified')  AS industry,
+          COALESCE(status, 'Unspecified')    AS status,
+          COALESCE(ap_spend, 0)::numeric     AS ap_spend,
+          company,
+          created_at,
+          updated_at
+        FROM leads
+        WHERE created_at >= $1::date
+          AND created_at <  $2::date
+          ${pinnedOnly ? 'AND latitude IS NOT NULL AND longitude IS NOT NULL' : ''}
+      ) t
+      ORDER BY LOWER(company), updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+    )
+  `
+  : `
+    base_final AS (
+      SELECT
+        COALESCE(lead_type, 'Unspecified') AS lead_type,
+        COALESCE(industry, 'Unspecified')  AS industry,
+        COALESCE(status, 'Unspecified')    AS status,
+        COALESCE(ap_spend, 0)::numeric     AS ap_spend
+      FROM leads
+      WHERE created_at >= $1::date
+        AND created_at <  $2::date
+        ${pinnedOnly ? 'AND latitude IS NOT NULL AND longitude IS NOT NULL' : ''}
+    )
+  `;
+
+const unplacedExprO11 = (countMode === 'accounts')
+  ? `COUNT(DISTINCT LOWER(company))::int`
+  : `COUNT(*)::int`;
+
+const sql = `
+  WITH
+  ${baseDedupe},
+  unplaced AS (
+    SELECT ${unplacedExprO11} AS unplaced_count
+    FROM leads
+    WHERE created_at >= $1::date
+      AND created_at <  $2::date
+      AND (latitude IS NULL OR longitude IS NULL)
+  ),
+  type_counts AS (
+    SELECT lead_type AS type, COUNT(*)::int AS count
+    FROM base_final GROUP BY 1 ORDER BY count DESC
+  ),
+  industry_counts AS (
+    SELECT industry, COUNT(*)::int AS count
+    FROM base_final GROUP BY 1 ORDER BY count DESC LIMIT 10
+  ),
+  status_counts AS (
+    SELECT status, COUNT(*)::int AS count
+    FROM base_final GROUP BY 1 ORDER BY count DESC
+  )
+  SELECT
+    (SELECT COUNT(*)::int FROM base_final)                     AS accounts_added,
+    (SELECT COALESCE(SUM(ap_spend),0)::numeric FROM base_final) AS ap_spend_total,
+    (SELECT unplaced_count FROM unplaced)                      AS unplaced_count,
+    (SELECT COALESCE(JSON_AGG(tc), '[]'::json) FROM type_counts tc)     AS type_counts,
+    (SELECT COALESCE(JSON_AGG(ic), '[]'::json) FROM industry_counts ic) AS industry_counts,
+    (SELECT COALESCE(JSON_AGG(sc), '[]'::json) FROM status_counts sc)   AS status_counts;
+`;
+const { rows } = await pool.query(sql, [fromStr, toStr]);
+    const row = rows[0] || {};
+    const total = row.accounts_added || 0;
+    const pct = n => (total > 0 ? Math.round((n / total) * 100) : 0);
+
+    const typeCounts = Array.isArray(row.type_counts) ? row.type_counts : [];
+    const customers = typeCounts.find(t => (t.type || '').toLowerCase() === 'customer')?.count || 0;
+    const partners  = typeCounts.find(t => (t.type || '').toLowerCase() === 'channel partner')?.count || 0;
+
+    res.json({
+      ok: true,
+      data: {
+        period: { from: fromStr, to: toStr }, // to = exclusive
+        accounts_added: total,
+        type_mix: {
+          counts: { customers, partners, other: Math.max(total - customers - partners, 0) },
+          pct: {
+            customers: pct(customers),
+            partners:  pct(partners),
+            other:     pct(Math.max(total - customers - partners, 0))
+          }
+        },
+        ap_spend_total: row.ap_spend_total || 0,
+		unplaced_count: row.unplaced_count || 0,
+        industries: Array.isArray(row.industry_counts) ? row.industry_counts : [],
+        status_breakdown: (Array.isArray(row.status_counts) ? row.status_counts : []).map(s => ({
+          status: s.status, count: s.count, pct: pct(s.count)
+        }))
+      }
+    });
+  } catch (err) {
+    console.error('GET /api/oneonone error:', err);
+    res.status(500).json({ ok: false, error: 'Internal error fetching 1-on-1 summary' });
+  }
+});
+
+// =========================
+// FORECASTING METRICS
+// =========================
+
+// GET /api/forecast?from&to
+app.get('/api/forecast', async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const mode = qpCountMode(req.query.count_mode);
+
+    // 1) Determine date window
+    const today = new Date();
+    const end = to ? new Date(to) : today;
+    const start = from ? new Date(from) : new Date(end);
+    if (!from) start.setDate(end.getDate() - 7);
+
+    const pad = (n) => (n < 10 ? "0"+n : ""+n);
+    const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+    const fromStr = ymd(start);
+    const endExclusive = new Date(end);
+    endExclusive.setDate(endExclusive.getDate() + 1);
+    const toStr = ymd(endExclusive);
+
+    // 2) Calculate forecasting KPIs
+    const SQL = `
+      WITH scoped AS (
+        SELECT *
+        FROM leads
+        WHERE created_at >= $1::date
+          AND created_at <  $2::date
+      )
+      SELECT
+        COUNT(*) FILTER (WHERE status ILIKE 'hot' OR status ILIKE 'warm') AS hw_count,
+        COUNT(*) FILTER (WHERE status ILIKE 'converted') AS conv_count,
+        SUM(CASE WHEN status ILIKE 'hot' OR status ILIKE 'warm'
+                 THEN COALESCE(arr,0) ELSE 0 END) AS hw_arr,
+        SUM(CASE WHEN status ILIKE 'converted'
+                 THEN COALESCE(arr,0) ELSE 0 END) AS conv_arr
+      FROM scoped;
+    `;
+
+    const { rows } = await pool.query(SQL, [fromStr, toStr]);
+    const m = rows[0] || {};
+
+    // Finexio quota assumptions (you can change these later)
+    const QUOTA_MEETINGS = 10;  // monthly target
+    const DAYS_IN_PERIOD = 30;
+
+    const actualMeetings = Number(m.conv_count || 0);
+    const conversionRate = m.hw_count ? actualMeetings / m.hw_count : 0;
+
+    const quotaPercent = Math.round((actualMeetings / QUOTA_MEETINGS) * 100);
+    const pipelineCoverage = m.hw_arr ? (m.hw_arr / (QUOTA_MEETINGS * 1000)) : 0;
+
+    const dailyRequired = QUOTA_MEETINGS / DAYS_IN_PERIOD;
+    const daysElapsed = (end - start) / (1000*3600*24);
+    const dailyActual = daysElapsed > 0 ? actualMeetings / daysElapsed : 0;
+
+    let pacing = "on_track";
+    if (dailyActual < dailyRequired * 0.7) pacing = "off_pace";
+    else if (dailyActual < dailyRequired) pacing = "slightly_behind";
+
+    return res.json({
+      ok: true,
+      data: {
+        quota_percent: quotaPercent,
+        meetings_forecast: actualMeetings,
+        pipeline_coverage: Number(pipelineCoverage.toFixed(1)),
+        conversion_rate: Math.round(conversionRate * 100),
+        daily_required: Number(dailyRequired.toFixed(2)),
+        daily_required_actual: Number(dailyActual.toFixed(2)),
+        pacing
+      }
+    });
+  } catch (err) {
+    console.error("FORECAST ERR:", err);
+    res.status(500).json({ ok:false, error:"forecast_failed" });
+  }
+});
+
+
+// =========================
+// DAILY QUEUE ENGINE
+// =========================
+
+// Helper: clamp batch size
+function normalizeBatchSize(raw) {
+  const n = parseInt(raw, 10);
+  if (Number.isNaN(n) || n <= 0) return 20;
+  if (n < 5) return 5;
+  if (n > 100) return 100;
+  return n;
+}
+
+// POST /api/daily-queue/generate
+// Body: { batch_size?: number, industries?: string[] }
+app.post('/api/daily-queue/generate', async (req, res) => {
+  const rawSize = req.body?.batch_size;
+  const size = normalizeBatchSize(rawSize);
+  const industries = Array.isArray(req.body?.industries)
+    ? req.body.industries.filter(Boolean)
+    : [];
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1) Pick candidate leads according to priority rules
+    const params = [size];
+    let industryFilterSql = '';
+    if (industries.length) {
+      params.push(industries);
+      industryFilterSql = 'AND l.industry = ANY($2)';
+    }
+
+    const pickSql = `
+      WITH candidate AS (
+        SELECT
+          l.*,
+          CASE
+            WHEN LOWER(COALESCE(l.status, '')) = 'hot'         THEN 1
+            WHEN LOWER(COALESCE(l.status, '')) = 'warm'        THEN 2
+            WHEN LOWER(COALESCE(l.status, '')) = 'unspecified' THEN 3
+            WHEN LOWER(COALESCE(l.status, '')) = 'follow-up'   THEN 4
+            WHEN LOWER(COALESCE(l.status, '')) = 'research'    THEN 5
+            WHEN LOWER(COALESCE(l.status, '')) = 'cold'        THEN 6
+            ELSE 7
+          END AS status_rank,
+          CASE
+            WHEN l.next_touch_at IS NOT NULL AND l.next_touch_at <= NOW() THEN 0
+            WHEN l.last_touch_at IS NULL                                  THEN 1
+            WHEN l.last_touch_at <= NOW() - INTERVAL '4 days'            THEN 2
+            ELSE 3
+          END AS touch_rank
+        FROM leads l
+        WHERE COALESCE(l.is_retired, false) = false
+          AND LOWER(COALESCE(l.status, '')) NOT IN ('converted','no fit','no_fit')
+          ${industryFilterSql}
+
+      )
+      SELECT *
+      FROM candidate
+      ORDER BY
+        status_rank ASC,
+        touch_rank ASC,
+        COALESCE(last_touch_at, '1970-01-01'::timestamptz) ASC
+      LIMIT $1;
+    `;
+
+    const { rows: picked } = await client.query(pickSql, params);
+    if (!picked.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        ok: false,
+        error: 'no_candidates',
+        message: 'No eligible leads found for a new daily queue.',
+      });
+    }
+
+    const requestedSize = size;
+    const actualSize = picked.length;
+
+    // 2) Create batch row
+    const batchSql = `
+      INSERT INTO daily_batches (batch_date, batch_size)
+      VALUES (CURRENT_DATE, $1)
+      RETURNING id, created_at, batch_date, batch_size, is_completed;
+    `;
+
+    const { rows: batchRows } = await client.query(batchSql, [requestedSize]);
+    const batch = batchRows[0];
+
+    // 3) Insert items
+    const itemSql = `
+      INSERT INTO daily_batch_items (batch_id, lead_id, position)
+      VALUES ($1, $2, $3)
+      RETURNING id, batch_id, lead_id, position, is_completed, is_skipped;
+    `;
+    const items = [];
+    for (let i = 0; i < picked.length; i++) {
+      const lead = picked[i];
+      const { rows: itemRows } = await client.query(itemSql, [
+        batch.id,
+        lead.id,          // UUID
+        i + 1,            // position starts at 1
+      ]);
+      const item = itemRows[0];
+
+      items.push({
+        // Batch item metadata
+        item_id: item.id,
+        batch_id: item.batch_id,
+        lead_id: item.lead_id,
+        position: item.position,
+        is_completed: item.is_completed,
+        is_skipped: item.is_skipped,
+
+        // 🔽 Flattened lead fields for Daily Queue cards
+        id: lead.id,
+        name: lead.name,
+        company: lead.company,
+        city: lead.city,
+        state: lead.state,
+        status: lead.status,
+        industry: lead.industry,
+
+        // touch fields
+        last_touch_at: lead.last_touch_at,
+        next_touch_at: lead.next_touch_at,
+		 next_action_at: lead.next_action_at,
+        // fallback for “Last touch” if needed
+        last_activity_at: lead.last_contacted_at || lead.last_touch_at || null,
+
+        // full lead object preserved for future use
+        lead,
+      });
+    }
+
+
+    await client.query('COMMIT');
+
+    return res.json({
+      ok: true,
+      batch: {
+        id: batch.id,
+        created_at: batch.created_at,
+        batch_size_requested: requestedSize,
+        batch_size_actual: actualSize,
+        is_completed: batch.is_completed,
+      },
+      items,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('POST /api/daily-queue/generate error:', err);
+    return res.status(500).json({ ok: false, error: 'generate_failed' });
+  } finally {
+    client.release();
+  }
+});
+
+// GET /api/daily-queue/current
+app.get('/api/daily-queue/current', async (_req, res) => {
+  const client = await pool.connect();
+  try {
+    const batchSql = `
+      SELECT id, created_at, batch_size, is_completed
+      FROM daily_batches
+      WHERE COALESCE(is_completed, false) = false
+      ORDER BY created_at DESC
+      LIMIT 1;
+    `;
+    const { rows: batchRows } = await client.query(batchSql);
+    if (!batchRows.length) {
+      return res.status(404).json({ ok: false, error: 'no_active_batch' });
+    }
+    const batch = batchRows[0];
+
+    const itemsSql = `
+      SELECT
+        dbi.id          AS item_id,
+        dbi.batch_id,
+        dbi.position,
+        dbi.is_completed,
+        dbi.completed_at,
+        dbi.is_skipped,
+        dbi.skipped_reason,
+        l.*
+      FROM daily_batch_items dbi
+      JOIN leads l ON l.id = dbi.lead_id
+      WHERE dbi.batch_id = $1
+      ORDER BY dbi.position ASC;
+    `;
+    const { rows: rows } = await client.query(itemsSql, [batch.id]);
+
+    const total = rows.length;
+    const done = rows.filter(r => r.is_completed).length;
+    const skipped = rows.filter(r => r.is_skipped).length;
+
+    const items = rows.map(r => ({
+      // Batch item metadata
+      item_id: r.item_id,
+      batch_id: r.batch_id,
+      position: r.position,
+      is_completed: r.is_completed,
+      completed_at: r.completed_at,
+      is_skipped: r.is_skipped,
+      skipped_reason: r.skipped_reason,
+
+      // 🔽 Flattened lead fields for Daily Queue cards
+      id: r.id,
+      name: r.name,
+      company: r.company,
+      city: r.city,
+      state: r.state,
+      status: r.status,
+      industry: r.industry,
+
+      last_touch_at: r.last_touch_at,
+      next_touch_at: r.next_touch_at,
+	  next_action_at: r.next_action_at, 
+      // fallback for Last touch if needed
+      last_activity_at: r.last_contacted_at || r.last_touch_at || null,
+
+      // full lead object preserved
+      lead: {
+        id: r.id,
+        name: r.name,
+        company: r.company,
+        city: r.city,
+        state: r.state,
+        status: r.status,
+        industry: r.industry,
+        forecast_month: r.forecast_month,
+        lead_type: r.lead_type,
+        arr: r.arr,
+        ap_spend: r.ap_spend,
+        tags: r.tags,
+        notes: r.notes,
+        last_touch_at: r.last_touch_at,
+        next_touch_at: r.next_touch_at,
+        last_status_change: r.last_status_change,
+        is_retired: r.is_retired,
+        latitude: r.latitude,
+        longitude: r.longitude,
+      },
+    }));
+
+
+    return res.json({
+      ok: true,
+      batch: {
+        id: batch.id,
+        created_at: batch.created_at,
+        batch_size: batch.batch_size,
+        is_completed: batch.is_completed,
+        progress: {
+          total,
+          done,
+          skipped,
+          remaining: Math.max(total - done - skipped, 0),
+        },
+      },
+      items,
+    });
+  } catch (err) {
+    console.error('GET /api/daily-queue/current error:', err);
+    return res.status(500).json({ ok: false, error: 'current_failed' });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/daily-queue/item/:id/done
+// Body: { new_status?, action_type?, notes?, next_touch_choice?, next_touch_at? }
+app.post('/api/daily-queue/item/:id/done', async (req, res) => {
+  const itemId = req.params.id;
+  const {
+    new_status,
+    action_type,       // "call" | "email" | "social"
+    notes,
+    next_touch_choice, // "tomorrow" | "3_days" | "next_week" | "later_this_month" | "custom"
+    next_touch_at,     // only used when choice === "custom"
+  } = req.body || {};
+
+  const client = await pool.connect();
+
+  // We'll compute an activity payload but insert it *after* the main transaction
+  let activityPayload = null;
+
+  try {
+    await client.query('BEGIN');
+
+    // 1) Load item + lead (lock row for this item)
+    const loadSql = `
+      SELECT
+        dbi.id      AS item_id,
+        dbi.batch_id,
+        dbi.lead_id,
+        l.status    AS old_status
+      FROM daily_batch_items dbi
+      JOIN leads l ON l.id = dbi.lead_id
+      WHERE dbi.id = $1
+      FOR UPDATE;
+    `;
+    const { rows } = await client.query(loadSql, [itemId]);
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'item_not_found' });
+    }
+    const item = rows[0];
+
+    const oldStatus = (item.old_status || '').toString();
+    const newStatusRaw = new_status || oldStatus;
+    const newStatus = normalizeStatus(newStatusRaw);
+
+    // 2) Compute next_touch_at (explicit date → choice → offset)
+    let nextTouch = null;
+
+    if (next_touch_at) {
+      // Custom date string from the UI, e.g. "2025-11-30"
+      const d = new Date(next_touch_at);
+      if (!Number.isNaN(d.getTime())) {
+        nextTouch = d;
+      }
+    } else if (next_touch_choice) {
+      const base = new Date();
+      base.setHours(12, 0, 0, 0);
+
+      let offsetDays = 0;
+      switch (next_touch_choice) {
+        case 'tomorrow':
+          offsetDays = 1;
+          break;
+        case '3_days':
+          offsetDays = 3;
+          break;
+        case 'next_week':
+          offsetDays = 7;
+          break;
+        case 'later_this_month':
+          offsetDays = 14;
+          break;
+        case 'custom':
+          // handled above via next_touch_at
+          offsetDays = 0;
+          break;
+        default:
+          offsetDays = 0;
+      }
+
+      if (offsetDays > 0) {
+        base.setDate(base.getDate() + offsetDays);
+        nextTouch = base;
+      }
+    }
+
+    // 3) Update lead status / retirement / touch dates
+    const isRetired =
+      ['converted', 'no fit', 'no_fit'].includes(newStatus.toLowerCase());
+
+    const updateLeadSql = `
+      UPDATE leads
+      SET
+        status        = $1,
+        is_retired    = $2,
+        last_touch_at = NOW(),
+        next_touch_at = COALESCE($3::timestamptz, next_touch_at),
+        updated_at    = NOW()
+      WHERE id = $4
+      RETURNING id;
+    `;
+    await client.query(updateLeadSql, [
+      newStatus,
+      isRetired,
+      nextTouch,
+      item.lead_id,
+    ]);
+
+    // 4) Prepare activity payload (we'll insert after COMMIT)
+    if (action_type) {
+      activityPayload = {
+        lead_id: item.lead_id,
+        activity_type: action_type,
+        notes: notes || null,
+        status_before: oldStatus || null,
+        status_after: newStatus || null,
+      };
+    }
+
+    // 5) Insert into lead_status_history if status changed
+    if (oldStatus.toLowerCase() !== newStatus.toLowerCase()) {
+      const historySql = `
+        INSERT INTO lead_status_history
+          (lead_id, old_status, new_status, changed_at, changed_by, note)
+        VALUES ($1, $2, $3, NOW(), $4, $5);
+      `;
+      await client.query(historySql, [
+        item.lead_id,
+        oldStatus || null,
+        newStatus,
+        null,
+        notes || null,
+      ]);
+    }
+
+    // 6) Mark batch item as completed
+    const updateItemSql = `
+      UPDATE daily_batch_items
+      SET
+        is_completed   = TRUE,
+        completed_at   = NOW(),
+        is_skipped     = FALSE,
+        skipped_reason = NULL
+      WHERE id = $1;
+    `;
+    await client.query(updateItemSql, [itemId]);
+
+    // 7) If all items are done/skipped, close the batch
+    const progressSql = `
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE is_completed OR is_skipped) AS done
+      FROM daily_batch_items
+      WHERE batch_id = $1;
+    `;
+    const { rows: progRows } = await client.query(progressSql, [item.batch_id]);
+    const prog = progRows[0];
+    if (prog && Number(prog.total) > 0 && Number(prog.total) === Number(prog.done)) {
+      await client.query(
+        'UPDATE daily_batches SET is_completed = TRUE WHERE id = $1;',
+        [item.batch_id]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    // 8) Best-effort: log activity AFTER COMMIT so it can't break Done flow
+    if (activityPayload) {
+      const pieces = [];
+
+      // Activity type label (CALL / EMAIL / SOCIAL)
+      if (activityPayload.activity_type) {
+        const typeLabel = activityPayload.activity_type.toString().toUpperCase();
+        pieces.push(typeLabel);
+      }
+
+      // Status change (warm → hot)
+      if (
+        activityPayload.status_before &&
+        activityPayload.status_after &&
+        activityPayload.status_before.toLowerCase() !==
+          activityPayload.status_after.toLowerCase()
+      ) {
+        pieces.push(
+          `${activityPayload.status_before} → ${activityPayload.status_after}`
+        );
+      }
+
+      // Short notes snippet
+      if (activityPayload.notes) {
+        const trimmed = activityPayload.notes.length > 80
+          ? activityPayload.notes.slice(0, 77) + '...'
+          : activityPayload.notes;
+        pieces.push(`“${trimmed}”`);
+      }
+
+      const summary = pieces.join(' — ');
+
+      // 🔹 Match your actual activities schema:
+      // id | created_at | lead_id | happened_at | type | summary | meta
+      const activitySql = `
+        INSERT INTO activities (
+          lead_id,
+          happened_at,
+          type,
+          summary
+        )
+        VALUES ($1, NOW(), $2, $3)
+        RETURNING id;
+      `;
+      const values = [
+        activityPayload.lead_id,
+        activityPayload.activity_type,
+        summary || null,
+      ];
+
+      try {
+        const { rows: actRows } = await client.query(activitySql, values);
+        const activityId = actRows[0] ? actRows[0].id : null;
+        console.log('[Daily Queue] Logged activity', {
+          activity_id: activityId,
+          lead_id: activityPayload.lead_id,
+          type: activityPayload.activity_type,
+        });
+      } catch (activityErr) {
+        console.error(
+          'Warning: failed to insert activity after done (non-fatal)',
+          activityErr
+        );
+        // Do NOT throw – the Done operation already succeeded
+      }
+	 } // <-- close if (activityPayload)
+
+
+    return res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('POST /api/daily-queue/item/:id/done error:', err);
+    return res.status(500).json({ ok: false, error: 'item_done_failed' });
+  } finally {
+    client.release();
+  }
+});
+
+
+
+
+// POST /api/daily-queue/item/:id/skip
+// Body: { reason? }
+app.post('/api/daily-queue/item/:id/skip', async (req, res) => {
+  const itemId = req.params.id;
+  const { reason } = req.body || {};
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const loadSql = `
+      SELECT id, batch_id
+      FROM daily_batch_items
+      WHERE id = $1
+      FOR UPDATE;
+    `;
+    const { rows } = await client.query(loadSql, [itemId]);
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'item_not_found' });
+    }
+    const item = rows[0];
+
+    const updateItemSql = `
+      UPDATE daily_batch_items
+      SET
+        is_skipped      = TRUE,
+        skipped_reason  = $2,
+        is_completed    = FALSE,
+        completed_at    = NULL
+      WHERE id = $1;
+    `;
+    await client.query(updateItemSql, [itemId, reason || null]);
+
+    // Check if batch is now fully done/skipped
+    const progressSql = `
+      SELECT
+        COUNT(*) AS total,
+        COUNT(*) FILTER (WHERE is_completed OR is_skipped) AS done
+      FROM daily_batch_items
+      WHERE batch_id = $1;
+    `;
+    const { rows: progRows } = await client.query(progressSql, [item.batch_id]);
+    const prog = progRows[0];
+    if (prog && Number(prog.total) > 0 && Number(prog.total) === Number(prog.done)) {
+      await client.query(
+        `UPDATE daily_batches SET is_completed = TRUE WHERE id = $1;`,
+        [item.batch_id]
+      );
+    }
+
+    await client.query('COMMIT');
+    return res.json({ ok: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('POST /api/daily-queue/item/:id/skip error:', err);
+    return res.status(500).json({ ok: false, error: 'item_skip_failed' });
+  } finally {
+    client.release();
+  }
+});
+
+
+// =========================
+// CSV IMPORT
+// =========================
+
+/**
+ * Final CSV header order (case-insensitive matching in importer):
+ * Name,Company,Industry,Owner,City,State,Status,Tags,Cadence Name,Source,Source Channel,
+ * Conversion Stage,ARR,AP Spend,Size,Obstacle,Net New,Self Sourced,Engagement Score,
+ * Last Contacted At,Next Action At,Last Status Change,Notes,Latitude,Longitude,Website
+ *
+ * Minimal required: Name, Company
+ */
+const REQUIRED_HEADERS = ['name', 'company'];
+const OPTIONAL_HEADERS = [
+  'industry','owner','city','state','status','tags','cadence name','source','source channel',
+  'conversion stage','arr','ap spend','size','obstacle','net new','self sourced','engagement score',
+  'last contacted at','next action at','last status change','notes','latitude','longitude','website',
+  // 🆕 add:
+  'forecast month','lead type'
+];
+
+const ALL_HEADERS = [...REQUIRED_HEADERS, ...OPTIONAL_HEADERS];
+
+// Map CSV -> DB columns
+const FIELD_MAP = {
+  'name':'name',
+  'company':'company',
+  'industry':'industry',
+  'owner':'owner',
+  'city':'city',
+  'state':'state',
+  'status':'status',
+  'tags':'tags',
+  'cadence name':'cadence_name',
+  'source':'source',
+  'source channel':'source_channel',
+  'conversion stage':'conversion_stage',
+  'arr':'arr',
+  'ap spend':'ap_spend',
+  'size':'size',
+  'obstacle':'obstacle',
+  'net new':'net_new',
+  'self sourced':'self_sourced',
+  'engagement score':'engagement_score',
+  'last contacted at':'last_contacted_at',
+  'next action at':'next_action_at',
+  'last status change':'last_status_change',
+  'notes':'notes',
+  'latitude':'latitude',
+  'longitude':'longitude',
+  'website':'website',
+  // NEW CSV headers → DB columns
+  'forecast month': 'forecast_month',
+  'lead type': 'lead_type'
+};
+
+// --- Status normalization ---
+const ALLOWED_STATUS = new Set([
+  'converted','hot','warm','cold','research','follow-up','unspecified'
+]);
+
+function normalizeStatus(v) {
+  const s = (v ?? '').toString().trim().toLowerCase();
+  const aliases = {
+    'wam': 'warm',
+    'wrm': 'warm',
+    'w': 'warm',
+    'h': 'hot',
+    'c': 'cold',
+    'r': 'research',
+    'prospect': 'research',
+    'followup': 'follow-up',
+    'follow up': 'follow-up',
+    '': 'unspecified'
+  };
+  const mapped = aliases[s] || s;
+  return ALLOWED_STATUS.has(mapped) ? mapped : 'unspecified';
+}
+
+function toNumber(v) {
+  const s = String(v ?? '').replace(/[\$,]/g, '').trim();
+  if (s === '' || isNaN(Number(s))) return null;
+  return Number(s);
+}
+function toBool(v) {
+  if (v == null) return false;
+  const s = String(v).trim().toLowerCase();
+  return ['true','yes','y','1','t'].includes(s);
+}
+function toDate(v) {
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// storage in memory is fine for <10MB CSVs; switch to disk if needed
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+/** Normalize a single CSV row into DB-ready shape */
+function normalizeRow(rowObj) {
+  const obj = {};
+  // copy mapped fields, trimming strings
+  for (const [csvKey, dbKey] of Object.entries(FIELD_MAP)) {
+    const v = rowObj[csvKey] ?? rowObj[String(csvKey).toLowerCase()];
+    if (v === undefined) continue;
+
+    if (dbKey === 'tags') {
+      // split on comma or semicolon into text[]
+      if (typeof v === 'string' && v.trim() !== '') {
+        obj.tags = v.split(/[;,]/g).map(s => s.trim()).filter(Boolean);
+      } else {
+        obj.tags = []; // never null
+      }
+    } else if (['arr','ap_spend','engagement_score'].includes(dbKey)) {
+      obj[dbKey] = toNumber(v);
+    } else if (['latitude','longitude'].includes(dbKey)) {
+      const num = String(v).trim();
+      obj[dbKey] = num === '' || isNaN(Number(num)) ? null : Number(num);
+    } else if (['net_new','self_sourced'].includes(dbKey)) {
+      obj[dbKey] = toBool(v);
+    } else if (['last_contacted_at','next_action_at','last_status_change'].includes(dbKey)) {
+      obj[dbKey] = toDate(v);
+    } else {
+      const s = typeof v === 'string' ? v.trim() : v;
+      obj[dbKey] = s === '' ? null : s;
+    }
+  }
+
+  // enforce required
+  if (!obj.name || !obj.company) {
+    throw new Error('Missing required fields: name, company');
+  }
+
+  // status cleanup if present
+  if (obj.status) obj.status = normalizeStatus(obj.status);
+
+  return obj;
+}
+
+// Template download (keeps Notes near end; Lat/Lon last-ish)
+app.get('/import/template', (_req, res) => {
+  const header = [
+    'Name','Company','Industry','Owner','City','State','Status','Tags','Cadence Name','Source','Source Channel',
+    'Conversion Stage','ARR','AP Spend','Size','Obstacle','Net New','Self Sourced','Engagement Score',
+    'Last Contacted At','Next Action At','Last Status Change','Notes','Latitude','Longitude',
+    'Forecast Month','Lead Type','Website'
+  ].join(',');
+
+  const body = [
+    // row 1
+    'Jane Doe,Acme Components,Manufacturing,Lewis Barr,Charlotte,NC,hot,"AP,ERP",Q4 Outreach,ZoomInfo,LinkedIn,Qualified,25000,30000000,MM,Timing gate,true,true,82,2025-11-08 10:00,2025-11-12 09:00,2025-11-08 10:05,"Champion loves Finexio.",35.2271,-80.8431,November,Customer,https://acme.com',
+    // row 2
+    'John Smith,Blue Pine Hotels,Hospitality,Lewis Barr,Los Angeles,CA,warm,"Hotels,West",Inbound follow-up,CSV Upload,Inbound,Discovery,18000,,ENT,,false,true,,2025-11-07,2025-11-13,,,"",,October,Channel Partner,https://bluepine.example'
+  ].join('\n');
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="deli_import_template.csv"');
+  res.send(header + '\n' + body + '\n');
+});
+
+	
+// Upload & import
+app.post('/import/csv', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded. Use form field name "file".' });
+    }
+
+    // Parse CSV into rows (lower-cased headers)
+    const rows = [];
+    await new Promise((resolve, reject) => {
+      const parser = parse({ columns: true, skip_empty_lines: true, trim: true });
+
+      parser.on('readable', () => {
+        let record;
+        while ((record = parser.read()) !== null) {
+          const lowered = {};
+          for (const [k, v] of Object.entries(record)) {
+            lowered[String(k).toLowerCase()] = v;
+          }
+          rows.push(lowered);
+        }
+      });
+
+      parser.on('error', reject);
+      parser.on('end', resolve);
+
+      parser.write(req.file.buffer);
+      parser.end();
+    });
+
+    if (!rows.length) {
+      return res.status(400).json({ error: 'CSV contained no data rows.' });
+    }
+
+    // Normalize & validate rows
+    const normalized = [];
+    let bad = 0;
+    const badExamples = [];
+
+    for (const r of rows) {
+      try {
+        normalized.push(normalizeRow(r));
+      } catch (e) {
+        bad++;
+        if (badExamples.length < 5) badExamples.push({ row: r, reason: e.message });
+      }
+    }
+
+    if (!normalized.length) {
+      return res.status(400).json({ error: 'All rows failed validation.', examples: badExamples });
+    }
+
+    // --- DB insert (parameterized) ---
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Column order matches template (Notes near end; Lat/Lon last)
+const cols = [
+  'name','company','industry','owner','city','state','status','tags','cadence_name',
+  'source','source_channel','conversion_stage','arr','ap_spend','size','obstacle',
+  'net_new','self_sourced','engagement_score','last_contacted_at','next_action_at',
+  'last_status_change','notes','latitude','longitude','forecast_month','lead_type',
+  'website','created_at','updated_at'
+];
+
+      const colList = cols.map(c => `"${c}"`).join(', ');
+      const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
+
+      const sql = `
+        INSERT INTO leads (${colList})
+        VALUES (${placeholders})
+        ON CONFLICT (name, company)
+        DO UPDATE SET
+  city              = COALESCE(EXCLUDED.city,              leads.city),
+  state             = COALESCE(EXCLUDED.state,             leads.state),
+  industry          = COALESCE(EXCLUDED.industry,          leads.industry),
+  owner             = COALESCE(EXCLUDED.owner,             leads.owner),
+  status            = COALESCE(EXCLUDED.status,            leads.status),
+  -- keep existing tags if incoming is NULL or empty array
+  tags              = CASE
+                        WHEN EXCLUDED.tags IS NULL OR EXCLUDED.tags = '{}'
+                          THEN leads.tags
+                        ELSE EXCLUDED.tags
+                      END,
+  cadence_name      = COALESCE(EXCLUDED.cadence_name,      leads.cadence_name),
+
+  lead_type         = COALESCE(EXCLUDED.lead_type,         leads.lead_type),
+  forecast_month    = COALESCE(EXCLUDED.forecast_month,    leads.forecast_month),
+
+  source            = COALESCE(EXCLUDED.source,            leads.source),
+  source_channel    = COALESCE(EXCLUDED.source_channel,    leads.source_channel),
+  conversion_stage  = COALESCE(EXCLUDED.conversion_stage,  leads.conversion_stage),
+
+  arr               = COALESCE(EXCLUDED.arr,               leads.arr),
+  ap_spend          = COALESCE(EXCLUDED.ap_spend,          leads.ap_spend),
+  size              = COALESCE(EXCLUDED.size,              leads.size),
+  obstacle          = COALESCE(EXCLUDED.obstacle,          leads.obstacle),
+  net_new           = COALESCE(EXCLUDED.net_new,           leads.net_new),
+  self_sourced      = COALESCE(EXCLUDED.self_sourced,      leads.self_sourced),
+  engagement_score  = COALESCE(EXCLUDED.engagement_score,  leads.engagement_score),
+
+  last_contacted_at = COALESCE(EXCLUDED.last_contacted_at, leads.last_contacted_at),
+  next_action_at    = COALESCE(EXCLUDED.next_action_at,    leads.next_action_at),
+  last_status_change= COALESCE(EXCLUDED.last_status_change,leads.last_status_change),
+
+  notes             = COALESCE(EXCLUDED.notes,             leads.notes),
+  latitude          = COALESCE(EXCLUDED.latitude,          leads.latitude),
+  longitude         = COALESCE(EXCLUDED.longitude,         leads.longitude),
+  website           = COALESCE(EXCLUDED.website,           leads.website),
+
+  updated_at        = NOW();
+      `;
+
+for (const r of normalized) {
+  const values = [
+    r.name ?? null,
+    r.company ?? null,
+    r.industry ?? null,
+    r.owner ?? null,
+    r.city ?? null,
+    r.state ?? null,
+    normalizeStatus(r.status),
+    Array.isArray(r.tags) ? r.tags : [],
+    r.cadence_name ?? null,
+    r.source ?? 'csv-import',
+    r.source_channel ?? null,
+    r.conversion_stage ?? null,
+    r.arr ?? null,
+    r.ap_spend ?? null,
+    r.size ?? null,
+    r.obstacle ?? null,
+    r.net_new ?? false,
+    r.self_sourced ?? false,
+    r.engagement_score ?? null,
+    r.last_contacted_at ?? null,
+    r.next_action_at ?? null,
+    r.last_status_change ?? null,
+    r.notes ?? null,
+    r.latitude ?? null,
+    r.longitude ?? null,
+    r.forecast_month ?? null,
+    r.lead_type ?? null,
+    r.website ?? null,
+    new Date(),
+    new Date()
+  ];
+
+  await client.query(sql, values);
+}
+
+await client.query('COMMIT');
+
+// 🗺️ Auto-run geocoder after CSV import (fills any missing lat/lon)
+const geoSummary = await geocodeMissingLeads({ limit: 25, delayMs: 1000 });
+
+return res.json({
+  ok: true,
+  inserted_or_updated: normalized.length,
+  failed: bad,
+  failed_examples: badExamples,
+  geocoded_processed: geoSummary.processed,
+  geocoded_success: geoSummary.success,
+  geocoded_failed: geoSummary.failed
+});
+
+    } catch (err) {
+      await client.query('ROLLBACK');
+      return res.status(500).json({
+        error: err.message || 'Import failed during database transaction.',
+        detail: err.detail, code: err.code, hint: err.hint, position: err.position
+      });
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('IMPORT ERR:', err);
+    return res.status(400).json({ error: err.message, detail: err.detail, code: err.code });
+  }
+});
+
+// --- UPDATE A LEAD (Safe UPSERT; now logs status history) ---
+// PUT /update-lead/:id  — update a single lead, log status change, and return the updated row
+app.put('/update-lead/:id', async (req, res) => {
+  const id = req.params.id;
+
+  // Helpers
+  const strOrNull = (v) =>
+    v === '' || v == null ? null : String(v);
+  const numOrNull = (v) =>
+    v === '' || v == null || Number.isNaN(Number(v))
+      ? null
+      : Number(v);
+
+  // Normalize status (frontend may send 'follow-up', etc.)
+  let status = strOrNull(req.body.status);
+  if (status) {
+    status = status
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, '_')
+      .replace(/-/g, '_');
+  }
+
+  // Tags → text[]
+  let tags = req.body.tags;
+  if (Array.isArray(tags)) {
+    tags = tags.map((s) => String(s).trim()).filter(Boolean);
+  } else if (typeof tags === 'string') {
+    tags = tags
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  } else if (tags == null) {
+    tags = null; // means "don’t change" (COALESCE keeps old)
+  }
+
+  const payload = {
+    name: strOrNull(req.body.name),
+    company: strOrNull(req.body.company),
+    city: strOrNull(req.body.city),
+    state: strOrNull(
+      req.body.state?.toUpperCase?.() || req.body.state
+    ),
+    status,
+    industry: strOrNull(req.body.industry),
+    forecast_month: strOrNull(req.body.forecast_month),
+    lead_type: strOrNull(req.body.lead_type),
+    arr: numOrNull(req.body.arr),
+    ap_spend: numOrNull(req.body.ap_spend),
+    notes: strOrNull(req.body.notes),
+    latitude: numOrNull(req.body.latitude),
+    longitude: numOrNull(req.body.longitude),
+    tags,
+  };
+
+  const sql = `
+    UPDATE leads SET
+      name            = COALESCE($2,  name),
+      company         = COALESCE($3,  company),
+      city            = COALESCE($4,  city),
+      state           = COALESCE($5,  state),
+      status          = COALESCE($6,  status),
+      industry        = COALESCE($7,  industry),
+      forecast_month  = COALESCE($8,  forecast_month),
+      lead_type       = COALESCE($9,  lead_type),
+      arr             = COALESCE($10, arr),
+      ap_spend        = COALESCE($11, ap_spend),
+      tags            = COALESCE($12::text[], tags),
+      notes           = COALESCE($13, notes),
+      latitude        = COALESCE($14, latitude),
+      longitude       = COALESCE($15, longitude),
+      updated_at      = NOW()
+    WHERE id = $1
+    RETURNING *;
+  `;
+
+  const params = [
+    id,
+    payload.name,
+    payload.company,
+    payload.city,
+    payload.state,
+    payload.status,
+    payload.industry,
+    payload.forecast_month,
+    payload.lead_type,
+    payload.arr,
+    payload.ap_spend,
+    payload.tags && payload.tags.length ? payload.tags : null,
+    payload.notes,
+    payload.latitude,
+    payload.longitude,
+  ];
+
+  try {
+    // 1) Read previous status before update
+    const { rows: beforeRows } = await pool.query(
+      'SELECT status FROM leads WHERE id = $1',
+      [id]
+    );
+    if (!beforeRows.length) {
+      return res.status(404).json({ error: 'Lead not found', id });
+    }
+    const oldStatus = beforeRows[0].status || null;
+
+    // 2) Run the update
+    const { rows } = await pool.query(sql, params);
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Lead not found', id });
+    }
+
+    const lead = rows[0];
+
+    // 3) If status actually changed, log into lead_status_history
+    if (payload.status != null) {
+      const prevNorm = (oldStatus || '').toLowerCase();
+      const newNorm = (lead.status || '').toLowerCase();
+      if (prevNorm !== newNorm) {
+        const historySql = `
+          INSERT INTO lead_status_history
+            (lead_id, old_status, new_status, changed_at, changed_by, note)
+          VALUES ($1, $2, $3, NOW(), $4, $5);
+        `;
+        await pool.query(historySql, [
+          id,
+          oldStatus || null,
+          lead.status || null,
+          null,                 // changed_by (null for now)
+          payload.notes || null,
+        ]);
+      }
+    }
+
+    // 4) Clean status for frontend (replace underscores with dashes)
+    if (typeof lead.status === 'string') {
+      lead.status = lead.status.replace(/_/g, '-');
+    }
+
+    return res.json(lead);
+  } catch (err) {
+    console.error('PUT /update-lead error:', err);
+    return res
+      .status(500)
+      .json({ error: 'Failed to update lead', details: err.message });
+  }
+});
+
+
+
+
+// === ON-DEMAND GEO-CODER ROUTE ===
+// lets you hit it manually from Postman or a button later
+app.post('/geocode/missing', async (req, res) => {
+  try {
+    const { limit = 25, delayMs = 1000 } = req.body || {};
+    const result = await geocodeMissingLeads({ limit, delayMs });
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error('Geocode error:', e);
+    res.status(500).json({ ok: false, error: 'geocode_failed' });
+  }
+});
+
+
+// --- LOCAL DEV PORT / RAILWAY PORT ---
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
   console.log(`[DS] Listening on :${PORT}`);
 });
-

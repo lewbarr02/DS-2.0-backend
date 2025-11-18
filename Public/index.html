@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Deli Sandwich</title>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <link href="images/favicon.png" rel="icon" type="image/png"/>
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600&display=swap" rel="stylesheet"/>
+    <link href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" rel="stylesheet"/>
+    <link href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" rel="stylesheet"/>
+    <link href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" rel="stylesheet"/>
+    <style>
+/* --- BASE RESET --- */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;                /* prevents the white strip */
+  font-family: 'Nunito Sans', sans-serif;
+}
+
+/* --- MAP AREA (final, full-bleed) --- */
+#mapView {               /* wrapper becomes neutral */
+  position: static;
+}
+
+#map {                   /* the map itself owns the viewport */
+  position: fixed;
+  inset: 0;              /* top:0; right:0; bottom:0; left:0 */
+  height: 100vh;
+  width: 100vw;
+}
+
+#mapView.hidden { display: none; }
+
+      /* --- DASHBOARD (existing) --- */
+      #dashboard {
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(255, 255, 255, 0.95);
+        padding: 12px 18px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+        z-index: 1001;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+      #dashboard.hidden { display: none; }
+      #dashboard label { font-weight: bold; margin-right: 5px; }
+      #dashboard select, #dashboard input[type="date"] { padding: 4px 8px; font-size: 14px; }
+      #dashboard .status-checkbox { margin-right: 10px; }
+      #dashboard button {
+        padding: 6px 12px; font-size: 14px; background: #444; color: white;
+        border: none; border-radius: 6px; cursor: pointer;
+      }
+
+      /* Dashboard toggle (existing) */
+      #dashboardToggle {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        z-index: 1101;
+        background: #444;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 12px;
+        cursor: pointer;
+        font-size: 14px;
+      }
+
+      /* --- MAP LEGEND & STATS (existing) --- */
+      #legend {
+        position: absolute; bottom: 20px; right: 20px;
+        background: white; padding: 10px 14px; border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.3); z-index: 1000; font-size: 14px;
+      }
+      .legend-item { display: flex; align-items: center; margin-bottom: 5px; }
+      .legend-color { width: 16px; height: 24px; margin-right: 8px; background-size: contain; background-repeat: no-repeat; background-position: center; }
+
+      #statsSummary {
+        position: absolute; bottom: 50px; left: 10px; background: white; padding: 10px;
+        border-radius: 8px; box-shadow: 0 0 8px rgba(0,0,0,0.2); font-size: 14px; z-index: 1000;
+      }
+	  
+	  #statsSummary .status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#statsSummary .status-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  font-size: 13px;
+}
+
+#statsSummary .status-chip span.icon {
+  font-size: 16px;
+}
+
+#statsSummary .status-chip strong {
+  margin-left: auto;
+}
+
+	  
+      #pinCount {
+        position: absolute; bottom: 10px; left: 10px; background: white; padding: 6px 10px;
+        border-radius: 6px; box-shadow: 0 0 6px rgba(0,0,0,0.2); font-size: 14px; z-index: 1000;
+      }
+
+      /* Logo (existing) */
+      #logo { position: absolute; top: -122px; left: 10px; height: 400px; z-index: 2000; }
+
+      /* Presentation overlay (existing) */
+      #presentationDisplay {
+        display: none; position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
+        width: 600px; max-height: 70%; overflow-y: auto; background: white; border-radius: 12px;
+        padding: 20px; box-shadow: 0 0 20px rgba(0,0,0,0.4); z-index: 2000; font-family: 'Nunito Sans', sans-serif;
+      }
+
+      /* --- VIEW SWITCHER --- */
+      #viewSwitcher {
+        position: absolute;
+        top: 20px;
+        right: 120px; /* keep clear of #dashboardToggle */
+        z-index: 1101;
+        display: flex;
+        background: rgba(255,255,255,0.95);
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        overflow: hidden;
+      }
+      #viewSwitcher button {
+        border: none; padding: 6px 12px; font-size: 14px; cursor: pointer; background: transparent;
+      }
+      #viewSwitcher button.active { background: #222; color: #fff; }
+
+      /* --- LIST VIEW --- */
+      #listView {
+        position: absolute; inset: 0; display: none; background: #f7f8fb;
+      }
+      #listView.show { display: block; }
+      #listToolbar {
+        position: sticky; top: 0; z-index: 5;
+        display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+        background: #fff; padding: 10px 12px; border-bottom: 1px solid #e7e7e7;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+      }
+      #listToolbar input[type="search"] {
+        padding: 6px 10px; font-size: 14px; min-width: 240px; border: 1px solid #ddd; border-radius: 6px;
+      }
+      .chip {
+        padding: 6px 10px; border-radius: 16px; border: 1px solid #ddd; background: #fff; cursor: pointer; font-size: 12px;
+      }
+      .chip.active { background: #222; color: #fff; border-color: #222; }
+      #columnsMenu details { user-select: none; }
+      #columnsMenu summary {
+        list-style: none; cursor: pointer; padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; background: #fff; font-size: 12px;
+      }
+      #columnsMenu summary::-webkit-details-marker { display: none; }
+      #columnsMenu .panel { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 8px; margin-top: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+      #columnsMenu .panel label { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; }
+
+      #leadTableWrap { height: calc(100% - 64px); overflow: auto; }
+      table { width: 100%; border-collapse: collapse; font-size: 14px; background: #fff; }
+      thead th {
+        position: sticky; top: 0; background: #fff; z-index: 1; text-align: left; padding: 10px; border-bottom: 1px solid #eee; cursor: default;
+      }
+      thead th.sortable { cursor: pointer; }
+      tbody td { padding: 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+      tr:hover { background: #fafafa; }
+      .actions-cell button {
+        margin-right: 6px; border: 1px solid #ddd; background: #fff; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 12px;
+      }
+      .status-cell { white-space: nowrap; font-weight: 600; }
+      .website-link { color: #0b6bcb; text-decoration: none; }
+
+      /* Modal (existing) */
+      .modal.hidden { display: none; }
+
+      /* --- Account 360° slide panel (new) --- */
+      .slide-panel {
+        position: fixed;
+        right: 0; top: 0;
+        width: 400px; height: 100%;
+        background: white;
+        border-left: 2px solid #ccc;
+        overflow-y: auto;
+        padding: 1rem;
+        z-index: 3000; /* above logo (2000) and overlays */
+      }
+      .slide-panel.hidden { display: none; }
+      .slide-panel .close-btn {
+        position: absolute;
+        right: 1rem; top: 1rem;
+        cursor: pointer;
+      }
+	  /* --- POPUP FORM POLISH --- */
+.leaflet-popup-content {
+  margin: 10px 12px;
+}
+
+.leaflet-popup-content input[type="text"],
+.leaflet-popup-content input[type="number"],
+.leaflet-popup-content select,
+.leaflet-popup-content textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.leaflet-popup-content label {
+  display: block;
+  margin-top: 6px;
+}
+
+.leaflet-popup-content .actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+      /* --- DAILY QUEUE PANEL --- */
+      #dailyQueuePanel {
+        position: absolute;
+        top: 80px;
+        right: 20px;
+        width: 320px;
+        max-height: 60vh;
+        background: #ffffff;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+        padding: 10px 12px;
+        font-size: 13px;
+        z-index: 2001;
+        display: none;              /* hidden until we generate */
+      }
+      #dailyQueuePanel header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+      }
+      #dailyQueuePanel h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+      #dailyQueuePanel button.close {
+        border: none;
+        background: transparent;
+        font-size: 16px;
+        cursor: pointer;
+        line-height: 1;
+      }
+      #dailyQueueList {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      #dailyQueueList li {
+        padding: 6px 0;
+        border-bottom: 1px solid #eee;
+      }
+      #dailyQueueList li:last-child {
+        border-bottom: none;
+      }
+      #dailyQueueList .line1 {
+        font-weight: 600;
+      }
+      #dailyQueueList .line2 {
+        color: #6b7280;
+        font-size: 12px;
+      }
+      #dailyQueueList .line3 {
+        color: #111827;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <img alt="Deli Sandwich Logo" id="logo" src="images/Deli_Sandwich_Logo_Large.png"/>
+
+    <!-- Existing dashboard toggle -->
+    <button id="dashboardToggle" title="Toggle Dashboard (Shift+D)" aria-pressed="true">Hide Controls</button>
+
+    <!-- NEW: Map / List switcher -->
+    <div id="viewSwitcher" role="tablist" aria-label="View Switcher">
+      <button id="btnMapView" class="active" role="tab" aria-selected="true">Map</button>
+      <button id="btnListView" role="tab" aria-selected="false">List</button>
+    </div>
+
+    <!-- Existing dashboard -->
+    <div id="dashboard">
+      <div>
+        <label for="tagFilter">Tags:</label>
+        <select id="tagFilter"><option value="All">All</option></select>
+      </div>
+      <div>
+        <label for="typeFilter">Type:</label>
+        <select id="typeFilter"><option value="All">All</option></select>
+      </div>
+      <div>
+        <label for="cadenceFilter">Cadence:</label>
+        <select id="cadenceFilter"><option value="All">All</option></select>
+      </div>
+      <div>
+        <label for="stateFilter">State:</label>
+        <select id="stateFilter"><option value="All">All</option></select>
+      </div>
+	  <div>
+    <label for="industryFilter">Industry:</label>
+    <select id="industryFilter"><option value="All">All</option></select>
+</div>
+      <div>
+        <label for="clusterToggle">Cluster Pins:</label>
+        <input checked id="clusterToggle" type="checkbox"/>
+      </div>
+      <div>
+        <label>Status:</label>
+        <label class="status-checkbox"><input checked type="checkbox" value="Hot"/> Hot</label>
+        <label class="status-checkbox"><input checked type="checkbox" value="Warm"/> Warm</label>
+        <label class="status-checkbox"><input checked type="checkbox" value="Cold"/> Cold</label>
+        <label class="status-checkbox"><input checked type="checkbox" value="Follow-Up"/> Follow-Up</label>
+        <label class="status-checkbox"><input checked type="checkbox" value="Converted"/> Converted</label>
+        <label class="status-checkbox"><input checked type="checkbox" value="Research"/> Research</label>
+        <label class="status-checkbox"><input checked type="checkbox" value="Unspecified"/> Unspecified</label>
+      </div>
+      <div>
+        <label for="startDate">From:</label>
+        <input id="startDate" type="date"/>
+        <label for="endDate">To:</label>
+        <input id="endDate" type="date"/>
+      </div>
+      <div>
+        <button id="launchPresentation">Launch Presentation Mode</button>
+        <button id="exportDailyList">Daily List</button>
+        <button id="resetFilters">Reset Filters</button>
+      </div>
+      <div>
+        <button id="openSummaryBtn" onclick="location.href='summary.html?range=today'">📊 Open Today’s Summary</button>
+        <button id="startMyDayBtn">🚀 Start My Day (20)</button>
+        <button id="addLeadBtn">➕ Add Lead</button>
+      </div>
+	  <!-- 📤 CSV Upload -->
+<div id="csvUploadBar" style="margin-top:8px;">
+  <button id="uploadCsvBtn" style="padding:6px 10px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">
+    📤 Upload CSV
+  </button>
+  <input id="csvInput" type="file" accept=".csv" style="display:none;" />
+  <span id="uploadStatus" style="display:none;margin-left:8px;font-size:14px;"></span>
+</div>
+
+<script>
+  // --- Upload CSV wiring ---
+  const uploadBtn = document.getElementById('uploadCsvBtn');
+  const fileInput = document.getElementById('csvInput');
+  const uploadStatus = document.getElementById('uploadStatus');
+
+  uploadBtn.addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+
+    uploadStatus.style.display = 'inline';
+    uploadStatus.textContent = 'Uploading…';
+    uploadStatus.style.color = '#6b7280';
+
+    try {
+      const fd = new FormData();
+      fd.append('file', file, file.name); // field name matches your backend Multer config
+
+const res = await fetch(`${window.DELI_API_BASE}/import/csv`, { method: 'POST', body: fd });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Upload failed');
+
+      const count = data?.inserted_or_updated ?? 0;
+      const failed = Array.isArray(data?.failed_rows) ? data.failed_rows.length : 0;
+
+      uploadStatus.textContent = `✅ Imported ${count} row(s) • ${failed} failed`;
+      uploadStatus.style.color = '#16a34a';
+
+      // Refresh map markers if leads.js exposes window.refreshLeads()
+      if (window.refreshLeads) await window.refreshLeads();
+	  // 👉 add this line to kick off geocoding of missing coords
+autoGeocodeMissing({ max: 25, delayMs: 1000 });
+    } catch (err) {
+      uploadStatus.textContent = `❌ ${err.message || 'Upload error'}`;
+      uploadStatus.style.color = '#dc2626';
+    } finally {
+      setTimeout(() => {
+        uploadStatus.style.display = 'none';
+        uploadStatus.textContent = '';
+        fileInput.value = '';
+      }, 3500);
+    }
+  });
+</script>
+	  
+    </div>
+
+    <!-- MAP VIEW (wrapped) -->
+    <div id="mapView">
+      <div id="map"></div>
+
+      <div id="presentationDisplay"></div>
+
+      <div id="statsSummary">Status Breakdown: (loading...)</div>
+      <div id="pinCount">Displaying 0 of 0 leads</div>
+	  
+	        <!-- Daily Queue panel -->
+      <div id="dailyQueuePanel">
+        <header>
+          <h3 id="dailyQueueTitle">Daily Queue</h3>
+          <button class="close" id="dailyQueueClose" title="Hide Daily Queue">×</button>
+        </header>
+        <div style="font-size:12px; color:#4b5563; margin-bottom:4px;">
+          Auto-selected batch of leads for today’s activity.
+        </div>
+        <ul id="dailyQueueList">
+          <!-- Filled by JS -->
+        </ul>
+      </div>
+
+
+      <div id="legend">
+        <div class="legend-item"><div class="legend-color" style="background-image: url('images/marker-icon-green.png');"></div>Converted</div>
+        <div class="legend-item"><div class="legend-color" style="background-image: url('images/marker-icon-red.png');"></div>Hot</div>
+        <div class="legend-item"><div class="legend-color" style="background-image: url('images/marker-icon-orange.png');"></div>Warm</div>
+        <div class="legend-item"><div class="legend-color" style="background-image: url('images/marker-icon-yellow.png');"></div>Follow-Up</div>
+        <div class="legend-item"><div class="legend-color" style="background-image: url('images/marker-icon-blue.png');"></div>Cold</div>
+        <div class="legend-item"><div class="legend-color" style="background-image: url('images/marker-icon-violet.png');"></div>Research</div>
+        <div class="legend-item"><div class="legend-color" style="background-image: url('images/marker-icon-grey.png');"></div>Unspecified</div>
+      </div>
+    </div>
+
+    <!-- LIST VIEW -->
+    <div id="listView" aria-label="Lead List">
+      <div id="listToolbar">
+        <input id="listSearch" type="search" placeholder="Search name, company, city, state, tags…" aria-label="Search"/>
+        <button class="chip" data-status="Converted">🏆 Converted</button>
+        <button class="chip" data-status="Hot">🔥 Hot</button>
+        <button class="chip" data-status="Warm">🌞 Warm</button>
+        <button class="chip" data-status="Cold">🧊 Cold</button>
+        <button class="chip" data-status="Follow-Up">⏳ Follow-Up</button>
+        <button class="chip" data-status="Research">🔍 Research</button>
+        <button class="chip" data-status="Unspecified">⚪ Unspecified</button>
+
+        <button id="listReset" class="chip" style="margin-left:8px;">Reset</button>
+
+        <div id="columnsMenu" style="margin-left:auto;">
+          <details>
+            <summary>Columns ▾</summary>
+            <div class="panel" id="columnsPanel"><!-- JS populates --></div>
+          </details>
+        </div>
+      </div>
+
+      <div id="leadTableWrap">
+        <table id="leadTable" aria-describedby="leadCount">
+          <thead id="leadThead"><tr id="leadHeaderRow"></tr></thead>
+          <tbody id="leadTbody"></tbody>
+        </table>
+      </div>
+      <div id="leadCount" style="padding:8px 12px; font-size:12px; color:#555;">0 leads</div>
+    </div>
+
+    <!-- NEW: Account 360° slide-in panel -->
+    <div id="account360Panel" class="slide-panel hidden"></div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+	
+	<!-- API base config (keep this BEFORE leads.js) -->
+<script>
+  window.DELI_API_BASE = "http://127.0.0.1:8080";
+</script>
+
+<!-- your app scripts -->
+<script src="leads.js" defer></script>
+
+
+<!-- ✅ Auto-geocode helper (place near the end of <body>) -->
+<script>
+async function autoGeocodeMissing({ max = 25, delayMs = 1000 } = {}) {
+  try {
+    const res = await fetch(`${window.DELI_API_BASE}/summary`);
+    const data = await res.json();
+    const leads = Array.isArray(data) ? data : (data.data || data.leads || []);
+
+    const targets = leads
+      .filter(l => (!l.latitude || !l.longitude) && (l.city || l.state || l.company))
+      .slice(0, max);
+
+    for (const lead of targets) {
+      const q = [lead.company, lead.city, lead.state].filter(Boolean).join(', ');
+      if (!q) continue;
+
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`;
+      const geo = await fetch(url, { headers: { 'Accept-Language': 'en' } }).then(r => r.json());
+
+      if (Array.isArray(geo) && geo[0]) {
+        const lat = parseFloat(geo[0].lat);
+        const lon = parseFloat(geo[0].lon);
+        if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
+          const id = lead.id || lead.uuid;
+          await fetch(`${window.DELI_API_BASE}/update-lead/${encodeURIComponent(id)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ latitude: lat, longitude: lon })
+          });
+        }
+      }
+
+      // throttle to avoid 429
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+
+    if (window.refreshLeads) await window.refreshLeads();
+  } catch (e) {
+    console.warn('Auto-geocode failed:', e);
+  }
+}
+</script>
+
+
+
+<!-- ✅ ADD THIS BLOCK RIGHT BELOW THE TWO LINES ABOVE -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const mapView   = document.getElementById('mapView');
+  const listView  = document.getElementById('listView');
+  const dash      = document.getElementById('dashboard');
+  const btnMap    = document.getElementById('btnMapView');
+  const btnList   = document.getElementById('btnListView');
+  const dashTgl   = document.getElementById('dashboardToggle');
+  const logo      = document.getElementById('logo');   // 👈 NEW
+
+  // Map/List switcher
+  function showMap() {
+    mapView.style.display = 'block';
+    listView.classList.remove('show');
+    btnMap.classList.add('active');
+    btnList.classList.remove('active');
+    if (logo) logo.style.display = '';                 // 👈 NEW (show logo)
+  }
+  function showList() {
+    mapView.style.display = 'none';
+    listView.classList.add('show');
+    btnList.classList.add('active');
+    btnMap.classList.remove('active');
+    if (logo) logo.style.display = 'none';             // 👈 NEW (hide logo)
+  }
+  btnMap?.addEventListener('click', showMap);
+  btnList?.addEventListener('click', showList);
+
+  // Hide Controls toggle
+  dashTgl?.addEventListener('click', () => {
+    const isHidden = dash.classList.toggle('hidden');
+    dashTgl.textContent = isHidden ? 'Show Controls' : 'Hide Controls';
+    dashTgl.setAttribute('aria-pressed', (!isHidden).toString());
+  });
+});
+</script>
+
+    <!-- 🧾 Add Lead Modal (updated with Last Touched) -->
+    <div class="modal hidden" id="leadModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: none; justify-content: center; align-items: center;">
+      <div class="modal-content" style="background: white; padding: 20px; width: 400px; max-height: 80vh; overflow-y: auto; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.2);">
+        <h2>New Lead</h2>
+        <form id="leadForm">
+          <input type="hidden" name="id" />
+          <input name="name" placeholder="Name" required style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+          <input name="company" placeholder="Company" style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+          <input name="city" placeholder="City" style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+          <input name="state" placeholder="State" style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+          <input name="tags" placeholder="Tags (comma-separated)" style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+          <input name="cadence_name" placeholder="Cadence Name" style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+          <input name="website" placeholder="Website" style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+          <select name="status" style="width: 100%; margin-bottom: 10px; padding: 8px;">
+            <option value="">Select Status</option>
+            <option value="Converted">Converted 🏆</option>
+            <option value="Hot">Hot 🔥</option>
+            <option value="Warm">Warm 🌞</option>
+            <option value="Cold">Cold 🧊</option>
+            <option value="Follow-Up">Follow-Up ⏳</option>
+            <option value="Research">Research 🔍</option>
+          </select>
+
+          <label style="display:block; font-weight:600; margin-top:6px;">Last Touched</label>
+          <input name="last_touched" type="date" style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+
+          <input name="net_new" placeholder="Net New (true/false)" style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+          <input name="size" placeholder="Size" style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+          <input name="arr" placeholder="ARR" style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+          <input name="obstacle" placeholder="Obstacle" style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+          <input name="self_sourced" placeholder="Self Sourced (true/false)" style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+          <textarea name="notes" placeholder="Notes..." style="width: 100%; margin-bottom: 10px; padding: 8px;"></textarea>
+
+          <div class="modal-buttons" style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button id="cancelLead" type="button">Cancel</button>
+            <button type="submit">Save Lead</button>
+          </div>
+        </form>
+      </div>
+    </div>
+<script>
+/* ---------- List View wiring + sorting ---------- */
+(function () {
+  // Helpers
+  const $  = (sel) => document.querySelector(sel);
+  const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+  // Sort state
+  const SORT = { key: 'company', dir: 'asc' }; // dir: 'asc' | 'desc'
+
+  // Column definitions
+  const COLUMNS = [
+    { key:'status',         label:'Status',         sortable:true },
+    { key:'company',        label:'Company',        sortable:true },
+    { key:'name',           label:'Name',           sortable:true },
+    { key:'city',           label:'City',           sortable:true },
+    { key:'state',          label:'State',          sortable:true },
+    { key:'industry',       label:'Industry',       sortable:true },
+    { key:'forecast_month', label:'Forecast',       sortable:true },
+    { key:'lead_type',      label:'Type',           sortable:true },
+    { key:'arr',            label:'ARR',            sortable:true, numeric:true },
+    { key:'ap_spend',       label:'AP Spend',       sortable:true, numeric:true },
+    { key:'tags',           label:'Tags',           sortable:false },
+    { key:'cadence_name',   label:'Cadence',        sortable:true },
+    { key:'website',        label:'Website',        sortable:false },
+    { key:'notes',          label:'Notes',          sortable:false },
+  ];
+
+  const STATUS_RANK = {
+    converted: 0, hot: 1, warm: 2, 'follow-up': 3, cold: 4, research: 5, unspecified: 6
+  };
+
+  function getCI(row, key) {
+    if (!row) return '';
+    const hit = Object.keys(row).find(k => k.toLowerCase() === key.toLowerCase());
+    return hit ? row[hit] ?? '' : '';
+  }
+
+  function prettyStatus(s) {
+    if (!s) return '⚪ Unspecified';
+    const k = String(s).toLowerCase();
+    if (k.includes('convert')) return '🏆 Converted';
+    if (k.includes('hot'))      return '🔥 Hot';
+    if (k.includes('warm'))     return '🌞 Warm';
+    if (k.includes('cold'))     return '🧊 Cold';
+    if (k.includes('follow'))   return '⏳ Follow-Up';
+    if (k.includes('research')) return '🔍 Research';
+    return '⚪ Unspecified';
+  }
+
+  function statusRankVal(s) {
+    const k = String(s || '').toLowerCase();
+    if (k.includes('convert')) return STATUS_RANK.converted;
+    if (k.includes('hot'))     return STATUS_RANK.hot;
+    if (k.includes('warm'))    return STATUS_RANK.warm;
+    if (k.includes('follow'))  return STATUS_RANK['follow-up'];
+    if (k.includes('cold'))    return STATUS_RANK.cold;
+    if (k.includes('research'))return STATUS_RANK.research;
+    return STATUS_RANK.unspecified;
+  }
+
+  function renderListTable(rows) {
+    const thead = $('#leadThead');
+    const tbody = $('#leadTbody');
+    const count = $('#leadCount');
+
+    // Header with sort indicators
+    thead.innerHTML =
+      '<tr id="leadHeaderRow">' +
+      COLUMNS.map(c => {
+        const isActive = SORT.key === c.key;
+        const indicator = c.sortable
+          ? `<span class="sort-indicator" style="margin-left:6px; font-size:11px; opacity:${isActive?1:.35}">
+               ${isActive ? (SORT.dir === 'asc' ? '▲' : '▼') : '▲'}
+             </span>`
+          : '';
+        const cls = c.sortable ? 'sortable' : '';
+        return `<th data-key="${c.key}" class="${cls}">${c.label}${indicator}</th>`;
+      }).join('') +
+      '</tr>';
+
+    // Wire header clicks
+    $$('#leadThead th.sortable').forEach(th => {
+      th.onclick = () => {
+        const key = th.getAttribute('data-key');
+        if (SORT.key === key) {
+          SORT.dir = SORT.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          SORT.key = key;
+          SORT.dir = 'asc';
+        }
+        window.renderListView(); // re-render with new sort
+      };
+    });
+
+    // Rows
+    const html = rows.map(r => {
+      const t = (v) => (v == null || v === '') ? '' : String(v);
+      const website = getCI(r,'website');
+      const arr = getCI(r,'arr');
+      const ap  = getCI(r,'ap_spend');
+
+      return `<tr>
+        <td class="status-cell">${prettyStatus(getCI(r,'status'))}</td>
+        <td>${t(getCI(r,'company'))}</td>
+        <td>${t(getCI(r,'name'))}</td>
+        <td>${t(getCI(r,'city'))}</td>
+        <td>${t(getCI(r,'state'))}</td>
+        <td>${t(getCI(r,'industry'))}</td>
+        <td>${t(getCI(r,'forecast_month'))}</td>
+        <td>${t(getCI(r,'lead_type'))}</td>
+        <td>${arr ? ('$' + Number(arr).toLocaleString()) : ''}</td>
+        <td>${ap  ? ('$' + Number(ap).toLocaleString())  : ''}</td>
+        <td>${t(getCI(r,'tags'))}</td>
+        <td>${t(getCI(r,'cadence_name'))}</td>
+        <td>${website ? `<a class="website-link" href="${website}" target="_blank" rel="noopener">Visit</a>` : ''}</td>
+        <td>${t(getCI(r,'notes'))}</td>
+      </tr>`;
+    }).join('');
+    tbody.innerHTML = html;
+
+    count.textContent = `${rows.length} lead${rows.length===1?'':'s'}`;
+  }
+
+  // Base rows from leads.js
+  function getFilteredRows() {
+    const DS = window.DS || {};
+    const rows = (DS.state && (DS.state.filtered || DS.state.rawRows)) || [];
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  // Apply List toolbar filters (search + chips), then sort
+  function computeListFilteredAndSorted() {
+    const q = ($('#listSearch')?.value || '').trim().toLowerCase();
+    const activeStatuses = $$('#listToolbar .chip.active[data-status]').map(el => el.dataset.status.toLowerCase());
+
+    let rows = getFilteredRows();
+
+    if (activeStatuses.length) {
+      rows = rows.filter(r => {
+        const s = String(getCI(r,'status')).toLowerCase();
+        return activeStatuses.some(a => s.includes(a) || a === s);
+      });
+    }
+
+    if (q) {
+      rows = rows.filter(r => {
+        const hay = [
+          getCI(r,'name'), getCI(r,'company'), getCI(r,'city'), getCI(r,'state'),
+          getCI(r,'tags'), getCI(r,'industry'), getCI(r,'notes'), getCI(r,'cadence_name'),
+          getCI(r,'lead_type'), getCI(r,'website')
+        ].join(' ').toLowerCase();
+        return hay.includes(q);
+      });
+    }
+
+    // ---- SORTING ----
+    const { key, dir } = SORT;
+    const asc = dir === 'asc' ? 1 : -1;
+
+    rows = rows.slice().sort((a,b) => {
+      // status uses custom rank
+      if (key === 'status') {
+        return asc * (statusRankVal(getCI(a,'status')) - statusRankVal(getCI(b,'status')));
+      }
+
+      const col = COLUMNS.find(c => c.key === key);
+      const avRaw = getCI(a, key);
+      const bvRaw = getCI(b, key);
+
+      // Nulls last
+      const aNull = (avRaw === null || avRaw === undefined || avRaw === '');
+      const bNull = (bvRaw === null || bvRaw === undefined || bvRaw === '');
+      if (aNull && !bNull) return  1;
+      if (!aNull && bNull) return -1;
+      if (aNull && bNull)  return  0;
+
+      if (col && col.numeric) {
+        const av = Number(avRaw);
+        const bv = Number(bvRaw);
+        return asc * ((av > bv) - (av < bv));
+      }
+
+      const av = String(avRaw).toLowerCase();
+      const bv = String(bvRaw).toLowerCase();
+      return asc * av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+    return rows;
+  }
+
+  // Public render fn
+  window.renderListView = function renderListView() {
+    renderListTable(computeListFilteredAndSorted());
+  };
+
+  // Wire List toolbar controls
+  function wireListControls() {
+    $('#listSearch')?.addEventListener('input', () => window.renderListView());
+    $$('#listToolbar .chip[data-status]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        btn.classList.toggle('active');
+        window.renderListView();
+      });
+    });
+    $('#listReset')?.addEventListener('click', () => {
+      $$('#listToolbar .chip.active').forEach(b => b.classList.remove('active'));
+      const s = $('#listSearch'); if (s) s.value = '';
+      window.renderListView();
+    });
+
+    // React to main dashboard filter changes (from leads.js)
+    ['tagFilter','typeFilter','cadenceFilter','stateFilter','startDate','endDate']
+      .map(id => document.getElementById(id))
+      .forEach(el => el && el.addEventListener('change', () => window.renderListView()));
+  }
+
+  // Render on List tab click
+  document.addEventListener('DOMContentLoaded', () => {
+    wireListControls();
+    document.getElementById('btnListView')?.addEventListener('click', () => {
+      setTimeout(() => window.renderListView(), 0);
+    });
+  });
+})();
+</script>
+
+<script>
+  // Redirect Start My Day → Hybrid Daily Queue
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('startMyDayBtn');
+    if (!btn) return;
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+
+      // Use the same backend base URL as the rest of the app
+      const base =
+        (window.DELI_API_BASE && window.DELI_API_BASE.replace(/\/$/, '')) ||
+        (window.location.origin || 'http://127.0.0.1:8080');
+
+      window.location.href = `${base}/daily-queue?autostart=1`;
+    });
+  });
+</script>
+	
+  </body>
+</html>
