@@ -12,16 +12,17 @@ app.use(express.json());
 app.set('json spaces', 2);
 
 // ---- Static frontend serving ----
-// All your HTML/JS/images live in ./public now
-const FRONT_DIR = path.join(__dirname, 'public');
+// All your HTML/JS/images live in ./Public now
+const FRONT_DIR = path.join(__dirname, 'Public');
 
-// Serve everything in /public (index.html, summary.html, JS, icons, images, etc.)
+// Serve everything in /Public (index.html, summary.html, JS, icons, images, etc.)
 app.use(express.static(FRONT_DIR));
 
 // Root -> index page
 app.get('/', (_req, res) => {
   res.sendFile(path.join(FRONT_DIR, 'index.html'));
 });
+
 
 // Pretty routes that load the same HTML files
 app.get('/launch-summary', (_req, res) => {
