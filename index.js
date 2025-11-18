@@ -130,271 +130,29 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ ok: true, service: 'Deli Sandwich Backend', ts: new Date().toISOString() });
 });
 
-// --- /summary (Finexio-focused, aligned with /api/oneonone) ---
+// TEMP: Simple summary endpoint just to prove DB + backend are wired.
+// We'll replace this with the full metrics/AI summary in the next phase.
 app.get('/summary', async (req, res) => {
+  let client;
   try {
-    const { from, to, status } = req.query;
-    const pinnedOnly = qpBool(req.query.pinned_only, true); // default true
-    const countMode  = qpCountMode(req.query.count_mode);
+    client = await pool.connect();
 
-    // Date window – same style as /api/oneonone (to = exclusive)
-    const today = new Date();
-    const end = to ? new Date(to) : today;
-    const start = from ? new Date(from) : new Date(end);
-    if (!from) start.setDate(end.getDate() - 7);
+    // Very simple sanity check: how many leads are in the DB?
+    const result = await client.query('SELECT COUNT(*) AS total FROM leads;');
+    const totalLeads = parseInt(result.rows[0]?.total || '0', 10);
 
-    const pad = n => (n < 10 ? '0' + n : '' + n);
-    const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
-    const fromStr = ymd(start);
-    const endExclusive = new Date(end);
-    endExclusive.setDate(endExclusive.getDate() + 1);
-    const toStr = ymd(endExclusive);
-
-    const params = [fromStr, toStr];
-
-    // Optional status filter
-    let statusSql = '';
-    if (status && status.trim() !== '') {
-      statusSql = 'AND LOWER(status) = LOWER($3)';
-      params.push(status);
-    }
-
-    // Base set = created_at within window, optional status + pinned filter
-    const baseDedupe = (countMode === 'accounts')
-      ? `
-        base_final AS (
-          SELECT DISTINCT ON (LOWER(company))
-                 id, name, company, status, city, state, arr,
-                 industry, forecast_month, lead_type, source_channel, owner,
-                 last_contacted_at, next_action_at, last_status_change,
-                 tags, created_at, updated_at, latitude, longitude
-          FROM (
-            SELECT *
-            FROM leads
-            WHERE created_at >= $1::date
-              AND created_at <  $2::date
-              ${statusSql}
-              ${pinnedOnly ? 'AND latitude IS NOT NULL AND longitude IS NOT NULL' : ''}
-          ) t
-          ORDER BY LOWER(company), updated_at DESC NULLS LAST, created_at DESC NULLS LAST
-        )
-      `
-      : `
-        base_final AS (
-          SELECT
-            id, name, company, status, city, state, arr,
-            industry, forecast_month, lead_type, source_channel, owner,
-            last_contacted_at, next_action_at, last_status_change,
-            tags, created_at, updated_at, latitude, longitude
-          FROM leads
-          WHERE created_at >= $1::date
-            AND created_at <  $2::date
-            ${statusSql}
-            ${pinnedOnly ? 'AND latitude IS NOT NULL AND longitude IS NOT NULL' : ''}
-        )
-      `;
-
-    const unplacedExpr = (countMode === 'accounts')
-      ? `COUNT(DISTINCT LOWER(company))::int`
-      : `COUNT(*)::int`;
-
-    const sql = `
-      WITH
-      ${baseDedupe},
-      unplaced AS (
-        SELECT ${unplacedExpr} AS unplaced_count
-        FROM leads
-        WHERE created_at >= $1::date
-          AND created_at <  $2::date
-          ${statusSql}
-          AND (latitude IS NULL OR longitude IS NULL)
-      ),
-      activity AS (
-        SELECT
-          COUNT(*) AS total_leads_considered,
-          COUNT(*) FILTER (
-            WHERE last_contacted_at BETWEEN $1::timestamptz AND $2::timestamptz
-          ) AS leads_contacted_window
-        FROM base_final
-      ),
-      arrs AS (
-        SELECT
-          SUM(CASE WHEN LOWER(status) = 'hot'
-                   THEN COALESCE(arr,0) ELSE 0 END) AS hot_arr,
-          SUM(CASE WHEN LOWER(status) = 'warm'
-                   THEN COALESCE(arr,0) ELSE 0 END) AS warm_arr,
-          SUM(
-            CASE WHEN LOWER(status) IN ('converted','hot','warm')
-                      AND COALESCE(arr,0) > 0
-                 THEN COALESCE(arr,0) ELSE 0 END
-          ) AS arr_for_avg,
-          COUNT(*) FILTER (
-            WHERE LOWER(status) IN ('converted','hot','warm')
-              AND COALESCE(arr,0) > 0
-          ) AS deals_for_avg
-        FROM base_final
-      ),
-      by_industry AS (
-        SELECT
-          COALESCE(industry,'—') AS key,
-          COUNT(*) AS leads,
-          ROUND(
-            100.0 * AVG(
-              CASE WHEN LOWER(status) IN ('converted','hot','warm')
-                   THEN 1 ELSE 0 END
-            ),
-            1
-          ) AS conv_pct
-        FROM base_final
-        GROUP BY 1
-        ORDER BY conv_pct DESC, leads DESC
-        LIMIT 8
-      ),
-      by_state AS (
-        SELECT
-          COALESCE(state,'—') AS key,
-          SUM(
-            CASE WHEN LOWER(status) IN ('hot','warm')
-                 THEN COALESCE(arr,0) ELSE 0 END
-          ) AS hw_arr
-        FROM base_final
-        GROUP BY 1
-        ORDER BY hw_arr DESC NULLS LAST
-        LIMIT 12
-      ),
-      counts AS (
-        SELECT
-          COUNT(*) FILTER (WHERE LOWER(status) = 'warm')      AS warm_count,
-          COUNT(*) FILTER (WHERE LOWER(status) = 'hot')       AS hot_count,
-          COUNT(*) FILTER (WHERE LOWER(status) = 'converted') AS converted_count
-        FROM base_final
-      ),
-      status_moves AS (
-        WITH ranked AS (
-          SELECT
-            h.lead_id,
-            h.old_status,
-            h.new_status,
-            h.changed_at,
-            l.tags,
-            CASE
-              WHEN LOWER(COALESCE(h.old_status,'')) = 'converted' THEN 1
-              WHEN LOWER(COALESCE(h.old_status,'')) = 'hot'       THEN 2
-              WHEN LOWER(COALESCE(h.old_status,'')) = 'warm'      THEN 3
-              WHEN LOWER(COALESCE(h.old_status,'')) = 'follow-up' THEN 4
-              WHEN LOWER(COALESCE(h.old_status,'')) = 'research'  THEN 5
-              WHEN LOWER(COALESCE(h.old_status,'')) = 'cold'      THEN 6
-              ELSE 7
-            END AS old_rank,
-            CASE
-              WHEN LOWER(COALESCE(h.new_status,'')) = 'converted' THEN 1
-              WHEN LOWER(COALESCE(h.new_status,'')) = 'hot'       THEN 2
-              WHEN LOWER(COALESCE(h.new_status,'')) = 'warm'      THEN 3
-              WHEN LOWER(COALESCE(h.new_status,'')) = 'follow-up' THEN 4
-              WHEN LOWER(COALESCE(h.new_status,'')) = 'research'  THEN 5
-              WHEN LOWER(COALESCE(h.new_status,'')) = 'cold'      THEN 6
-              ELSE 7
-            END AS new_rank
-          FROM lead_status_history h
-          JOIN leads l ON l.id = h.lead_id
-          WHERE h.changed_at::date >= $1::date
-            AND h.changed_at::date <= ($2::date - INTERVAL '1 day')
-        )
-        SELECT
-          COUNT(*) FILTER (WHERE new_rank < old_rank) AS upgrades,
-          COUNT(*) FILTER (WHERE new_rank > old_rank) AS downgrades,
-          (
-            SELECT t
-            FROM (
-              SELECT LOWER(TRIM(unnest(tags))) AS t
-              FROM ranked
-              WHERE new_rank < old_rank
-                AND tags IS NOT NULL
-            ) up
-            GROUP BY t
-            ORDER BY COUNT(*) DESC
-            LIMIT 1
-          ) AS top_tag_upgrade,
-          (
-            SELECT t
-            FROM (
-              SELECT LOWER(TRIM(unnest(tags))) AS t
-              FROM ranked
-              WHERE new_rank > old_rank
-                AND tags IS NOT NULL
-            ) down
-            GROUP BY t
-            ORDER BY COUNT(*) DESC
-            LIMIT 1
-          ) AS top_tag_downgrade
-        FROM ranked
-      )
-      SELECT
-        (SELECT row_to_json(activity) FROM activity) AS activity,
-        (SELECT json_build_object(
-           'hot_arr',  COALESCE(hot_arr, 0),
-           'warm_arr', COALESCE(warm_arr, 0),
-           'corpv',    COALESCE(hot_arr, 0) + COALESCE(warm_arr, 0),
-           'avg_deal', CASE
-                         WHEN deals_for_avg > 0
-                           THEN ROUND(arr_for_avg / deals_for_avg)
-                         ELSE 0
-                       END
-         ) FROM arrs) AS arr,
-        (SELECT json_agg(row_to_json(r)) FROM by_industry r) AS perf_by_industry,
-        (SELECT json_agg(row_to_json(r)) FROM by_state r)    AS perf_by_state,
-        '[]'::json                                           AS perf_by_tag,
-        (SELECT row_to_json(counts)        FROM counts)      AS counts,
-        (SELECT row_to_json(status_moves)  FROM status_moves) AS pipeline,
-        (SELECT unplaced_count FROM unplaced)                AS unplaced_count,
-        (SELECT json_agg(row_to_json(s)) FROM base_final s)  AS leads
-      ;
-    `;
-
-    const { rows } = await pool.query(sql, params);
-    const payload = rows[0] || {};
-
-    // If tags is not TEXT[] in DB, derive a tag summary from the leads[]
-    if (!payload.perf_by_tag || payload.perf_by_tag.length === 0) {
-      const tagCounter = {};
-      (payload.leads || []).forEach(l => {
-        let tags = [];
-        if (Array.isArray(l.tags)) tags = l.tags;
-        else if (typeof l.tags === 'string') {
-          tags = l.tags.split(',').map(s => s.trim()).filter(Boolean);
-        }
-        tags.forEach(t => {
-          const k = t.toLowerCase();
-          tagCounter[k] = (tagCounter[k] || 0) + 1;
-        });
-      });
-      payload.perf_by_tag = Object.entries(tagCounter)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10)
-        .map(([key, cnt]) => ({ key, cnt }));
-    }
-
-    res.json({
-      filters: { from: fromStr, to: ymd(end), status: status || '' },
-      metrics: {
-        activity:         payload.activity || {},
-        arr:              payload.arr || { hot_arr:0, warm_arr:0, corpv:0, avg_deal:0 },
-        counts:           payload.counts || { warm_count:0, hot_count:0, converted_count:0 },
-        pipeline:         payload.pipeline || { upgrades:0, downgrades:0, top_tag_upgrade:null, top_tag_downgrade:null },
-        perf_by_industry: payload.perf_by_industry || [],
-        perf_by_state:    payload.perf_by_state || [],
-        perf_by_tag:      payload.perf_by_tag || []
-      },
-      leads:          payload.leads || [],
-      unplaced_count: payload.unplaced_count || 0
+    return res.json({
+      ok: true,
+      message: 'Summary backend is wired. Detailed metrics coming next phase.',
+      total_leads: totalLeads
     });
   } catch (err) {
-    console.error('SUMMARY ERR:', err);
-    res.status(500).json({ error: 'summary_failed' });
+    console.error('SUMMARY ERR (temp handler)', err);
+    return res.status(500).json({ error: 'summary_failed' });
+  } finally {
+    if (client) client.release();
   }
 });
-
 
 
 app.get('/map/summary', async (req, res) => {
