@@ -1,5 +1,7 @@
 (function () {
-  const API = window.DELI_API_BASE || "http://127.0.0.1:8080";
+  // Use same-origin backend for both local dev and Railway
+  const API = '';
+
 
   // ----- Date helpers -----
   const pad = (n) => String(n).padStart(2, "0");

@@ -2,18 +2,21 @@
 
 (() => {
   // ---------- API BASE ----------
-const API_BASE = window.DELI_API_BASE;   // <-- bridge the HTML global to this file
-const MAP_URL = `${API_BASE}/map/summary`;
+  // Use same-origin backend for both local dev and Railway.
+  // (index.html and the backend live on the same host/port.)
+  const API_BASE = '';
+  const MAP_URL = `${API_BASE}/map/summary`;
 
-window.refreshLeads = async function refreshLeads() {
-  const res = await fetch(MAP_URL, { cache: 'no-cache' });
-  const payload = await res.json();
-  DS.state.rawRows = unwrapData(payload);
-  populateFilterOptions();
-  computeFiltered();
-  renderMarkers();
-  updateStats();
-};
+  window.refreshLeads = async function refreshLeads() {
+    const res = await fetch(MAP_URL, { cache: 'no-cache' });
+    const payload = await res.json();
+    DS.state.rawRows = unwrapData(payload);
+    populateFilterOptions();
+    computeFiltered();
+    renderMarkers();
+    updateStats();
+  };
+
 
   // ---------- DOM ----------
   const MAP_ID = 'map';
