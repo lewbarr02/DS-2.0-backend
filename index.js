@@ -1202,66 +1202,10 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'All rows failed validation.', examples: badExamples });
     }
 
-    // --- DB insert (parameterized) ---
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      // Column order matches template (Notes near end; Lat/Lon last)
-const cols = [
-  'name','company','industry','owner','city','state','status','tags','cadence_name',
-  'source','source_channel','conversion_stage','arr','ap_spend','size','obstacle',
-  'net_new','self_sourced','engagement_score','last_contacted_at','next_action_at',
-  'last_status_change','notes','latitude','longitude','forecast_month','lead_type',
-  'website','created_at','updated_at'
-];
-
-      const colList = cols.map(c => `"${c}"`).join(', ');
-      const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
-
       const sql = `
         INSERT INTO leads (${colList})
         VALUES (${placeholders})
-        ON CONFLICT (name, company)
-        DO UPDATE SET
-  city              = COALESCE(EXCLUDED.city,              leads.city),
-  state             = COALESCE(EXCLUDED.state,             leads.state),
-  industry          = COALESCE(EXCLUDED.industry,          leads.industry),
-  owner             = COALESCE(EXCLUDED.owner,             leads.owner),
-  status            = COALESCE(EXCLUDED.status,            leads.status),
-  -- keep existing tags if incoming is NULL or empty array
-  tags              = CASE
-                        WHEN EXCLUDED.tags IS NULL OR EXCLUDED.tags = '{}'
-                          THEN leads.tags
-                        ELSE EXCLUDED.tags
-                      END,
-  cadence_name      = COALESCE(EXCLUDED.cadence_name,      leads.cadence_name),
-
-  lead_type         = COALESCE(EXCLUDED.lead_type,         leads.lead_type),
-  forecast_month    = COALESCE(EXCLUDED.forecast_month,    leads.forecast_month),
-
-  source            = COALESCE(EXCLUDED.source,            leads.source),
-  source_channel    = COALESCE(EXCLUDED.source_channel,    leads.source_channel),
-  conversion_stage  = COALESCE(EXCLUDED.conversion_stage,  leads.conversion_stage),
-
-  arr               = COALESCE(EXCLUDED.arr,               leads.arr),
-  ap_spend          = COALESCE(EXCLUDED.ap_spend,          leads.ap_spend),
-  size              = COALESCE(EXCLUDED.size,              leads.size),
-  obstacle          = COALESCE(EXCLUDED.obstacle,          leads.obstacle),
-  net_new           = COALESCE(EXCLUDED.net_new,           leads.net_new),
-  self_sourced      = COALESCE(EXCLUDED.self_sourced,      leads.self_sourced),
-  engagement_score  = COALESCE(EXCLUDED.engagement_score,  leads.engagement_score),
-
-  last_contacted_at = COALESCE(EXCLUDED.last_contacted_at, leads.last_contacted_at),
-  next_action_at    = COALESCE(EXCLUDED.next_action_at,    leads.next_action_at),
-  last_status_change= COALESCE(EXCLUDED.last_status_change,leads.last_status_change),
-
-  notes             = COALESCE(EXCLUDED.notes,             leads.notes),
-  latitude          = COALESCE(EXCLUDED.latitude,          leads.latitude),
-  longitude         = COALESCE(EXCLUDED.longitude,         leads.longitude),
-  website           = COALESCE(EXCLUDED.website,           leads.website),
-
-  updated_at        = NOW();
+        ON CONFLICT DO NOTHING;
       `;
 
 for (const r of normalized) {
