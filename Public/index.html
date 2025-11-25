@@ -511,14 +511,16 @@ async function autoGeocodeMissing({ max = 25, delayMs = 1000 } = {}) {
       if (Array.isArray(geo) && geo[0]) {
         const lat = parseFloat(geo[0].lat);
         const lon = parseFloat(geo[0].lon);
-        if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
-          const id = lead.id || lead.uuid;
-          await fetch(`${window.DELI_API_BASE}/update-lead/${encodeURIComponent(id)}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ latitude: lat, longitude: lon })
-          });
-        }
+if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
+  const id = lead.id || lead.uuid;
+  const base = window.DELI_API_BASE || '';
+  await fetch(`${base}/update-lead/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ latitude: lat, longitude: lon })
+  });
+}
+
       }
 
       // throttle to avoid 429

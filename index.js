@@ -1438,6 +1438,35 @@ app.put('/update-lead/:id', async (req, res) => {
   }
 });
 
+// --- DELETE A LEAD ---
+// DELETE /leads/:id – permanently remove a single lead
+// (activities etc. will be removed automatically if your FKs use ON DELETE CASCADE)
+app.delete('/leads/:id', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) {
+    return res.status(400).json({ error: 'Invalid id' });
+  }
+
+  try {
+    const result = await pool.query(
+      'DELETE FROM leads WHERE id = $1 RETURNING id, name, company',
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Lead not found' });
+    }
+
+    return res.json({ ok: true, deleted: result.rows[0] });
+  } catch (err) {
+    console.error('DELETE /leads/:id error', err);
+    return res
+      .status(500)
+      .json({ error: 'Failed to delete lead', detail: err.message });
+  }
+});
+
+
 
 
 

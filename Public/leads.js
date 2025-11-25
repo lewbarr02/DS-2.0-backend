@@ -1,21 +1,31 @@
 /* Deli Sandwich – Functional Map (filters + clustering + stats) */
 
 (() => {
-  // ---------- API BASE ----------
-  // Use same-origin backend for both local dev and Railway.
-  // (index.html and the backend live on the same host/port.)
-  const API_BASE = '';
-  const MAP_URL = `${API_BASE}/map/summary`;
+// ---------- API BASE ----------
+const API_BASE = window.DELI_API_BASE || '';
 
-  window.refreshLeads = async function refreshLeads() {
-    const res = await fetch(MAP_URL, { cache: 'no-cache' });
-    const payload = await res.json();
-    DS.state.rawRows = unwrapData(payload);
-    populateFilterOptions();
-    computeFiltered();
-    renderMarkers();
-    updateStats();
-  };
+// Centralized map loader
+async function loadMapData() {
+  try {
+    const res = await fetch(`${API_BASE}/map/summary`, { cache: 'no-cache' });
+    if (res.ok) return await res.json();
+    console.warn("map/summary failed, falling back to /summary");
+  } catch {}
+
+  const res2 = await fetch(`${API_BASE}/summary`, { cache: 'no-cache' });
+  return await res2.json();
+}
+
+window.refreshLeads = async function refreshLeads() {
+  const payload = await loadMapData();
+  DS.state.rawRows = unwrapData(payload);
+  populateFilterOptions();
+  computeFiltered();
+  renderMarkers();
+  updateStats();
+};
+
+
 
 
   // ---------- DOM ----------
@@ -419,6 +429,8 @@ function updateStats() {
   // ——— State ———
   let DS_CURRENT_LEAD = null;
   let DS_SAVE_IN_FLIGHT = false;
+  let DS_DELETE_IN_FLIGHT = false;
+
 
   // Keep one Leaflet popup instance so we can swap content without reopening
   const dsPopup = L.popup({ maxWidth: 420, closeButton: true });
@@ -473,6 +485,8 @@ function updateStats() {
       </div>
     `;
   }
+  
+  
 
   // ——— Edit template ———
   function renderEditPopup(lead) {
@@ -558,14 +572,26 @@ function updateStats() {
             <textarea name="notes" rows="3">${esc(lead.notes || "")}</textarea>
           </label>
 
-          <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.5rem">
-            <button type="button" class="ds-btn-cancel" style="padding:.4rem .7rem;border:1px solid #ddd;border-radius:8px;background:white">Cancel</button>
-            <button type="submit" class="ds-btn-save" style="padding:.4rem .7rem;border:1px solid #0a7;background:#0a7;color:white;border-radius:8px">Save</button>
-          </div>
-        </form>
+        <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.5rem">
+          <button class="ds-btn-edit"
+                  style="padding:.4rem .7rem;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:#f8f8f8">
+            Edit
+          </button>
+
+          <button class="ds-btn-delete"
+                  style="padding:.4rem .7rem;border-radius:8px;border:1px solid #f5b5b5;cursor:pointer;background:#fff;color:#b00020">
+            Delete
+          </button>
+
+          <button class="ds-btn-close"
+                  style="padding:.4rem .7rem;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:white">
+            Close
+          </button>
+        </div>
       </div>
     `;
   }
+
 
   // ——— Popup open/swap ———
   function openLeadPopup(mode, latlng) {
@@ -576,24 +602,73 @@ function updateStats() {
 
   // ——— Attach one-time document listeners (call from boot()) ———
   function attachPopupEventDelegates() {
-    // Edit / Close in preview
-    document.addEventListener("click", (e) => {
+    // Edit / Close / Delete in preview
+    document.addEventListener("click", async (e) => {
       const node = e.target;
+
       if (node.classList?.contains("ds-btn-edit")) {
         e.preventDefault();
         const latlng = dsPopup.getLatLng();
         openLeadPopup("edit", latlng);
       }
+
       if (node.classList?.contains("ds-btn-close")) {
         e.preventDefault();
         window.map.closePopup(dsPopup);
       }
+
       if (node.classList?.contains("ds-btn-cancel")) {
         e.preventDefault();
         const latlng = dsPopup.getLatLng();
         openLeadPopup("preview", latlng);
       }
+
+      if (node.classList?.contains("ds-btn-delete")) {
+        e.preventDefault();
+        if (!DS_CURRENT_LEAD || !DS_CURRENT_LEAD.id) return;
+        if (DS_DELETE_IN_FLIGHT) return;
+
+        const label =
+          DS_CURRENT_LEAD.company ||
+          DS_CURRENT_LEAD.name ||
+          "this lead";
+
+        const ok = window.confirm(
+          `Delete "${label}"? This cannot be undone.`
+        );
+        if (!ok) return;
+
+        try {
+          DS_DELETE_IN_FLIGHT = true;
+          node.disabled = true;
+          node.textContent = "Deleting…";
+
+          const res = await fetch(
+            `${API_BASE}/leads/${encodeURIComponent(DS_CURRENT_LEAD.id)}`,
+            { method: "DELETE" }
+          );
+
+          if (!res.ok) {
+            const msg = await res.text().catch(() => "");
+            throw new Error(msg || `Delete failed (${res.status})`);
+          }
+
+          // Close popup and refresh map + list
+          window.map.closePopup(dsPopup);
+          if (window.refreshLeads) {
+            await window.refreshLeads();
+          }
+        } catch (err) {
+          console.error("Delete failed", err);
+          alert("Delete failed: " + (err.message || err));
+        } finally {
+          DS_DELETE_IN_FLIGHT = false;
+          node.disabled = false;
+          node.textContent = "Delete";
+        }
+      }
     });
+
 
     // Save submit
     document.addEventListener("submit", async (e) => {
@@ -619,7 +694,7 @@ function updateStats() {
       };
 
       const id = DS_CURRENT_LEAD.id;
-      const saveBtn = form.querySelector(".ds-btn-save");
+      const saveBtn = form.querySelector(".ds-btn-edit");
       try {
         DS_SAVE_IN_FLIGHT = true;
         saveBtn.disabled = true;
@@ -681,29 +756,21 @@ function updateStats() {
     window.map = map;
     attachPopupEventDelegates();   // new preview/edit system
 
-    // Fetch + render
-    let payload;
- try {
-  // Explicitly use the map data endpoint instead of analytics summary
-  const res = await fetch(`${API_BASE}/map/summary`, { cache: 'no-cache' });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  payload = await res.json();
-} catch (err) {
-  console.error('Failed to load /map/summary:', err);
-  return;
-}
-
+    // Fetch + render (uses same helper as refreshLeads)
+    const payload = await loadMapData();
     DS.state.rawRows = unwrapData(payload);
     populateFilterOptions();
     wireDashboard();
     computeFiltered();
     renderMarkers();
     updateStats();
-  }  // 👈 closes the boot() function
 
-  // ✅ Auto-run boot once when the page loads
-  if (!DS.leadsBootBound) {
-    document.addEventListener('DOMContentLoaded', boot);
-    DS.leadsBootBound = true;
-  }
+
+// Auto-run boot once when the page loads
+if (!DS.leadsBootBound) {
+  document.addEventListener('DOMContentLoaded', boot);
+  DS.leadsBootBound = true;
+}
+
+// CLOSE IIFE
 })();
