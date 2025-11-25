@@ -997,7 +997,8 @@ app.post('/api/daily-queue/item/:id/skip', async (req, res) => {
  * Final CSV header order (case-insensitive matching in importer):
  * Name,Company,Industry,Owner,City,State,Status,Tags,Cadence Name,Source,Source Channel,
  * Conversion Stage,ARR,AP Spend,Size,Obstacle,Net New,Self Sourced,Engagement Score,
- * Last Contacted At,Next Action At,Last Status Change,Notes,Latitude,Longitude,Website
+ * Last Contacted At,Next Action At,Last Status Change,Notes,Latitude,Longitude,Website,
+ * Forecast Month,Lead Type
  *
  * Minimal required: Name, Company
  */
@@ -1149,7 +1150,6 @@ app.get('/import/template', (_req, res) => {
   res.send(header + '\n' + body + '\n');
 });
 
-	
 // Upload & import
 app.post('/import/csv', upload.single('file'), async (req, res) => {
   try {
@@ -1202,64 +1202,79 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'All rows failed validation.', examples: badExamples });
     }
 
+    // ---------- DB transaction ----------
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // fixed column order for insert
+      const columns = [
+        'name','company','industry','owner','city','state','status','tags','cadence_name',
+        'source','source_channel','conversion_stage','arr','ap_spend','size','obstacle',
+        'net_new','self_sourced','engagement_score','last_contacted_at','next_action_at',
+        'last_status_change','notes','latitude','longitude','forecast_month','lead_type',
+        'website','created_at','updated_at'
+      ];
+      const colList = columns.join(', ');
+      const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
+
       const sql = `
         INSERT INTO leads (${colList})
         VALUES (${placeholders})
         ON CONFLICT DO NOTHING;
       `;
 
-for (const r of normalized) {
-  const values = [
-    r.name ?? null,
-    r.company ?? null,
-    r.industry ?? null,
-    r.owner ?? null,
-    r.city ?? null,
-    r.state ?? null,
-    normalizeStatus(r.status),
-    Array.isArray(r.tags) ? r.tags : [],
-    r.cadence_name ?? null,
-    r.source ?? 'csv-import',
-    r.source_channel ?? null,
-    r.conversion_stage ?? null,
-    r.arr ?? null,
-    r.ap_spend ?? null,
-    r.size ?? null,
-    r.obstacle ?? null,
-    r.net_new ?? false,
-    r.self_sourced ?? false,
-    r.engagement_score ?? null,
-    r.last_contacted_at ?? null,
-    r.next_action_at ?? null,
-    r.last_status_change ?? null,
-    r.notes ?? null,
-    r.latitude ?? null,
-    r.longitude ?? null,
-    r.forecast_month ?? null,
-    r.lead_type ?? null,
-    r.website ?? null,
-    new Date(),
-    new Date()
-  ];
+      for (const r of normalized) {
+        const values = [
+          r.name ?? null,
+          r.company ?? null,
+          r.industry ?? null,
+          r.owner ?? null,
+          r.city ?? null,
+          r.state ?? null,
+          normalizeStatus(r.status),
+          Array.isArray(r.tags) ? r.tags : [],
+          r.cadence_name ?? null,
+          r.source ?? 'csv-import',
+          r.source_channel ?? null,
+          r.conversion_stage ?? null,
+          r.arr ?? null,
+          r.ap_spend ?? null,
+          r.size ?? null,
+          r.obstacle ?? null,
+          r.net_new ?? false,
+          r.self_sourced ?? false,
+          r.engagement_score ?? null,
+          r.last_contacted_at ?? null,
+          r.next_action_at ?? null,
+          r.last_status_change ?? null,
+          r.notes ?? null,
+          r.latitude ?? null,
+          r.longitude ?? null,
+          r.forecast_month ?? null,
+          r.lead_type ?? null,
+          r.website ?? null,
+          new Date(), // created_at
+          new Date()  // updated_at
+        ];
 
-  await client.query(sql, values);
-}
+        await client.query(sql, values);
+      }
 
-await client.query('COMMIT');
+      await client.query('COMMIT');
 
-// 🗺️ Auto-run geocoder after CSV import (fills any missing lat/lon)
-const geoSummary = await geocodeMissingLeads({ limit: 25, delayMs: 1000 });
+      // 🗺️ Auto-run geocoder after CSV import (fills any missing lat/lon)
+      const geoSummary = await geocodeMissingLeads({ limit: 25, delayMs: 1000 });
 
-return res.json({
-  ok: true,
-  inserted_or_updated: normalized.length,
-  failed: bad,
-  failed_examples: badExamples,
-  geocoded_processed: geoSummary.processed,
-  geocoded_success: geoSummary.success,
-  geocoded_failed: geoSummary.failed
-});
-
+      return res.json({
+        ok: true,
+        inserted_or_updated: normalized.length,
+        failed: bad,
+        failed_examples: badExamples,
+        geocoded_processed: geoSummary.processed,
+        geocoded_success: geoSummary.success,
+        geocoded_failed: geoSummary.failed
+      });
     } catch (err) {
       await client.query('ROLLBACK');
       return res.status(500).json({
@@ -1274,6 +1289,7 @@ return res.json({
     return res.status(400).json({ error: err.message, detail: err.detail, code: err.code });
   }
 });
+
 
 // --- UPDATE A LEAD (Safe UPSERT; now logs status history) ---
 // PUT /update-lead/:id  — update a single lead, log status change, and return the updated row
