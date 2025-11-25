@@ -756,21 +756,28 @@ function updateStats() {
     window.map = map;
     attachPopupEventDelegates();   // new preview/edit system
 
-    // Fetch + render (uses same helper as refreshLeads)
-    const payload = await loadMapData();
+    // Fetch + render (use the map summary endpoint)
+    let payload;
+    try {
+      const res = await fetch(`${API_BASE}/map/summary`, { cache: 'no-cache' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      payload = await res.json();
+    } catch (err) {
+      console.error('Failed to load /map/summary:', err);
+      return;
+    }
+
     DS.state.rawRows = unwrapData(payload);
     populateFilterOptions();
     wireDashboard();
     computeFiltered();
     renderMarkers();
     updateStats();
+  }
 
-
-// Auto-run boot once when the page loads
-if (!DS.leadsBootBound) {
-  document.addEventListener('DOMContentLoaded', boot);
-  DS.leadsBootBound = true;
-}
-
-// CLOSE IIFE
+  // Auto-run boot once when the page loads
+  if (!DS.leadsBootBound) {
+    document.addEventListener('DOMContentLoaded', boot);
+    DS.leadsBootBound = true;
+  }
 })();
