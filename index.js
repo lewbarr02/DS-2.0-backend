@@ -1476,6 +1476,31 @@ app.delete('/leads/:id', async (req, res) => {
   }
 });
 
+// --- BULK DELETE ALL LEADS ---
+// POST /leads/bulk-delete – dangerous: wipes ALL leads
+app.post('/leads/bulk-delete', async (req, res) => {
+  const { confirm } = req.body || {};
+
+  // Simple safety check so we don't delete by accident
+  if (confirm !== 'DELETE') {
+    return res.status(400).json({
+      error: 'Missing or invalid confirm token. Pass { "confirm": "DELETE" } to bulk delete.'
+    });
+  }
+
+  try {
+    const result = await pool.query('DELETE FROM leads');
+    // If your foreign keys use ON DELETE CASCADE, related activities etc. will go too
+    return res.json({ ok: true, deleted: result.rowCount });
+  } catch (err) {
+    console.error('POST /leads/bulk-delete error', err);
+    return res
+      .status(500)
+      .json({ error: 'Failed to bulk delete leads', detail: err.message });
+  }
+});
+
+
 
 
 

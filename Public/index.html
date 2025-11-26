@@ -358,7 +358,17 @@ html, body {
   </button>
   <input id="csvInput" type="file" accept=".csv" style="display:none;" />
   <span id="uploadStatus" style="display:none;margin-left:8px;font-size:14px;"></span>
+
+  <!-- ⚠️ Dangerous: wipes ALL leads -->
+  <button
+    id="deleteAllLeadsBtn"
+    style="margin-left:12px;padding:6px 10px;border-radius:8px;
+           border:1px solid #fca5a5;background:#fee2e2;color:#b91c1c;
+           cursor:pointer;">
+    🗑️ Delete All Leads
+  </button>
 </div>
+
 
 <script>
   // --- Upload CSV wiring ---
@@ -380,12 +390,12 @@ html, body {
       const fd = new FormData();
       fd.append('file', file, file.name); // field name matches your backend Multer config
 
-const res = await fetch('/import/csv', { method: 'POST', body: fd });
+      const res = await fetch('/import/csv', { method: 'POST', body: fd });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Upload failed');
 
-      const count = data?.inserted_or_updated ?? 0;
+      const count  = data?.inserted_or_updated ?? 0;
       const failed = Array.isArray(data?.failed_rows) ? data.failed_rows.length : 0;
 
       uploadStatus.textContent = `✅ Imported ${count} row(s) • ${failed} failed`;
@@ -393,8 +403,10 @@ const res = await fetch('/import/csv', { method: 'POST', body: fd });
 
       // Refresh map markers if leads.js exposes window.refreshLeads()
       if (window.refreshLeads) await window.refreshLeads();
-	  // 👉 add this line to kick off geocoding of missing coords
-autoGeocodeMissing({ max: 25, delayMs: 1000 });
+      // Kick off geocoding of any new leads missing coords
+      if (window.autoGeocodeMissing) {
+        window.autoGeocodeMissing({ max: 25, delayMs: 1000 });
+      }
     } catch (err) {
       uploadStatus.textContent = `❌ ${err.message || 'Upload error'}`;
       uploadStatus.style.color = '#dc2626';
@@ -406,7 +418,47 @@ autoGeocodeMissing({ max: 25, delayMs: 1000 });
       }, 3500);
     }
   });
+
+  // --- Bulk Delete All Leads wiring ---
+  const deleteAllBtn = document.getElementById('deleteAllLeadsBtn');
+  if (deleteAllBtn) {
+    deleteAllBtn.addEventListener('click', async () => {
+      const ok = window.confirm(
+        'Delete ALL leads from Deli (including test data)? This cannot be undone.'
+      );
+      if (!ok) return;
+
+      const originalText = deleteAllBtn.textContent;
+      deleteAllBtn.disabled = true;
+      deleteAllBtn.textContent = 'Deleting…';
+
+      try {
+        const res = await fetch('/leads/bulk-delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confirm: 'DELETE' })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
+
+        const deletedCount = data.deleted ?? 'all';
+        alert(`Deleted ${deletedCount} lead(s).`);
+
+        if (window.refreshLeads) {
+          await window.refreshLeads();
+        }
+      } catch (err) {
+        console.error('Bulk delete failed', err);
+        alert(`Bulk delete failed: ${err.message || 'Unknown error'}`);
+      } finally {
+        deleteAllBtn.disabled = false;
+        deleteAllBtn.textContent = originalText;
+      }
+    });
+  }
 </script>
+
 	  
     </div>
 
@@ -578,40 +630,77 @@ document.addEventListener('DOMContentLoaded', () => {
     <div class="modal hidden" id="leadModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: none; justify-content: center; align-items: center;">
       <div class="modal-content" style="background: white; padding: 20px; width: 400px; max-height: 80vh; overflow-y: auto; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.2);">
         <h2>New Lead</h2>
-        <form id="leadForm">
-          <input type="hidden" name="id" />
-          <input name="name" placeholder="Name" required style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
-          <input name="company" placeholder="Company" style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
-          <input name="city" placeholder="City" style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
-          <input name="state" placeholder="State" style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
-          <input name="tags" placeholder="Tags (comma-separated)" style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
-          <input name="cadence_name" placeholder="Cadence Name" style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
-          <input name="website" placeholder="Website" style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
-          <select name="status" style="width: 100%; margin-bottom: 10px; padding: 8px;">
-            <option value="">Select Status</option>
-            <option value="Converted">Converted 🏆</option>
-            <option value="Hot">Hot 🔥</option>
-            <option value="Warm">Warm 🌞</option>
-            <option value="Cold">Cold 🧊</option>
-            <option value="Follow-Up">Follow-Up ⏳</option>
-            <option value="Research">Research 🔍</option>
-          </select>
+<form id="leadForm">
+  <input type="hidden" name="id" />
 
-          <label style="display:block; font-weight:600; margin-top:6px;">Last Touched</label>
-          <input name="last_touched" type="date" style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+  <input name="name" placeholder="Name" required
+         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
 
-          <input name="net_new" placeholder="Net New (true/false)" style="width: 100%; margin-bottom: 10px; padding: 8px;" />
-          <input name="size" placeholder="Size" style="width: 100%; margin-bottom: 10px; padding: 8px;" />
-          <input name="arr" placeholder="ARR" style="width: 100%; margin-bottom: 10px; padding: 8px;" />
-          <input name="obstacle" placeholder="Obstacle" style="width: 100%; margin-bottom: 10px; padding: 8px;" />
-          <input name="self_sourced" placeholder="Self Sourced (true/false)" style="width: 100%; margin-bottom: 10px; padding: 8px;" />
-          <textarea name="notes" placeholder="Notes..." style="width: 100%; margin-bottom: 10px; padding: 8px;"></textarea>
+  <input name="company" placeholder="Company"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
 
-          <div class="modal-buttons" style="display: flex; justify-content: flex-end; gap: 10px;">
-            <button id="cancelLead" type="button">Cancel</button>
-            <button type="submit">Save Lead</button>
-          </div>
-        </form>
+  <input name="city" placeholder="City"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+
+  <input name="state" placeholder="State"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+
+  <!-- NEW FIELD -->
+  <input name="industry" placeholder="Industry"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+
+  <input name="tags" placeholder="Tags (comma-separated)"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+
+  <input name="cadence_name" placeholder="Cadence Name"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+
+  <input name="website" placeholder="Website"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+
+  <select name="status"
+          style="width: 100%; margin-bottom: 10px; padding: 8px;">
+    <option value="">Select Status</option>
+    <option value="Unspecified">Unspecified ⚪</option>
+    <option value="Converted">Converted 🏆</option>
+    <option value="Hot">Hot 🔥</option>
+    <option value="Warm">Warm 🌞</option>
+    <option value="Cold">Cold 🧊</option>
+    <option value="Follow-Up">Follow-Up ⏳</option>
+    <option value="Research">Research 🔍</option>
+  </select>
+
+  <label style="display:block; font-weight:600; margin-top:6px;">
+    Last Touched
+  </label>
+  <input name="last_touched" type="date"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+
+  <input name="net_new" placeholder="Net New (true/false)"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+
+  <input name="size" placeholder="Size"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+
+  <input name="arr" placeholder="ARR"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+
+  <input name="obstacle" placeholder="Obstacle"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+
+  <input name="self_sourced" placeholder="Self Sourced (true/false)"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+
+  <textarea name="notes" placeholder="Notes..."
+            style="width: 100%; margin-bottom: 10px; padding: 8px;"></textarea>
+
+  <div class="modal-buttons"
+       style="display: flex; justify-content: flex-end; gap: 10px;">
+    <button id="cancelLead" type="button">Cancel</button>
+    <button type="submit">Save Lead</button>
+  </div>
+</form>
+
       </div>
     </div>
 <script>
