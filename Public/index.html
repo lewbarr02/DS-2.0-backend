@@ -620,6 +620,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // Helpers
   const $  = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+  
+    // Make sure website links are absolute (so "www.cuny.edu" works)
+  function normalizeWebsiteUrl(url) {
+    if (!url) return '';
+    let u = String(url).trim();
+    if (!u) return '';
+
+    // strip any existing http/https just in case
+    u = u.replace(/^https?:\/\//i, '');
+
+    return 'https://' + u;
+  }
+
 
   // Sort state
   const SORT = { key: 'company', dir: 'asc' }; // dir: 'asc' | 'desc'
@@ -713,6 +726,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const html = rows.map(r => {
       const t = (v) => (v == null || v === '') ? '' : String(v);
       const website = getCI(r,'website');
+      const websiteUrl = website ? normalizeWebsiteUrl(website) : '';
       const arr = getCI(r,'arr');
       const ap  = getCI(r,'ap_spend');
 
@@ -729,10 +743,11 @@ document.addEventListener('DOMContentLoaded', () => {
         <td>${ap  ? ('$' + Number(ap).toLocaleString())  : ''}</td>
         <td>${t(getCI(r,'tags'))}</td>
         <td>${t(getCI(r,'cadence_name'))}</td>
-        <td>${website ? `<a class="website-link" href="${website}" target="_blank" rel="noopener">Visit</a>` : ''}</td>
+        <td>${websiteUrl ? `<a class="website-link" href="${websiteUrl}" target="_blank" rel="noopener noreferrer">Visit</a>` : ''}</td>
         <td>${t(getCI(r,'notes'))}</td>
       </tr>`;
     }).join('');
+
     tbody.innerHTML = html;
 
     count.textContent = `${rows.length} lead${rows.length===1?'':'s'}`;

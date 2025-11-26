@@ -472,6 +472,8 @@ function updateStats() {
           <div style="color:#666">Industry</div><div>${esc(lead.industry || "—")}</div>
           <div style="color:#666">Forecast</div><div>${esc(lead.forecast_month || "—")}</div>
           <div style="color:#666">Type</div><div>${esc(lead.lead_type || "—")}</div>
+		  <div style="color:#666">Website</div>
+		  <div>${lead.website ? `<a href="${esc(lead.website)}" target="_blank">${esc(lead.website)}</a>` : "—"}</div>          
           <div style="color:#666">ARR</div><div>${lead.arr != null ? `$${Number(lead.arr).toLocaleString()}` : "—"}</div>
           <div style="color:#666">AP Spend</div><div>${lead.ap_spend != null ? `$${Number(lead.ap_spend).toLocaleString()}` : "—"}</div>
           <div style="color:#666">Tags</div><div>${esc(Array.isArray(lead.tags)? lead.tags.join(", ") : (lead.tags||"—"))}</div>
@@ -508,6 +510,12 @@ function updateStats() {
             <span style="color:#555">Company</span>
             <input name="company" value="${esc(lead.company || "")}" />
           </label>
+		  
+		  <label style="display:grid;gap:.25rem">
+  <span style="color:#555">Website</span>
+  <input name="website" value="${esc(lead.website || "")}" />
+</label>
+
 
           <div style="display:grid;grid-template-columns:1fr 80px;gap:.5rem;align-items:end">
   <label style="display:grid;gap:.25rem">
@@ -681,6 +689,7 @@ function updateStats() {
       const payload = {
         name: fd.get("name")?.trim() || null,
         company: fd.get("company")?.trim() || null,
+		website: (fd.get("website") || "").trim() || null,
         city: fd.get("city")?.trim() || null,
         state: fd.get("state")?.trim().toUpperCase() || null,
         status: statusKey((fd.get("status") || "unspecified").trim()),

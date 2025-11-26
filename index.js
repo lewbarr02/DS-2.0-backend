@@ -995,56 +995,56 @@ app.post('/api/daily-queue/item/:id/skip', async (req, res) => {
 
 /**
  * Final CSV header order (case-insensitive matching in importer):
- * Name,Company,Industry,Owner,City,State,Status,Tags,Cadence Name,Source,Source Channel,
+ * Name,Email,Company,Industry,Owner,City,State,Status,Tags,Cadence Name,Source,Source Channel,
  * Conversion Stage,ARR,AP Spend,Size,Obstacle,Net New,Self Sourced,Engagement Score,
- * Last Contacted At,Next Action At,Last Status Change,Notes,Latitude,Longitude,Website,
- * Forecast Month,Lead Type
+ * Last Contacted At,Next Action At,Last Status Change,Notes,Latitude,Longitude,Forecast Month,Lead Type,Website
  *
  * Minimal required: Name, Company
  */
 const REQUIRED_HEADERS = ['name', 'company'];
 const OPTIONAL_HEADERS = [
+  'email',
   'industry','owner','city','state','status','tags','cadence name','source','source channel',
   'conversion stage','arr','ap spend','size','obstacle','net new','self sourced','engagement score',
-  'last contacted at','next action at','last status change','notes','latitude','longitude','website',
-  // 🆕 add:
-  'forecast month','lead type'
+  'last contacted at','next action at','last status change','notes','latitude','longitude',
+  'forecast month','lead type','website'
 ];
 
 const ALL_HEADERS = [...REQUIRED_HEADERS, ...OPTIONAL_HEADERS];
 
 // Map CSV -> DB columns
 const FIELD_MAP = {
-  'name':'name',
-  'company':'company',
-  'industry':'industry',
-  'owner':'owner',
-  'city':'city',
-  'state':'state',
-  'status':'status',
-  'tags':'tags',
-  'cadence name':'cadence_name',
-  'source':'source',
-  'source channel':'source_channel',
-  'conversion stage':'conversion_stage',
-  'arr':'arr',
-  'ap spend':'ap_spend',
-  'size':'size',
-  'obstacle':'obstacle',
-  'net new':'net_new',
-  'self sourced':'self_sourced',
-  'engagement score':'engagement_score',
-  'last contacted at':'last_contacted_at',
-  'next action at':'next_action_at',
-  'last status change':'last_status_change',
-  'notes':'notes',
-  'latitude':'latitude',
-  'longitude':'longitude',
-  'website':'website',
-  // NEW CSV headers → DB columns
+  'name'          : 'name',
+  'email'         : 'email',
+  'company'       : 'company',
+  'industry'      : 'industry',
+  'owner'         : 'owner',
+  'city'          : 'city',
+  'state'         : 'state',
+  'status'        : 'status',
+  'tags'          : 'tags',
+  'cadence name'  : 'cadence_name',
+  'source'        : 'source',
+  'source channel': 'source_channel',
+  'conversion stage': 'conversion_stage',
+  'arr'           : 'arr',
+  'ap spend'      : 'ap_spend',
+  'size'          : 'size',
+  'obstacle'      : 'obstacle',
+  'net new'       : 'net_new',
+  'self sourced'  : 'self_sourced',
+  'engagement score': 'engagement_score',
+  'last contacted at': 'last_contacted_at',
+  'next action at': 'next_action_at',
+  'last status change': 'last_status_change',
+  'notes'         : 'notes',
+  'latitude'      : 'latitude',
+  'longitude'     : 'longitude',
   'forecast month': 'forecast_month',
-  'lead type': 'lead_type'
+  'lead type'     : 'lead_type',
+  'website'       : 'website'
 };
+
 
 // --- Status normalization ---
 const ALLOWED_STATUS = new Set([
@@ -1132,7 +1132,7 @@ function normalizeRow(rowObj) {
 // Template download (keeps Notes near end; Lat/Lon last-ish)
 app.get('/import/template', (_req, res) => {
   const header = [
-    'Name','Company','Industry','Owner','City','State','Status','Tags','Cadence Name','Source','Source Channel',
+    'Name','Email','Company','Industry','Owner','City','State','Status','Tags','Cadence Name','Source','Source Channel',
     'Conversion Stage','ARR','AP Spend','Size','Obstacle','Net New','Self Sourced','Engagement Score',
     'Last Contacted At','Next Action At','Last Status Change','Notes','Latitude','Longitude',
     'Forecast Month','Lead Type','Website'
@@ -1140,15 +1140,16 @@ app.get('/import/template', (_req, res) => {
 
   const body = [
     // row 1
-    'Jane Doe,Acme Components,Manufacturing,Lewis Barr,Charlotte,NC,hot,"AP,ERP",Q4 Outreach,ZoomInfo,LinkedIn,Qualified,25000,30000000,MM,Timing gate,true,true,82,2025-11-08 10:00,2025-11-12 09:00,2025-11-08 10:05,"Champion loves Finexio.",35.2271,-80.8431,November,Customer,https://acme.com',
+    'Jane Doe,jane.doe@example.com,Acme Components,Manufacturing,Lewis Barr,Charlotte,NC,hot,"AP,ERP",Q4 Outreach,ZoomInfo,LinkedIn,Qualified,25000,30000000,MM,Timing gate,true,true,82,2025-11-08 10:00,2025-11-12 09:00,2025-11-08 10:05,"Champion loves Finexio.",35.2271,-80.8431,November,Customer,https://acme.com',
     // row 2
-    'John Smith,Blue Pine Hotels,Hospitality,Lewis Barr,Los Angeles,CA,warm,"Hotels,West",Inbound follow-up,CSV Upload,Inbound,Discovery,18000,,ENT,,false,true,,2025-11-07,2025-11-13,,,"",,October,Channel Partner,https://bluepine.example'
+    'John Smith,john.smith@example.com,Blue Pine Hotels,Hospitality,Lewis Barr,Los Angeles,CA,warm,"Hotels,West",Inbound follow-up,CSV Upload,Inbound,Discovery,18000,,ENT,,false,true,,2025-11-07,2025-11-13,,,"",,October,Channel Partner,https://bluepine.example'
   ].join('\n');
 
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="deli_import_template.csv"');
   res.send(header + '\n' + body + '\n');
 });
+
 
 // Upload & import
 app.post('/import/csv', upload.single('file'), async (req, res) => {
@@ -1209,12 +1210,13 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
 
       // fixed column order for insert
       const columns = [
-        'name','company','industry','owner','city','state','status','tags','cadence_name',
+        'name','email','company','industry','owner','city','state','status','tags','cadence_name',
         'source','source_channel','conversion_stage','arr','ap_spend','size','obstacle',
         'net_new','self_sourced','engagement_score','last_contacted_at','next_action_at',
         'last_status_change','notes','latitude','longitude','forecast_month','lead_type',
         'website','created_at','updated_at'
       ];
+
       const colList = columns.join(', ');
       const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
 
@@ -1227,6 +1229,7 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
       for (const r of normalized) {
         const values = [
           r.name ?? null,
+          r.email ?? null,
           r.company ?? null,
           r.industry ?? null,
           r.owner ?? null,
@@ -1257,6 +1260,7 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
           new Date(), // created_at
           new Date()  // updated_at
         ];
+
 
         await client.query(sql, values);
       }
@@ -1329,12 +1333,11 @@ app.put('/update-lead/:id', async (req, res) => {
 
   const payload = {
     name: strOrNull(req.body.name),
+    email: strOrNull(req.body.email),
     company: strOrNull(req.body.company),
-    website: strOrNull(req.body.website),  // 👈 NEW: website from edit popup
+    website: strOrNull(req.body.website),
     city: strOrNull(req.body.city),
-    state: strOrNull(
-      req.body.state?.toUpperCase?.() || req.body.state
-    ),
+    state: strOrNull(req.body.state?.toUpperCase?.() || req.body.state),
     status,
     industry: strOrNull(req.body.industry),
     forecast_month: strOrNull(req.body.forecast_month),
@@ -1350,20 +1353,21 @@ app.put('/update-lead/:id', async (req, res) => {
   const sql = `
     UPDATE leads SET
       name            = COALESCE($2,  name),
-      company         = COALESCE($3,  company),
-      website         = COALESCE($4,  website),      -- 👈 NEW
-      city            = COALESCE($5,  city),
-      state           = COALESCE($6,  state),
-      status          = COALESCE($7,  status),
-      industry        = COALESCE($8,  industry),
-      forecast_month  = COALESCE($9,  forecast_month),
-      lead_type       = COALESCE($10, lead_type),
-      arr             = COALESCE($11, arr),
-      ap_spend        = COALESCE($12, ap_spend),
-      tags            = COALESCE($13::text[], tags),
-      notes           = COALESCE($14, notes),
-      latitude        = COALESCE($15, latitude),
-      longitude       = COALESCE($16, longitude),
+      email           = COALESCE($3,  email),
+      company         = COALESCE($4,  company),
+      website         = COALESCE($5,  website),
+      city            = COALESCE($6,  city),
+      state           = COALESCE($7,  state),
+      status          = COALESCE($8,  status),
+      industry        = COALESCE($9,  industry),
+      forecast_month  = COALESCE($10, forecast_month),
+      lead_type       = COALESCE($11, lead_type),
+      arr             = COALESCE($12, arr),
+      ap_spend        = COALESCE($13, ap_spend),
+      tags            = COALESCE($14::text[], tags),
+      notes           = COALESCE($15, notes),
+      latitude        = COALESCE($16, latitude),
+      longitude       = COALESCE($17, longitude),
       updated_at      = NOW()
     WHERE id = $1
     RETURNING *;
@@ -1372,20 +1376,21 @@ app.put('/update-lead/:id', async (req, res) => {
   const params = [
     id,
     payload.name,                          // $2
-    payload.company,                       // $3
-    payload.website,                       // $4  👈 NEW param
-    payload.city,                          // $5
-    payload.state,                         // $6
-    payload.status,                        // $7
-    payload.industry,                      // $8
-    payload.forecast_month,                // $9
-    payload.lead_type,                     // $10
-    payload.arr,                           // $11
-    payload.ap_spend,                      // $12
-    payload.tags && payload.tags.length ? payload.tags : null, // $13
-    payload.notes,                         // $14
-    payload.latitude,                      // $15
-    payload.longitude,                     // $16
+    payload.email,                         // $3
+    payload.company,                       // $4
+    payload.website,                       // $5
+    payload.city,                          // $6
+    payload.state,                         // $7
+    payload.status,                        // $8
+    payload.industry,                      // $9
+    payload.forecast_month,                // $10
+    payload.lead_type,                     // $11
+    payload.arr,                           // $12
+    payload.ap_spend,                      // $13
+    payload.tags && payload.tags.length ? payload.tags : null, // $14
+    payload.notes,                         // $15
+    payload.latitude,                      // $16
+    payload.longitude,                     // $17
   ];
 
   try {
@@ -1440,6 +1445,7 @@ app.put('/update-lead/:id', async (req, res) => {
       .json({ error: 'Failed to update lead', details: err.message });
   }
 });
+
 
 
 // --- DELETE A LEAD ---
