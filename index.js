@@ -1330,6 +1330,7 @@ app.put('/update-lead/:id', async (req, res) => {
   const payload = {
     name: strOrNull(req.body.name),
     company: strOrNull(req.body.company),
+    website: strOrNull(req.body.website),  // 👈 NEW: website from edit popup
     city: strOrNull(req.body.city),
     state: strOrNull(
       req.body.state?.toUpperCase?.() || req.body.state
@@ -1350,18 +1351,19 @@ app.put('/update-lead/:id', async (req, res) => {
     UPDATE leads SET
       name            = COALESCE($2,  name),
       company         = COALESCE($3,  company),
-      city            = COALESCE($4,  city),
-      state           = COALESCE($5,  state),
-      status          = COALESCE($6,  status),
-      industry        = COALESCE($7,  industry),
-      forecast_month  = COALESCE($8,  forecast_month),
-      lead_type       = COALESCE($9,  lead_type),
-      arr             = COALESCE($10, arr),
-      ap_spend        = COALESCE($11, ap_spend),
-      tags            = COALESCE($12::text[], tags),
-      notes           = COALESCE($13, notes),
-      latitude        = COALESCE($14, latitude),
-      longitude       = COALESCE($15, longitude),
+      website         = COALESCE($4,  website),      -- 👈 NEW
+      city            = COALESCE($5,  city),
+      state           = COALESCE($6,  state),
+      status          = COALESCE($7,  status),
+      industry        = COALESCE($8,  industry),
+      forecast_month  = COALESCE($9,  forecast_month),
+      lead_type       = COALESCE($10, lead_type),
+      arr             = COALESCE($11, arr),
+      ap_spend        = COALESCE($12, ap_spend),
+      tags            = COALESCE($13::text[], tags),
+      notes           = COALESCE($14, notes),
+      latitude        = COALESCE($15, latitude),
+      longitude       = COALESCE($16, longitude),
       updated_at      = NOW()
     WHERE id = $1
     RETURNING *;
@@ -1369,20 +1371,21 @@ app.put('/update-lead/:id', async (req, res) => {
 
   const params = [
     id,
-    payload.name,
-    payload.company,
-    payload.city,
-    payload.state,
-    payload.status,
-    payload.industry,
-    payload.forecast_month,
-    payload.lead_type,
-    payload.arr,
-    payload.ap_spend,
-    payload.tags && payload.tags.length ? payload.tags : null,
-    payload.notes,
-    payload.latitude,
-    payload.longitude,
+    payload.name,                          // $2
+    payload.company,                       // $3
+    payload.website,                       // $4  👈 NEW param
+    payload.city,                          // $5
+    payload.state,                         // $6
+    payload.status,                        // $7
+    payload.industry,                      // $8
+    payload.forecast_month,                // $9
+    payload.lead_type,                     // $10
+    payload.arr,                           // $11
+    payload.ap_spend,                      // $12
+    payload.tags && payload.tags.length ? payload.tags : null, // $13
+    payload.notes,                         // $14
+    payload.latitude,                      // $15
+    payload.longitude,                     // $16
   ];
 
   try {
@@ -1437,6 +1440,7 @@ app.put('/update-lead/:id', async (req, res) => {
       .json({ error: 'Failed to update lead', details: err.message });
   }
 });
+
 
 // --- DELETE A LEAD ---
 // DELETE /leads/:id – permanently remove a single lead
