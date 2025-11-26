@@ -419,44 +419,62 @@ html, body {
     }
   });
 
-  // --- Bulk Delete All Leads wiring ---
-  const deleteAllBtn = document.getElementById('deleteAllLeadsBtn');
-  if (deleteAllBtn) {
-    deleteAllBtn.addEventListener('click', async () => {
+<script>
+  // Helper: get IDs for current filtered/visible leads
+  function getFilteredLeadIdsForDelete() {
+    const DS = window.DS || {};
+    const rows = (DS.state && (DS.state.filtered || DS.state.rawRows)) || [];
+    return rows
+      .map(r => r.id ?? r.ID ?? r.lead_id)
+      .filter(id => id !== null && id !== undefined);
+  }
+
+  // --- Bulk Delete Filtered Leads (Safe mode) wiring ---
+  const deleteFilteredBtn = document.getElementById('deleteFilteredLeadsBtn');
+
+  if (deleteFilteredBtn) {
+    deleteFilteredBtn.addEventListener('click', async () => {
+      const ids = getFilteredLeadIdsForDelete();
+
+      if (!ids.length) {
+        alert('No leads match the current filters, so there is nothing to delete.');
+        return;
+      }
+
       const ok = window.confirm(
-        'Delete ALL leads from Deli (including test data)? This cannot be undone.'
+        `Delete ${ids.length} lead(s) that match the CURRENT filters? This cannot be undone.`
       );
       if (!ok) return;
 
-      const originalText = deleteAllBtn.textContent;
-      deleteAllBtn.disabled = true;
-      deleteAllBtn.textContent = 'Deleting…';
+      const originalText = deleteFilteredBtn.textContent;
+      deleteFilteredBtn.disabled = true;
+      deleteFilteredBtn.textContent = 'Deleting…';
 
       try {
-        const res = await fetch('/leads/bulk-delete', {
+        const res = await fetch('/leads/bulk-delete-by-ids', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ confirm: 'DELETE' })
+          body: JSON.stringify({ ids })
         });
 
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
 
-        const deletedCount = data.deleted ?? 'all';
+        const deletedCount = data.deleted ?? ids.length;
         alert(`Deleted ${deletedCount} lead(s).`);
 
-        if (window.refreshLeads) {
-          await window.refreshLeads();
-        }
+        if (window.refreshLeads) await window.refreshLeads();
       } catch (err) {
-        console.error('Bulk delete failed', err);
+        console.error('Bulk delete (filtered) failed', err);
         alert(`Bulk delete failed: ${err.message || 'Unknown error'}`);
       } finally {
-        deleteAllBtn.disabled = false;
-        deleteAllBtn.textContent = originalText;
+        deleteFilteredBtn.disabled = false;
+        deleteFilteredBtn.textContent = originalText;
       }
     });
   }
+</script>
+
 </script>
 
 	  

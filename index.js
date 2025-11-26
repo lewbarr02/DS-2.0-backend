@@ -1487,6 +1487,7 @@ app.post('/leads/bulk-delete', async (req, res) => {
       error: 'Missing or invalid confirm token. Pass { "confirm": "DELETE" } to bulk delete.'
     });
   }
+  
 
   try {
     const result = await pool.query('DELETE FROM leads');
@@ -1499,6 +1500,40 @@ app.post('/leads/bulk-delete', async (req, res) => {
       .json({ error: 'Failed to bulk delete leads', detail: err.message });
   }
 });
+
+// --- BULK DELETE FILTERED LEADS (SAFE MODE) ---
+// POST /leads/bulk-delete-by-ids – deletes only the IDs you send
+app.post('/leads/bulk-delete-by-ids', async (req, res) => {
+  try {
+    let { ids } = req.body || {};
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'No lead IDs provided.' });
+    }
+
+    // Coerce to integers and drop anything invalid
+    ids = ids
+      .map((id) => Number(id))
+      .filter((n) => Number.isInteger(n));
+
+    if (ids.length === 0) {
+      return res.status(400).json({ error: 'No valid numeric IDs provided.' });
+    }
+
+    const result = await pool.query(
+      'DELETE FROM leads WHERE id = ANY($1::int[])',
+      [ids]
+    );
+
+    return res.json({ ok: true, deleted: result.rowCount });
+  } catch (err) {
+    console.error('POST /leads/bulk-delete-by-ids error', err);
+    return res
+      .status(500)
+      .json({ error: 'Failed to bulk delete selected leads', detail: err.message });
+  }
+});
+
 
 
 
