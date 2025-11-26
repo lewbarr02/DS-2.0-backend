@@ -351,131 +351,26 @@ html, body {
         <button id="startMyDayBtn">🚀 Start My Day (20)</button>
         <button id="addLeadBtn">➕ Add Lead</button>
       </div>
-	  <!-- 📤 CSV Upload -->
-<div id="csvUploadBar" style="margin-top:8px;">
-  <button id="uploadCsvBtn" style="padding:6px 10px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">
-    📤 Upload CSV
-  </button>
-  <input id="csvInput" type="file" accept=".csv" style="display:none;" />
-  <span id="uploadStatus" style="display:none;margin-left:8px;font-size:14px;"></span>
+      <!-- 📤 CSV Upload -->
+      <div id="csvUploadBar" style="margin-top:8px;">
+        <button
+          id="uploadCsvBtn"
+          style="padding:6px 10px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">
+          📤 Upload CSV
+        </button>
+        <input id="csvInput" type="file" accept=".csv" style="display:none;" />
+        <span id="uploadStatus" style="display:none;margin-left:8px;font-size:14px;"></span>
 
-  <!-- ⚠️ Dangerous: wipes ALL leads -->
-  <button
-    id="deleteAllLeadsBtn"
-    style="margin-left:12px;padding:6px 10px;border-radius:8px;
-           border:1px solid #fca5a5;background:#fee2e2;color:#b91c1c;
-           cursor:pointer;">
-    🗑️ Delete All Leads
-  </button>
-</div>
+        <!-- 🛡 Safe mode: deletes only currently filtered leads -->
+        <button
+          id="deleteFilteredLeadsBtn"
+          style="margin-left:12px;padding:6px 10px;border-radius:8px;
+                 border:1px solid #fca5a5;background:#fee2e2;color:#b91c1c;
+                 cursor:pointer;">
+          🗑️ Delete Filtered Leads (Safe)
+        </button>
+      </div>
 
-
-<script>
-  // --- Upload CSV wiring ---
-  const uploadBtn = document.getElementById('uploadCsvBtn');
-  const fileInput = document.getElementById('csvInput');
-  const uploadStatus = document.getElementById('uploadStatus');
-
-  uploadBtn.addEventListener('click', () => fileInput.click());
-
-  fileInput.addEventListener('change', async () => {
-    const file = fileInput.files?.[0];
-    if (!file) return;
-
-    uploadStatus.style.display = 'inline';
-    uploadStatus.textContent = 'Uploading…';
-    uploadStatus.style.color = '#6b7280';
-
-    try {
-      const fd = new FormData();
-      fd.append('file', file, file.name); // field name matches your backend Multer config
-
-      const res = await fetch('/import/csv', { method: 'POST', body: fd });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'Upload failed');
-
-      const count  = data?.inserted_or_updated ?? 0;
-      const failed = Array.isArray(data?.failed_rows) ? data.failed_rows.length : 0;
-
-      uploadStatus.textContent = `✅ Imported ${count} row(s) • ${failed} failed`;
-      uploadStatus.style.color = '#16a34a';
-
-      // Refresh map markers if leads.js exposes window.refreshLeads()
-      if (window.refreshLeads) await window.refreshLeads();
-      // Kick off geocoding of any new leads missing coords
-      if (window.autoGeocodeMissing) {
-        window.autoGeocodeMissing({ max: 25, delayMs: 1000 });
-      }
-    } catch (err) {
-      uploadStatus.textContent = `❌ ${err.message || 'Upload error'}`;
-      uploadStatus.style.color = '#dc2626';
-    } finally {
-      setTimeout(() => {
-        uploadStatus.style.display = 'none';
-        uploadStatus.textContent = '';
-        fileInput.value = '';
-      }, 3500);
-    }
-  });
-
-<script>
-  // Helper: get IDs for current filtered/visible leads
-  function getFilteredLeadIdsForDelete() {
-    const DS = window.DS || {};
-    const rows = (DS.state && (DS.state.filtered || DS.state.rawRows)) || [];
-    return rows
-      .map(r => r.id ?? r.ID ?? r.lead_id)
-      .filter(id => id !== null && id !== undefined);
-  }
-
-  // --- Bulk Delete Filtered Leads (Safe mode) wiring ---
-  const deleteFilteredBtn = document.getElementById('deleteFilteredLeadsBtn');
-
-  if (deleteFilteredBtn) {
-    deleteFilteredBtn.addEventListener('click', async () => {
-      const ids = getFilteredLeadIdsForDelete();
-
-      if (!ids.length) {
-        alert('No leads match the current filters, so there is nothing to delete.');
-        return;
-      }
-
-      const ok = window.confirm(
-        `Delete ${ids.length} lead(s) that match the CURRENT filters? This cannot be undone.`
-      );
-      if (!ok) return;
-
-      const originalText = deleteFilteredBtn.textContent;
-      deleteFilteredBtn.disabled = true;
-      deleteFilteredBtn.textContent = 'Deleting…';
-
-      try {
-        const res = await fetch('/leads/bulk-delete-by-ids', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ids })
-        });
-
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
-
-        const deletedCount = data.deleted ?? ids.length;
-        alert(`Deleted ${deletedCount} lead(s).`);
-
-        if (window.refreshLeads) await window.refreshLeads();
-      } catch (err) {
-        console.error('Bulk delete (filtered) failed', err);
-        alert(`Bulk delete failed: ${err.message || 'Unknown error'}`);
-      } finally {
-        deleteFilteredBtn.disabled = false;
-        deleteFilteredBtn.textContent = originalText;
-      }
-    });
-  }
-</script>
-
-</script>
 
 	  
     </div>
@@ -553,6 +448,121 @@ html, body {
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- Scripts -->
+
+    <script>
+      (function() {
+        // --- Upload CSV wiring ---
+        const uploadBtn    = document.getElementById('uploadCsvBtn');
+        const fileInput    = document.getElementById('csvInput');
+        const uploadStatus = document.getElementById('uploadStatus');
+
+        if (uploadBtn && fileInput && uploadStatus) {
+          uploadBtn.addEventListener('click', () => fileInput.click());
+
+          fileInput.addEventListener('change', async () => {
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) return;
+
+            uploadStatus.style.display = 'inline';
+            uploadStatus.textContent = 'Uploading…';
+            uploadStatus.style.color = '#6b7280';
+
+            try {
+              const fd = new FormData();
+              fd.append('file', file, file.name); // field name matches backend
+
+              const res  = await fetch('/import/csv', { method: 'POST', body: fd });
+              const data = await res.json();
+              if (!res.ok) throw new Error(data?.error || 'Upload failed');
+
+              const count  = data?.inserted_or_updated ?? 0;
+              const failed = Array.isArray(data?.failed_rows) ? data.failed_rows.length : 0;
+
+              uploadStatus.textContent = `✅ Imported ${count} row(s) • ${failed} failed`;
+              uploadStatus.style.color = '#16a34a';
+
+              if (window.refreshLeads) await window.refreshLeads();
+              if (window.autoGeocodeMissing) {
+                window.autoGeocodeMissing({ max: 25, delayMs: 1000 });
+              }
+            } catch (err) {
+              uploadStatus.textContent = `❌ ${err.message || 'Upload error'}`;
+              uploadStatus.style.color = '#dc2626';
+            } finally {
+              setTimeout(() => {
+                uploadStatus.style.display = 'none';
+                uploadStatus.textContent = '';
+                fileInput.value = '';
+              }, 3500);
+            }
+          });
+        }
+
+        // Helper: get IDs for current filtered/visible leads
+        function getFilteredLeadIdsForDelete() {
+          const DS   = window.DS || {};
+          const rows = (DS.state && (DS.state.filtered || DS.state.rawRows)) || [];
+          return rows
+            .map(r => r.id ?? r.ID ?? r.lead_id)
+            .filter(id => id !== null && id !== undefined);
+        }
+
+        // --- Bulk Delete Filtered Leads (Safe mode) wiring ---
+        const deleteFilteredBtn = document.getElementById('deleteFilteredLeadsBtn');
+
+        if (deleteFilteredBtn) {
+          deleteFilteredBtn.addEventListener('click', async () => {
+            const ids = getFilteredLeadIdsForDelete();
+
+            if (!ids.length) {
+              alert('No leads match the current filters, so there is nothing to delete.');
+              return;
+            }
+
+            const ok = window.confirm(
+              `Delete ${ids.length} lead(s) that match the CURRENT filters? This cannot be undone.`
+            );
+            if (!ok) return;
+
+            const originalText = deleteFilteredBtn.textContent;
+            deleteFilteredBtn.disabled = true;
+            deleteFilteredBtn.textContent = 'Deleting…';
+
+            try {
+              const res = await fetch('/leads/bulk-delete-by-ids', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids })
+              });
+
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
+
+              const deletedCount = data.deleted ?? ids.length;
+              alert(`Deleted ${deletedCount} lead(s).`);
+
+              if (window.refreshLeads) await window.refreshLeads();
+            } catch (err) {
+              console.error('Bulk delete (filtered) failed', err);
+              alert(`Bulk delete failed: ${err.message || 'Unknown error'}`);
+            } finally {
+              deleteFilteredBtn.disabled = false;
+              deleteFilteredBtn.textContent = originalText;
+            }
+          });
+        }
+      })();
+    </script>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+	
+    <!-- your app scripts -->
+    <script src="leads.js" defer></script>
+
 	
 <!-- your app scripts -->
 <script src="leads.js" defer></script>
