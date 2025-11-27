@@ -1344,17 +1344,23 @@ app.put('/update-lead/:id', async (req, res) => {
   }
 
   // Tags → text[]
-  let tags = req.body.tags;
-  if (Array.isArray(tags)) {
-    tags = tags.map((s) => String(s).trim()).filter(Boolean);
-  } else if (typeof tags === 'string') {
-    tags = tags
+  let tags = null;
+
+  if (typeof req.body.tags === 'string') {
+    const parts = req.body.tags
       .split(',')
-      .map((s) => s.trim())
+      .map(s => s.trim())
       .filter(Boolean);
-  } else if (tags == null) {
-    tags = null; // means "don’t change" (COALESCE keeps old)
+
+    tags = parts.length ? parts : null;
+  } else if (Array.isArray(req.body.tags)) {
+    const parts = req.body.tags
+      .map(s => String(s).trim())
+      .filter(Boolean);
+
+    tags = parts.length ? parts : null;
   }
+
 
   const payload = {
     name: strOrNull(req.body.name),
@@ -1389,7 +1395,7 @@ app.put('/update-lead/:id', async (req, res) => {
       lead_type       = COALESCE($11, lead_type),
       arr             = COALESCE($12, arr),
       ap_spend        = COALESCE($13, ap_spend),
-      tags            = COALESCE($14::text[], tags),
+      tags            = COALESCE($14, tags),
       notes           = COALESCE($15, notes),
       latitude        = COALESCE($16, latitude),
       longitude       = COALESCE($17, longitude),
@@ -1412,7 +1418,7 @@ app.put('/update-lead/:id', async (req, res) => {
     payload.lead_type,                     // $11
     payload.arr,                           // $12
     payload.ap_spend,                      // $13
-    payload.tags && payload.tags.length ? payload.tags : null, // $14
+    payload.tags,                          // $14
     payload.notes,                         // $15
     payload.latitude,                      // $16
     payload.longitude,                     // $17
