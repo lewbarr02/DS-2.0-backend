@@ -446,6 +446,28 @@ function updateStats() {
     const n = Number(String(v).replace(/[, ]+/g, ""));
     return Number.isFinite(n) ? n : null;
   };
+  
+  
+  
+  // Normalize website URLs for links (add https:// if missing)
+function normalizeWebsite(url) {
+  if (!url) return "";
+
+  let cleaned = String(url).trim();
+
+  // remove ALL leading slashes
+  cleaned = cleaned.replace(/^\/+/, "");
+
+  // if still missing protocol, add https://
+  if (!/^https?:\/\//i.test(cleaned)) {
+    cleaned = "https://" + cleaned;
+  }
+
+  return cleaned;
+}
+
+
+
 
   // Status emoji for preview header
   const STATUS_EMOJI = {
@@ -456,6 +478,20 @@ function updateStats() {
   // ——— Preview template ———
   function renderPreviewPopup(lead) {
     const s = statusKey(lead.status || "unspecified");
+
+    const email = (lead.email || "").trim();
+    const emailHtml = email
+      ? `<a href="mailto:${esc(email)}">${esc(email)}</a>`
+      : "—";
+
+    const website = (lead.website || "").trim();
+    const websiteHtml = website
+      ? `<a href="#"
+            class="ds-website-link"
+            data-url="${esc(website)}">${esc(website)}</a>`
+      : "—";
+
+
     return `
       <div class="ds-popup p-2" style="font:14px/1.3 system-ui,Segoe UI,Arial">
         <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.25rem">
@@ -468,12 +504,12 @@ function updateStats() {
 
         <div style="display:grid;grid-template-columns:110px 1fr;gap:.25rem .5rem;margin:.25rem 0">
           <div style="color:#666">Name</div><div>${esc(lead.name || "")}</div>
+          <div style="color:#666">Email</div><div>${emailHtml}</div>
           <div style="color:#666">Status</div><div>${esc(prettyStatus(lead.status))}</div>
           <div style="color:#666">Industry</div><div>${esc(lead.industry || "—")}</div>
           <div style="color:#666">Forecast</div><div>${esc(lead.forecast_month || "—")}</div>
           <div style="color:#666">Type</div><div>${esc(lead.lead_type || "—")}</div>
-		  <div style="color:#666">Website</div>
-		  <div>${lead.website ? `<a href="${esc(lead.website)}" target="_blank">${esc(lead.website)}</a>` : "—"}</div>          
+          <div style="color:#666">Website</div><div>${websiteHtml}</div>
           <div style="color:#666">ARR</div><div>${lead.arr != null ? `$${Number(lead.arr).toLocaleString()}` : "—"}</div>
           <div style="color:#666">AP Spend</div><div>${lead.ap_spend != null ? `$${Number(lead.ap_spend).toLocaleString()}` : "—"}</div>
           <div style="color:#666">Tags</div><div>${esc(Array.isArray(lead.tags)? lead.tags.join(", ") : (lead.tags||"—"))}</div>
@@ -487,6 +523,7 @@ function updateStats() {
       </div>
     `;
   }
+
   
   
 
@@ -619,6 +656,18 @@ function updateStats() {
         const latlng = dsPopup.getLatLng();
         openLeadPopup("edit", latlng);
       }
+	  
+	        // Open website links from the popup
+      if (node.classList?.contains("ds-website-link")) {
+        e.preventDefault();
+        const raw = node.getAttribute("data-url") || "";
+        const url = normalizeWebsite(raw);
+        if (url) {
+          window.open(url, "_blank", "noopener");
+        }
+      }
+
+	  
 
       if (node.classList?.contains("ds-btn-close")) {
         e.preventDefault();
@@ -673,6 +722,8 @@ function updateStats() {
           DS_DELETE_IN_FLIGHT = false;
           node.disabled = false;
           node.textContent = "Delete";
+		  
+		  
         }
       }
     });
