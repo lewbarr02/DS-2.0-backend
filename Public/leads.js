@@ -214,41 +214,70 @@ function unwrapData(payload){
 
   function computeFiltered() {
     const rows = DS.state.rawRows || [];
-    const tagSel     = els.tagFilter()?.value ?? 'All';
-    const typeSel    = els.typeFilter()?.value ?? 'All';
-    const cadenceSel = els.cadenceFilter()?.value ?? 'All';
-    const stateSel   = els.stateFilter()?.value ?? 'All';
-	const industrySel = els.industryFilter()?.value ?? 'All';
-    const statuses   = getSelectedStatuses();
-    const startStr   = els.startDate()?.value || '';
-    const endStr     = els.endDate()?.value || '';
+    const tagSel      = els.tagFilter()?.value ?? 'All';
+    const typeSel     = els.typeFilter()?.value ?? 'All';
+    const cadenceSel  = els.cadenceFilter()?.value ?? 'All';
+    const stateSel    = els.stateFilter()?.value ?? 'All';
+    const industrySel = els.industryFilter()?.value ?? 'All';
+    const statuses    = getSelectedStatuses();
+    const startStr    = els.startDate()?.value || '';
+    const endStr      = els.endDate()?.value || '';
 
     const filtered = [];
+
     for (const r of rows) {
-      const coords = normalizeCoords(r);
-      if(!coords) continue;
+      // ❌ DO NOT require coords here anymore
+      // const coords = normalizeCoords(r);
+      // if (!coords) continue;
 
-      // field getters (case-insensitive)
-      const get=(key)=>{ const hit=Object.keys(r).find(k=>k.toLowerCase()===key.toLowerCase()); return hit?r[hit]:null; };
+      // Case-insensitive getter
+      const get = (key) => {
+        const hit = Object.keys(r).find(
+          (k) => k.toLowerCase() === key.toLowerCase()
+        );
+        return hit ? r[hit] : null;
+      };
 
+      // Status filter (supports "Warm" and "warm")
       const sKey = statusKey(get('status'));
-      // Allow both cases: checkbox values like "Warm" vs normalized "warm"
-      if (!statuses.includes(sKey.charAt(0).toUpperCase() + sKey.slice(1)) && !statuses.includes(sKey)) {
+      if (
+        !statuses.includes(sKey.charAt(0).toUpperCase() + sKey.slice(1)) &&
+        !statuses.includes(sKey)
+      ) {
         if (!statuses.includes(sKey)) continue;
       }
 
+      // Tag / type / cadence / state / industry filters
       if (!includesToken(get('tags'), tagSel)) continue;
+
       if (!includesToken(get('type') || get('lead_type'), typeSel)) continue;
-      if (!includesToken(get('cadence_name'), cadenceSel) && !includesToken(get('cadence'), cadenceSel)) continue;
-      if (!(stateSel === 'All' || (get('state')||'').toLowerCase() === stateSel.toLowerCase())) continue;
-	  if (industrySel !== 'All' && (get('industry') || '').toLowerCase() !== industrySel.toLowerCase()) continue;
+
+      if (
+        !includesToken(get('cadence_name'), cadenceSel) &&
+        !includesToken(get('cadence'), cadenceSel)
+      ) continue;
+
+      if (
+        !(stateSel === 'All' ||
+          (get('state') || '').toLowerCase() === stateSel.toLowerCase())
+      ) continue;
+
+      if (
+        industrySel !== 'All' &&
+        (get('industry') || '').toLowerCase() !== industrySel.toLowerCase()
+      ) continue;
+
+      // Date filter
       if (!withinDateRange(r, startStr, endStr)) continue;
 
+      // ✅ Keep this row even if it has no lat/lon
       filtered.push(r);
     }
+
     DS.state.filtered = filtered;
     return filtered;
   }
+
 
   // ---------- RENDER ----------
   function clearLayers() {
@@ -305,60 +334,77 @@ function unwrapData(payload){
     }
   }
 
-function updateStats() {
-  const total = DS.state.rawRows.filter(r => normalizeCoords(r)).length;
-  const shown = DS.state.filtered.length;
+  function updateStats() {
+    const allRows = DS.state.rawRows || [];
+    const filtered = DS.state.filtered || [];
 
-  const breakdown = DS.state.filtered.reduce((acc, r) => {
-    const k = statusKey(r.status || r.Status);
-    acc[k] = (acc[k] || 0) + 1;
-    return acc;
-  }, {});
+    // Total = every lead in the DB payload
+    const total = allRows.length;
 
-  // 🔹 New vertical chip layout
-  const order = ['converted','hot','warm','follow-up','cold','research','unspecified'];
+    // Shown = every lead that passes filters (map pins + no-pin leads)
+    const shown = filtered.length;
 
-  const meta = {
-    converted:  { label: 'Converted',  icon: '🏆' },
-    hot:        { label: 'Hot',        icon: '🔥' },
-    warm:       { label: 'Warm',       icon: '🌞' },
-    'follow-up':{ label: 'Follow-Up',  icon: '⏳' },
-    cold:       { label: 'Cold',       icon: '🧊' },
-    research:   { label: 'Research',   icon: '🔍' },
-    unspecified:{ label: 'Unspecified',icon: '⚪' },
-  };
+    // Status breakdown is based on filtered leads (what you’re currently “working”)
+    const breakdown = filtered.reduce((acc, r) => {
+      const k = statusKey(r.status || r.Status);
+      acc[k] = (acc[k] || 0) + 1;
+      return acc;
+    }, {});
 
-  const rowsHtml = order
-    .filter(k => breakdown[k])
-    .map(k => {
-      const { label, icon } = meta[k];
-      const count = breakdown[k];
-      return `
-        <div class="status-chip">
-          <span class="icon">${icon}</span>
-          <span>${label}</span>
-          <strong>${count}</strong>
-        </div>
-      `;
-    }).join('');
+    const order = [
+      'converted',
+      'hot',
+      'warm',
+      'follow-up',
+      'cold',
+      'research',
+      'unspecified'
+    ];
 
-  if (els.statsSummary()) {
-    if (rowsHtml) {
-      els.statsSummary().innerHTML = `
-        <div style="font-weight:600; margin-bottom:4px;">Status Breakdown</div>
-        <div class="status-list">
-          ${rowsHtml}
-        </div>
-      `;
-    } else {
-      els.statsSummary().textContent = 'Status Breakdown: (no results)';
+    const meta = {
+      converted:  { label: 'Converted',  icon: '🏆' },
+      hot:        { label: 'Hot',        icon: '🔥' },
+      warm:       { label: 'Warm',       icon: '🌞' },
+      'follow-up':{ label: 'Follow-Up',  icon: '⏳' },
+      cold:       { label: 'Cold',       icon: '🧊' },
+      research:   { label: 'Research',   icon: '🔍' },
+      unspecified:{ label: 'Unspecified',icon: '⚪' }
+    };
+
+    const rowsHtml = order
+      .filter(k => breakdown[k])
+      .map(k => {
+        const { label, icon } = meta[k];
+        const count = breakdown[k];
+        return `
+          <div class="status-chip">
+            <span class="icon">${icon}</span>
+            <span>${label}</span>
+            <strong>${count}</strong>
+          </div>
+        `;
+      })
+      .join('');
+
+    if (els.statsSummary()) {
+      if (rowsHtml) {
+        els.statsSummary().innerHTML = `
+          <div style="font-weight:600; margin-bottom:4px;">Status Breakdown</div>
+          <div class="status-list">
+            ${rowsHtml}
+          </div>
+        `;
+      } else {
+        els.statsSummary().textContent = 'Status Breakdown: (no results)';
+      }
+    }
+
+    // Bottom-left footer
+    if (els.pinCount()) {
+      els.pinCount().textContent = `Displaying ${shown} of ${total} leads`;
     }
   }
 
-  if (els.pinCount()) {
-    els.pinCount().textContent = `Displaying ${shown} of ${total} leads`;
-  }
-}
 
 
   function populateFilterOptions() {

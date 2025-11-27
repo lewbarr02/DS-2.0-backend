@@ -757,6 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Column definitions
   const COLUMNS = [
     { key:'status',         label:'Status',         sortable:true },
+	{ key:'pin',            label:'Pin',            sortable:true },
     { key:'company',        label:'Company',        sortable:true },
     { key:'name',           label:'Name',           sortable:true },
     { key:'city',           label:'City',           sortable:true },
@@ -776,11 +777,20 @@ document.addEventListener('DOMContentLoaded', () => {
     converted: 0, hot: 1, warm: 2, 'follow-up': 3, cold: 4, research: 5, unspecified: 6
   };
 
-  function getCI(row, key) {
+function getCI(row, key) {
     if (!row) return '';
+
+    // ⭐ NEW: handle virtual column
+    if (key.toLowerCase() === 'pin') {
+        const lat = row.latitude || row.lat;
+        const lon = row.longitude || row.lon;
+        return lat && lon ? '1' : '0';  // sortable numeric
+    }
+
     const hit = Object.keys(row).find(k => k.toLowerCase() === key.toLowerCase());
     return hit ? row[hit] ?? '' : '';
-  }
+}
+
 
   function prettyStatus(s) {
     if (!s) return '⚪ Unspecified';
@@ -849,6 +859,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       return `<tr>
         <td class="status-cell">${prettyStatus(getCI(r,'status'))}</td>
+		<td>${hasPin ? '✅' : '❌'}</td>
         <td>${t(getCI(r,'company'))}</td>
         <td>${t(getCI(r,'name'))}</td>
         <td>${t(getCI(r,'city'))}</td>
