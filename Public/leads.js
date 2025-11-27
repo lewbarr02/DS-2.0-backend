@@ -4,17 +4,19 @@
 // ---------- API BASE ----------
 const API_BASE = window.DELI_API_BASE || '';
 
-// Centralized map loader
+// Centralized map loader – prefer full /summary (all leads)
 async function loadMapData() {
   try {
-    const res = await fetch(`${API_BASE}/map/summary`, { cache: 'no-cache' });
+    const res = await fetch(`${API_BASE}/summary`, { cache: 'no-cache' });
     if (res.ok) return await res.json();
-    console.warn("map/summary failed, falling back to /summary");
+    console.warn("summary failed, falling back to /map/summary");
   } catch {}
 
-  const res2 = await fetch(`${API_BASE}/summary`, { cache: 'no-cache' });
+  // Fallback for older backends
+  const res2 = await fetch(`${API_BASE}/map/summary`, { cache: 'no-cache' });
   return await res2.json();
 }
+
 
 window.refreshLeads = async function refreshLeads() {
   const payload = await loadMapData();
@@ -862,14 +864,12 @@ function normalizeWebsite(url) {
     window.map = map;
     attachPopupEventDelegates();   // new preview/edit system
 
-    // Fetch + render (use the map summary endpoint)
+    // Fetch + render using centralized loader (full /summary preferred)
     let payload;
     try {
-      const res = await fetch(`${API_BASE}/map/summary`, { cache: 'no-cache' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      payload = await res.json();
+      payload = await loadMapData();
     } catch (err) {
-      console.error('Failed to load /map/summary:', err);
+      console.error('Failed to load leads:', err);
       return;
     }
 
@@ -880,6 +880,7 @@ function normalizeWebsite(url) {
     renderMarkers();
     updateStats();
   }
+
 
   // Auto-run boot once when the page loads
   if (!DS.leadsBootBound) {
