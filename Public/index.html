@@ -757,7 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Column definitions
   const COLUMNS = [
     { key:'status',         label:'Status',         sortable:true },
-	{ key:'pin',            label:'Pin',            sortable:true },
+    { key:'pin',            label:'Pin',            sortable:true },
     { key:'company',        label:'Company',        sortable:true },
     { key:'name',           label:'Name',           sortable:true },
     { key:'city',           label:'City',           sortable:true },
@@ -771,7 +771,11 @@ document.addEventListener('DOMContentLoaded', () => {
     { key:'cadence_name',   label:'Cadence',        sortable:true },
     { key:'website',        label:'Website',        sortable:false },
     { key:'notes',          label:'Notes',          sortable:false },
+
+    // ⭐ NEW: actions column (for delete button)
+    { key:'actions',        label:'',               sortable:false },
   ];
+
 
   const STATUS_RANK = {
     converted: 0, hot: 1, warm: 2, 'follow-up': 3, cold: 4, research: 5, unspecified: 6
@@ -856,12 +860,20 @@ function getCI(row, key) {
       const websiteUrl = website ? normalizeWebsiteUrl(website) : '';
       const arr = getCI(r,'arr');
       const ap  = getCI(r,'ap_spend');
-	  const hasPin = getCI(r, 'pin') === '1';
+      const hasPin = getCI(r, 'pin') === '1';
 
+      // DB id (case-insensitive) so we can call DELETE /leads/:id
+      const id = getCI(r, 'id') || r.id || r.lead_id || '';
 
-      return `<tr>
+      const deleteCell = id
+        ? `<button class="list-delete-btn"
+                    data-id="${id}"
+                    title="Delete this lead">🗑</button>`
+        : '';
+
+      return `<tr data-id="${id}">
         <td class="status-cell">${prettyStatus(getCI(r,'status'))}</td>
-		<td>${hasPin ? '✅' : '❌'}</td>
+        <td>${hasPin ? '✅' : '❌'}</td>
         <td>${t(getCI(r,'company'))}</td>
         <td>${t(getCI(r,'name'))}</td>
         <td>${t(getCI(r,'city'))}</td>
@@ -873,15 +885,59 @@ function getCI(row, key) {
         <td>${ap  ? ('$' + Number(ap).toLocaleString())  : ''}</td>
         <td>${t(getCI(r,'tags'))}</td>
         <td>${t(getCI(r,'cadence_name'))}</td>
-        <td>${websiteUrl ? `<a class="website-link" href="${websiteUrl}" target="_blank" rel="noopener noreferrer">Visit</a>` : ''}</td>
+        <td>${websiteUrl
+              ? `<a class="website-link" href="${websiteUrl}" target="_blank" rel="noopener noreferrer">Visit</a>`
+              : ''}</td>
         <td>${t(getCI(r,'notes'))}</td>
+        <td class="actions-cell">${deleteCell}</td>
       </tr>`;
     }).join('');
 
     tbody.innerHTML = html;
 
     count.textContent = `${rows.length} lead${rows.length===1?'':'s'}`;
+
+    // Wire row delete buttons
+    $$('#leadTbody .list-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // don’t trigger row-level events later
+
+        const id = btn.dataset.id;
+        if (!id) return;
+
+        const ok = window.confirm(
+          'Delete this lead from Deli Sandwich?\n\nThis cannot be undone.'
+        );
+        if (!ok) return;
+
+        try {
+          const API_BASE = window.DELI_API_BASE || '';
+          const res = await fetch(`${API_BASE}/leads/${encodeURIComponent(id)}`, {
+            method: 'DELETE'
+          });
+
+          if (!res.ok) {
+            console.error('List delete failed', res.status);
+            alert('Delete failed – please try again.');
+            return;
+          }
+
+          // Refresh shared state: map + filters + list
+          if (typeof window.refreshLeads === 'function') {
+            await window.refreshLeads();
+          }
+          if (typeof window.renderListView === 'function') {
+            window.renderListView();
+          }
+        } catch (err) {
+          console.error('List delete error', err);
+          alert('Delete failed due to a network error.');
+        }
+      });
+    });
   }
+
 
   // Base rows from leads.js
   function getFilteredRows() {
