@@ -816,7 +816,7 @@ function attachPopupEventDelegates() {
       lead_type: (fd.get("lead_type") || "").trim() || null,
       arr: toNum(fd.get("arr")),
       ap_spend: toNum(fd.get("ap_spend")),
-      tags: (fd.get("tags") || "").split(",").map(t => t.trim()).filter(Boolean),
+      tags: (fd.get("tags") || "").trim() || null,
       notes: fd.get("notes") || null
     };
 
