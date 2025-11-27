@@ -196,6 +196,31 @@ app.get('/map/summary', async (req, res) => {
   }
 });
 
+// =======================
+// FULL LEAD LIST (no geolocation filter)
+// GET /leads/all
+// =======================
+app.get('/leads/all', async (_req, res) => {
+  try {
+    const sql = `
+      SELECT *
+      FROM leads
+      ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+      LIMIT 5000;
+    `;
+    const { rows } = await pool.query(sql);
+    return res.json({
+      ok: true,
+      count: rows.length,
+      data: rows
+    });
+  } catch (err) {
+    console.error('ALL LEADS ERR:', err);
+    return res.status(500).json({ ok: false, error: 'failed_all_leads' });
+  }
+});
+
+
 
 // ===== 1-on-1 Summary API =====
 // GET /api/oneonone?from=YYYY-MM-DD&to=YYYY-MM-DD  (to is exclusive)

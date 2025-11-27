@@ -9,26 +9,21 @@ async function loadMapData() {
   async function fetchJson(path) {
     try {
       const res = await fetch(path, { cache: 'no-cache' });
-      if (!res.ok) {
-        console.warn(`Request to ${path} failed with ${res.status}`);
-        return null;
-      }
+      if (!res.ok) return null;
       return await res.json();
-    } catch (err) {
-      console.warn(`Error fetching ${path}:`, err);
+    } catch {
       return null;
     }
   }
 
-  // 1) Primary: /map/summary  (this was our original working endpoint)
-  let payload = await fetchJson(`${API_BASE}/map/summary`);
-  if (payload) return payload;
+  // Primary: full lead list (all leads — pin or no pin)
+  let payload = await fetchJson(`${API_BASE}/leads/all`);
+  if (payload && payload.data) return payload;
 
-  // 2) Fallback: /summary, just in case
-  console.warn('Falling back to /summary');
-  payload = await fetchJson(`${API_BASE}/summary`);
-  return payload || { data: [] };
+  // Fallback: geocoded map-only leads
+  return await fetchJson(`${API_BASE}/map/summary`) || { data: [] };
 }
+
 
 
 
