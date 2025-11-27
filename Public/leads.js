@@ -573,11 +573,18 @@ function normalizeWebsite(url) {
           <div style="color:#666">Notes</div><div>${esc(lead.notes || "—")}</div>
         </div>
 
-        <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.5rem">
-          <button class="ds-btn-edit" style="padding:.4rem .7rem;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:#f8f8f8">Edit</button>
-          <button class="ds-btn-close" style="padding:.4rem .7rem;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:white">Close</button>
-        </div>
-      </div>
+<div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.5rem">
+  <button class="ds-btn-edit"
+          style="padding:.4rem .7rem;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:#f8f8f8">
+    Edit
+  </button>
+
+  <button class="ds-btn-close"
+          style="padding:.4rem .7rem;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:white">
+    Close
+  </button>
+</div>
+
     `;
   }
 
@@ -674,22 +681,26 @@ function normalizeWebsite(url) {
             <textarea name="notes" rows="3">${esc(lead.notes || "")}</textarea>
           </label>
 
-        <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.5rem">
-          <button class="ds-btn-edit"
-                  style="padding:.4rem .7rem;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:#f8f8f8">
-            Edit
-          </button>
+<div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.5rem">
+  <button type="submit"
+          class="ds-btn-save"
+          style="padding:.4rem .7rem;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:#4caf50;color:white">
+    Save
+  </button>
 
-          <button class="ds-btn-delete"
-                  style="padding:.4rem .7rem;border-radius:8px;border:1px solid #f5b5b5;cursor:pointer;background:#fff;color:#b00020">
-            Delete
-          </button>
+  <button type="button"
+          class="ds-btn-delete"
+          style="padding:.4rem .7rem;border-radius:8px;border:1px solid #f5b5b5;cursor:pointer;background:#fff;color:#b00020">
+    Delete
+  </button>
 
-          <button class="ds-btn-close"
-                  style="padding:.4rem .7rem;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:white">
-            Close
-          </button>
-        </div>
+  <button type="button"
+          class="ds-btn-cancel"
+          style="padding:.4rem .7rem;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:white">
+    Cancel
+  </button>
+</div>
+
       </div>
     `;
   }
@@ -702,167 +713,177 @@ function normalizeWebsite(url) {
     dsPopup.setLatLng(latlng).setContent(html).openOn(window.map); // window.map is set in boot()
   }
 
-  // ——— Attach one-time document listeners (call from boot()) ———
-  function attachPopupEventDelegates() {
-    // Edit / Close / Delete in preview
-    document.addEventListener("click", async (e) => {
-      const node = e.target;
+// ——— Attach one-time document listeners (call from boot()) ———
+function attachPopupEventDelegates() {
+  // Click handlers for buttons in the popup
+  document.addEventListener("click", async (e) => {
+    const node = e.target;
 
-      if (node.classList?.contains("ds-btn-edit")) {
-        e.preventDefault();
-        const latlng = dsPopup.getLatLng();
-        openLeadPopup("edit", latlng);
-      }
-	  
-	        // Open website links from the popup
-      if (node.classList?.contains("ds-website-link")) {
-        e.preventDefault();
-        const raw = node.getAttribute("data-url") || "";
-        const url = normalizeWebsite(raw);
-        if (url) {
-          window.open(url, "_blank", "noopener");
-        }
-      }
-
-	  
-
-      if (node.classList?.contains("ds-btn-close")) {
-        e.preventDefault();
-        window.map.closePopup(dsPopup);
-      }
-
-      if (node.classList?.contains("ds-btn-cancel")) {
-        e.preventDefault();
-        const latlng = dsPopup.getLatLng();
-        openLeadPopup("preview", latlng);
-      }
-
-      if (node.classList?.contains("ds-btn-delete")) {
-        e.preventDefault();
-        if (!DS_CURRENT_LEAD || !DS_CURRENT_LEAD.id) return;
-        if (DS_DELETE_IN_FLIGHT) return;
-
-        const label =
-          DS_CURRENT_LEAD.company ||
-          DS_CURRENT_LEAD.name ||
-          "this lead";
-
-        const ok = window.confirm(
-          `Delete "${label}"? This cannot be undone.`
-        );
-        if (!ok) return;
-
-        try {
-          DS_DELETE_IN_FLIGHT = true;
-          node.disabled = true;
-          node.textContent = "Deleting…";
-
-          const res = await fetch(
-            `${API_BASE}/leads/${encodeURIComponent(DS_CURRENT_LEAD.id)}`,
-            { method: "DELETE" }
-          );
-
-          if (!res.ok) {
-            const msg = await res.text().catch(() => "");
-            throw new Error(msg || `Delete failed (${res.status})`);
-          }
-
-          // Close popup and refresh map + list
-          window.map.closePopup(dsPopup);
-          if (window.refreshLeads) {
-            await window.refreshLeads();
-          }
-        } catch (err) {
-          console.error("Delete failed", err);
-          alert("Delete failed: " + (err.message || err));
-        } finally {
-          DS_DELETE_IN_FLIGHT = false;
-          node.disabled = false;
-          node.textContent = "Delete";
-		  
-		  
-        }
-      }
-    });
-
-
-    // Save submit
-    document.addEventListener("submit", async (e) => {
-      const form = e.target;
-      if (!form.classList?.contains("ds-edit-form")) return;
+    // Edit from preview → open edit form
+    if (node.classList?.contains("ds-btn-edit")) {
       e.preventDefault();
-      if (DS_SAVE_IN_FLIGHT) return;
+      const latlng = dsPopup.getLatLng();
+      openLeadPopup("edit", latlng);
+    }
 
-      const fd = new FormData(form);
-      const payload = {
-        name: fd.get("name")?.trim() || null,
-        company: fd.get("company")?.trim() || null,
-		website: (fd.get("website") || "").trim() || null,
-        city: fd.get("city")?.trim() || null,
-        state: fd.get("state")?.trim().toUpperCase() || null,
-        status: statusKey((fd.get("status") || "unspecified").trim()),
-        industry: (fd.get("industry") || "").trim() || null,
-        forecast_month: (fd.get("forecast_month") || "").trim() || null,
-        lead_type: (fd.get("lead_type") || "").trim() || null,
-        arr: toNum(fd.get("arr")),
-        ap_spend: toNum(fd.get("ap_spend")),
-        tags: (fd.get("tags") || "").split(",").map(t => t.trim()).filter(Boolean),
-        notes: fd.get("notes") || null
-      };
+    // Website links
+    if (node.classList?.contains("ds-website-link")) {
+      e.preventDefault();
+      const raw = node.getAttribute("data-url") || "";
+      const url = normalizeWebsite(raw);
+      if (url) {
+        window.open(url, "_blank", "noopener");
+      }
+    }
 
-      const id = DS_CURRENT_LEAD.id;
-      const saveBtn = form.querySelector(".ds-btn-edit");
+    // Close popup entirely
+    if (node.classList?.contains("ds-btn-close")) {
+      e.preventDefault();
+      window.map.closePopup(dsPopup);
+    }
+
+    // Cancel in edit → go back to preview (don’t close popup)
+    if (node.classList?.contains("ds-btn-cancel")) {
+      e.preventDefault();
+      const latlng = dsPopup.getLatLng();
+      openLeadPopup("preview", latlng);
+    }
+
+    // Delete lead
+    if (node.classList?.contains("ds-btn-delete")) {
+      e.preventDefault();
+      if (!DS_CURRENT_LEAD || !DS_CURRENT_LEAD.id) return;
+      if (DS_DELETE_IN_FLIGHT) return;
+
+      const label =
+        DS_CURRENT_LEAD.company ||
+        DS_CURRENT_LEAD.name ||
+        "this lead";
+
+      const ok = window.confirm(
+        `Delete "${label}"? This cannot be undone.`
+      );
+      if (!ok) return;
+
       try {
-        DS_SAVE_IN_FLIGHT = true;
-        saveBtn.disabled = true;
-        saveBtn.textContent = "Saving…";
+        DS_DELETE_IN_FLIGHT = true;
+        node.disabled = true;
+        node.textContent = "Deleting…";
 
-        const res = await fetch(`${API_BASE}/update-lead/${encodeURIComponent(id)}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
+        const res = await fetch(
+          `${API_BASE}/leads/${encodeURIComponent(DS_CURRENT_LEAD.id)}`,
+          { method: "DELETE" }
+        );
 
         if (!res.ok) {
-          const text = await res.text().catch(()=>"");
-          throw new Error(`Save failed (${res.status}) ${text}`);
+          const msg = await res.text().catch(() => "");
+          throw new Error(msg || `Delete failed (${res.status})`);
         }
 
-        // Response can be the updated row; merge into memory
-        const updated = await res.json().catch(()=> ({}));
-        const freshLead = updated.lead || updated || {};
-        Object.assign(DS_CURRENT_LEAD, payload, freshLead);
-
-        // Update marker UI and position if needed
-        const marker = DS_CURRENT_LEAD._marker || DS.state.markerById.get(DS_CURRENT_LEAD.id);
-        if (marker) {
-          marker.setIcon(iconForStatus(DS_CURRENT_LEAD.status));
-          if (Number.isFinite(DS_CURRENT_LEAD.latitude) && Number.isFinite(DS_CURRENT_LEAD.longitude)) {
-            marker.setLatLng([DS_CURRENT_LEAD.latitude, DS_CURRENT_LEAD.longitude]);
-          }
+        // Close popup and refresh map + list
+        window.map.closePopup(dsPopup);
+        if (window.refreshLeads) {
+          await window.refreshLeads();
         }
-
-        // Replace the row in rawRows
-        const idx = DS.state.rawRows.findIndex(r => (r.id || r.uuid) === DS_CURRENT_LEAD.id);
-        if (idx >= 0) DS.state.rawRows[idx] = { ...DS.state.rawRows[idx], ...DS_CURRENT_LEAD };
-
-        // Swap back to preview
-        const latlng = dsPopup.getLatLng();
-        openLeadPopup("preview", latlng);
-
-        // Recompute filters/stats in case status changed
-        computeFiltered();
-        updateStats();
       } catch (err) {
-        console.error(err);
-        alert(`Couldn't save: ${err.message}`);
+        console.error("Delete failed", err);
+        alert("Delete failed: " + (err.message || err));
+      } finally {
+        DS_DELETE_IN_FLIGHT = false;
+        node.disabled = false;
+        node.textContent = "Delete";
+      }
+    }
+  });
+
+  // Save submit
+  document.addEventListener("submit", async (e) => {
+    const form = e.target;
+    if (!form.classList?.contains("ds-edit-form")) return;
+    e.preventDefault();
+    if (DS_SAVE_IN_FLIGHT) return;
+
+    const fd = new FormData(form);
+    const payload = {
+      name: fd.get("name")?.trim() || null,
+      company: fd.get("company")?.trim() || null,
+      website: (fd.get("website") || "").trim() || null,
+      city: fd.get("city")?.trim() || null,
+      state: fd.get("state")?.trim().toUpperCase() || null,
+      status: statusKey((fd.get("status") || "unspecified").trim()),
+      industry: (fd.get("industry") || "").trim() || null,
+      forecast_month: (fd.get("forecast_month") || "").trim() || null,
+      lead_type: (fd.get("lead_type") || "").trim() || null,
+      arr: toNum(fd.get("arr")),
+      ap_spend: toNum(fd.get("ap_spend")),
+      tags: (fd.get("tags") || "").split(",").map(t => t.trim()).filter(Boolean),
+      notes: fd.get("notes") || null
+    };
+
+    const id = DS_CURRENT_LEAD.id;
+    const saveBtn = form.querySelector(".ds-btn-save");
+
+    try {
+      DS_SAVE_IN_FLIGHT = true;
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Saving…";
+      }
+
+      const res = await fetch(`${API_BASE}/update-lead/${encodeURIComponent(id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(()=>"");
+        throw new Error(`Save failed (${res.status}) ${text}`);
+      }
+
+      // Response can be the updated row; merge into memory
+      const updated = await res.json().catch(()=> ({}));
+      const freshLead = updated.lead || updated || {};
+      Object.assign(DS_CURRENT_LEAD, payload, freshLead);
+
+      // Update marker UI and position if needed
+      const marker = DS_CURRENT_LEAD._marker || DS.state.markerById.get(DS_CURRENT_LEAD.id);
+      if (marker) {
+        marker.setIcon(iconForStatus(DS_CURRENT_LEAD.status));
+        if (Number.isFinite(DS_CURRENT_LEAD.latitude) && Number.isFinite(DS_CURRENT_LEAD.longitude)) {
+          marker.setLatLng([DS_CURRENT_LEAD.latitude, DS_CURRENT_LEAD.longitude]);
+        }
+      }
+
+      // Replace the row in rawRows
+      const idx = DS.state.rawRows.findIndex(r => (r.id || r.uuid) === DS_CURRENT_LEAD.id);
+      if (idx >= 0) {
+        DS.state.rawRows[idx] = { ...DS.state.rawRows[idx], ...DS_CURRENT_LEAD };
+      }
+
+      // Swap back to preview
+      const latlng = dsPopup.getLatLng();
+      openLeadPopup("preview", latlng);
+
+      // Recompute filters/stats in case status changed
+      computeFiltered();
+      updateStats();
+    } catch (err) {
+      console.error(err);
+      alert(`Couldn't save: ${err.message}`);
+    } finally {
+      DS_SAVE_IN_FLIGHT = false;
+      if (saveBtn) {
         saveBtn.disabled = false;
         saveBtn.textContent = "Save";
-      } finally {
-        DS_SAVE_IN_FLIGHT = false;
       }
-    });
-  }
+    }
+  });
+}
+
+
+
+
 
   // ---------- BOOT ----------
   async function boot() {
