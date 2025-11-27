@@ -4,18 +4,32 @@
 // ---------- API BASE ----------
 const API_BASE = window.DELI_API_BASE || '';
 
-// Centralized map loader – prefer full /summary (all leads)
+// Centralized map loader – use /map/summary (stable) and fall back to /summary
 async function loadMapData() {
-  try {
-    const res = await fetch(`${API_BASE}/summary`, { cache: 'no-cache' });
-    if (res.ok) return await res.json();
-    console.warn("summary failed, falling back to /map/summary");
-  } catch {}
+  async function fetchJson(path) {
+    try {
+      const res = await fetch(path, { cache: 'no-cache' });
+      if (!res.ok) {
+        console.warn(`Request to ${path} failed with ${res.status}`);
+        return null;
+      }
+      return await res.json();
+    } catch (err) {
+      console.warn(`Error fetching ${path}:`, err);
+      return null;
+    }
+  }
 
-  // Fallback for older backends
-  const res2 = await fetch(`${API_BASE}/map/summary`, { cache: 'no-cache' });
-  return await res2.json();
+  // 1) Primary: /map/summary  (this was our original working endpoint)
+  let payload = await fetchJson(`${API_BASE}/map/summary`);
+  if (payload) return payload;
+
+  // 2) Fallback: /summary, just in case
+  console.warn('Falling back to /summary');
+  payload = await fetchJson(`${API_BASE}/summary`);
+  return payload || { data: [] };
 }
+
 
 
 window.refreshLeads = async function refreshLeads() {
