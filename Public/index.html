@@ -856,6 +856,8 @@ function getCI(row, key) {
       const websiteUrl = website ? normalizeWebsiteUrl(website) : '';
       const arr = getCI(r,'arr');
       const ap  = getCI(r,'ap_spend');
+	  const hasPin = getCI(r, 'pin') === '1';
+
 
       return `<tr>
         <td class="status-cell">${prettyStatus(getCI(r,'status'))}</td>
