@@ -496,13 +496,67 @@ function unwrapData(payload){
   const esc = (s = "") => String(s).replace(/[&<>"']/g, c => ({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
   }[c]));
+  
+  // Format large numbers as shorthand for edit boxes (e.g., 25M, 2.5B, 750K)
+function formatShortMoney(v) {
+  if (v == null) return '';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '';
 
-  // Normalizers for numeric fields
+  const abs = Math.abs(n);
+
+  const fmt = (val) => {
+    // 10M → "10", 2.5M → "2.5"
+    return val >= 10 ? Math.round(val).toString()
+                     : (Math.round(val * 10) / 10).toString();
+  };
+
+  if (abs >= 1_000_000_000) return fmt(n / 1_000_000_000) + 'B';
+  if (abs >= 1_000_000)     return fmt(n / 1_000_000)     + 'M';
+  if (abs >= 1_000)         return fmt(n / 1_000)         + 'K';
+
+  return n.toString();
+}
+
+
+  // Parse money-ish input for popup fields: "25000000", "25M", "2.5m", "10k", "1B"
+  function parseShortMoneyClient(v) {
+    if (v == null) return null;
+
+    let s = String(v).trim();
+    if (!s) return null;
+
+    // strip $ and commas, normalize to lowercase
+    s = s.replace(/[\$,]/g, '').toLowerCase();
+
+    // allow K / M / MM / B suffix
+    const match = s.match(/^([\d.,]+)(k|m{1,2}|b)?$/);
+    if (!match) {
+      const n = Number(s.replace(/,/g, ''));
+      return Number.isFinite(n) ? n : null;
+    }
+
+    let num = parseFloat(match[1].replace(/,/g, ''));
+    if (!Number.isFinite(num)) return null;
+
+    const suffix = match[2];
+    if (suffix === 'k') {
+      num *= 1_000;
+    } else if (suffix === 'm' || suffix === 'mm') {
+      num *= 1_000_000;
+    } else if (suffix === 'b') {
+      num *= 1_000_000_000;
+    }
+
+    return num;
+  }
+
+  // Normalizers for numeric fields (ARR, AP Spend)
   const toNum = v => {
     if (v === null || v === undefined || v === "") return null;
-    const n = Number(String(v).replace(/[, ]+/g, ""));
-    return Number.isFinite(n) ? n : null;
+    return parseShortMoneyClient(v);
   };
+
   
   
   
@@ -594,7 +648,7 @@ function normalizeWebsite(url) {
   // ——— Edit template ———
   function renderEditPopup(lead) {
     const opt = (v, cur) => `<option value="${esc(v)}" ${String(cur||"")===String(v)?"selected":""}>${esc(v)}</option>`;
-    const numberVal = v => (v ?? "") === null ? "" : String(v ?? "");
+        const numberVal = v => formatShortMoney(v);
     return `
       <div class="ds-popup p-2" style="font:14px/1.3 system-ui,Segoe UI,Arial">
         <div style="font-weight:600;margin-bottom:.5rem">Edit Lead</div>

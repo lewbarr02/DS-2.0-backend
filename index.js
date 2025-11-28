@@ -541,34 +541,41 @@ app.post('/api/daily-queue/generate', async (req, res) => {
       ]);
       const item = itemRows[0];
 
-      items.push({
-        // Batch item metadata
-        item_id: item.id,
-        batch_id: item.batch_id,
-        lead_id: item.lead_id,
-        position: item.position,
-        is_completed: item.is_completed,
-        is_skipped: item.is_skipped,
+    items.push({
+      // Batch item metadata
+      item_id: item.id,
+      batch_id: item.batch_id,
+      lead_id: item.lead_id,
+      position: item.position,
+      is_completed: item.is_completed,
+      is_skipped: item.is_skipped,
 
-        // 🔽 Flattened lead fields for Daily Queue cards
-        id: lead.id,
-        name: lead.name,
-        company: lead.company,
-        city: lead.city,
-        state: lead.state,
-        status: lead.status,
-        industry: lead.industry,
+      // 🔽 Flattened lead fields for Daily Queue cards
+      id: lead.id,
+      name: lead.name,
+      company: lead.company,
+      city: lead.city,
+      state: lead.state,
+      status: lead.status,
+      industry: lead.industry,
 
-        // touch fields
-        last_touch_at: lead.last_touch_at,
-        next_touch_at: lead.next_touch_at,
-		 next_action_at: lead.next_action_at,
-        // fallback for “Last touch” if needed
-        last_activity_at: lead.last_contacted_at || lead.last_touch_at || null,
+      // key revenue / planning fields
+      forecast_month: lead.forecast_month,
+      lead_type:      lead.lead_type,
+      arr:            lead.arr,
+      ap_spend:       lead.ap_spend,
 
-        // full lead object preserved for future use
-        lead,
-      });
+      // touch fields
+      last_touch_at:  lead.last_touch_at,
+      next_touch_at:  lead.next_touch_at,
+      next_action_at: lead.next_action_at,
+      // fallback for “Last touch” if needed
+      last_activity_at: lead.last_contacted_at || lead.last_touch_at || null,
+
+      // full lead object preserved for future use
+      lead,
+    });
+
     }
 
 
@@ -626,69 +633,71 @@ app.get('/api/daily-queue/current', async (_req, res) => {
       WHERE dbi.batch_id = $1
       ORDER BY dbi.position ASC;
     `;
-    const { rows: rows } = await client.query(itemsSql, [batch.id]);
+    const { rows } = await client.query(itemsSql, [batch.id]);
 
-    const total = rows.length;
-    const done = rows.filter(r => r.is_completed).length;
+    const total   = rows.length;
+    const done    = rows.filter(r => r.is_completed).length;
     const skipped = rows.filter(r => r.is_skipped).length;
 
     const items = rows.map(r => ({
       // Batch item metadata
-      item_id: r.item_id,
-      batch_id: r.batch_id,
-      position: r.position,
-      is_completed: r.is_completed,
-      completed_at: r.completed_at,
-      is_skipped: r.is_skipped,
-      skipped_reason: r.skipped_reason,
+      item_id:       r.item_id,
+      batch_id:      r.batch_id,
+      lead_id:       r.lead_id,
+      position:      r.position,
+      is_completed:  r.is_completed,
+      is_skipped:    r.is_skipped,
+      completed_at:  r.completed_at,
+      skipped_reason:r.skipped_reason,
 
       // 🔽 Flattened lead fields for Daily Queue cards
-      id: r.id,
-      name: r.name,
-      company: r.company,
-      city: r.city,
-      state: r.state,
-      status: r.status,
-      industry: r.industry,
+      id:            r.id,
+      name:          r.name,
+      company:       r.company,
+      city:          r.city,
+      state:         r.state,
+      status:        r.status,
+      industry:      r.industry,
 
+      // key revenue / planning fields
+      forecast_month:r.forecast_month,
+      lead_type:     r.lead_type,
+      arr:           r.arr,
+      ap_spend:      r.ap_spend,
+
+      // touch fields
       last_touch_at: r.last_touch_at,
       next_touch_at: r.next_touch_at,
-	  next_action_at: r.next_action_at, 
-      // fallback for Last touch if needed
+      next_action_at:r.next_action_at,
       last_activity_at: r.last_contacted_at || r.last_touch_at || null,
 
-      // full lead object preserved
+      // keep raw lead in case UI ever needs extras
       lead: {
-        id: r.id,
-        name: r.name,
-        company: r.company,
-        city: r.city,
-        state: r.state,
-        status: r.status,
-        industry: r.industry,
-        forecast_month: r.forecast_month,
-        lead_type: r.lead_type,
-        arr: r.arr,
-        ap_spend: r.ap_spend,
-        tags: r.tags,
-        notes: r.notes,
-        last_touch_at: r.last_touch_at,
-        next_touch_at: r.next_touch_at,
-        last_status_change: r.last_status_change,
-        is_retired: r.is_retired,
-        latitude: r.latitude,
-        longitude: r.longitude,
-      },
+        id:              r.id,
+        name:            r.name,
+        company:         r.company,
+        city:            r.city,
+        state:           r.state,
+        status:          r.status,
+        industry:        r.industry,
+        forecast_month:  r.forecast_month,
+        lead_type:       r.lead_type,
+        arr:             r.arr,
+        ap_spend:        r.ap_spend,
+        last_touch_at:   r.last_touch_at,
+        next_touch_at:   r.next_touch_at,
+        next_action_at:  r.next_action_at,
+        last_contacted_at: r.last_contacted_at,
+      }
     }));
-
 
     return res.json({
       ok: true,
       batch: {
-        id: batch.id,
-        created_at: batch.created_at,
-        batch_size: batch.batch_size,
-        is_completed: batch.is_completed,
+        id:          batch.id,
+        created_at:  batch.created_at,
+        batch_size:  batch.batch_size,
+        is_completed:batch.is_completed,
         progress: {
           total,
           done,
@@ -705,6 +714,7 @@ app.get('/api/daily-queue/current', async (_req, res) => {
     client.release();
   }
 });
+
 
 // POST /api/daily-queue/item/:id/done
 // Body: { new_status?, action_type?, notes?, next_touch_choice?, next_touch_at? }
@@ -1094,11 +1104,43 @@ function normalizeStatus(v) {
   return ALLOWED_STATUS.has(mapped) ? mapped : 'unspecified';
 }
 
-function toNumber(v) {
-  const s = String(v ?? '').replace(/[\$,]/g, '').trim();
-  if (s === '' || isNaN(Number(s))) return null;
-  return Number(s);
+// Parse money-ish input like "25000000", "25M", "2.5m", "10k", "1B"
+function parseShortMoney(v) {
+  if (v == null) return null;
+
+  let s = String(v).trim();
+  if (!s) return null;
+
+  // strip $ and commas, normalize to lowercase
+  s = s.replace(/[\$,]/g, '').toLowerCase();
+
+  // allow K / M / MM / B suffix
+  const match = s.match(/^([\d.,]+)(k|m{1,2}|b)?$/);
+  if (!match) {
+    const n = Number(s.replace(/,/g, ''));
+    return Number.isFinite(n) ? n : null;
+  }
+
+  let num = parseFloat(match[1].replace(/,/g, ''));
+  if (!Number.isFinite(num)) return null;
+
+  const suffix = match[2];
+  if (suffix === 'k') {
+    num *= 1_000;
+  } else if (suffix === 'm' || suffix === 'mm') {
+    num *= 1_000_000;
+  } else if (suffix === 'b') {
+    num *= 1_000_000_000;
+  }
+
+  return num;
 }
+
+// CSV helper now just delegates to the new parser
+function toNumber(v) {
+  return parseShortMoney(v);
+}
+
 function toBool(v) {
   if (v == null) return false;
   const s = String(v).trim().toLowerCase();
@@ -1109,6 +1151,8 @@ function toDate(v) {
   const d = new Date(v);
   return isNaN(d.getTime()) ? null : d;
 }
+
+
 
 // storage in memory is fine for <10MB CSVs; switch to disk if needed
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -1328,10 +1372,10 @@ app.put('/update-lead/:id', async (req, res) => {
   // Helpers
   const strOrNull = (v) =>
     v === '' || v == null ? null : String(v);
-  const numOrNull = (v) =>
-    v === '' || v == null || Number.isNaN(Number(v))
-      ? null
-      : Number(v);
+  const numOrNull = (v) => {
+    const n = parseShortMoney(v);
+    return n == null ? null : n;
+  };
 
   // Normalize status (frontend may send 'follow-up', etc.)
   let status = strOrNull(req.body.status);

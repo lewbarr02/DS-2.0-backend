@@ -99,6 +99,64 @@ document.addEventListener('DOMContentLoaded', () => {
 
     return formatDate(ts);
   }
+  
+    // Short money helpers for ARR/AP Spend (e.g. "25M", "2.5B", "750K")
+  function formatShortMoney(value) {
+    if (value == null) return '';
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '';
+
+    const abs = Math.abs(n);
+
+    const fmt = (val) => {
+      // 10M -> "10", 2.5M -> "2.5"
+      return val >= 10 ? Math.round(val).toString()
+                       : (Math.round(val * 10) / 10).toString();
+    };
+
+    if (abs >= 1_000_000_000) return fmt(n / 1_000_000_000) + 'B';
+    if (abs >= 1_000_000)     return fmt(n / 1_000_000)     + 'M';
+    if (abs >= 1_000)         return fmt(n / 1_000)         + 'K';
+    return n.toString();
+  }
+
+  function parseShortMoneyClient(v) {
+    if (v == null) return null;
+
+    let s = String(v).trim();
+    if (!s) return null;
+
+    // strip $ and commas, normalize to lowercase
+    s = s.replace(/[\$,]/g, '').toLowerCase();
+
+    // allow K / M / MM / B suffix
+    const match = s.match(/^([\d.,]+)(k|m{1,2}|b)?$/);
+    if (!match) {
+      const n = Number(s.replace(/,/g, ''));
+      return Number.isFinite(n) ? n : null;
+    }
+
+    let num = parseFloat(match[1].replace(/,/g, ''));
+    if (!Number.isFinite(num)) return null;
+
+    const suffix = match[2];
+    if (suffix === 'k') {
+      num *= 1_000;
+    } else if (suffix === 'm' || suffix === 'mm') {
+      num *= 1_000_000;
+    } else if (suffix === 'b') {
+      num *= 1_000_000_000;
+    }
+
+    return num;
+  }
+
+  // Shared month options for inline Forecast Month dropdown
+  const FORECAST_MONTH_OPTIONS = [
+    'January','February','March','April','May','June',
+    'July','August','September','October','November','December'
+  ];
+
 
   function computeIsDone(item) {
     // Prefer backend flags if present
@@ -228,6 +286,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const itemId = cardEl.dataset.itemId;
       if (!itemId) return;
 
+      if (action === 'save-lead') {
+        event.preventDefault();
+        event.stopPropagation();
+        saveLeadInline(itemId, cardEl);
+        return;
+      }
+
       if (action === 'done') {
         event.preventDefault();
         event.stopPropagation();
@@ -243,6 +308,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
+
     // Otherwise, just set this card as the active card
     const cards = listEl.querySelectorAll('.dq-queue-card');
     cards.forEach((c) => c.classList.remove('dq-queue-card--active'));
@@ -250,16 +316,30 @@ document.addEventListener('DOMContentLoaded', () => {
   }
  
 
-function renderCard(item) {
-  const isDone = computeIsDone(item);
-  const statusLabel = item.status || item.lead_status || 'Unspecified';
-  const statusClass = mapStatusClass(statusLabel);
+  function renderCard(item) {
+    const isDone = computeIsDone(item);
+    const statusLabel = item.status || item.lead_status || 'Unspecified';
+    const statusClass = mapStatusClass(statusLabel);
 
-  const card = document.createElement('div');
-  card.className = 'dq-queue-card' + (isDone ? ' dq-queue-card--done' : '');
-  card.dataset.itemId = item.item_id || item.id || '';
+    const card = document.createElement('div');
+    card.className = 'dq-queue-card' + (isDone ? ' dq-queue-card--done' : '');
+    card.dataset.itemId = item.item_id || item.id || '';
 
-  card.innerHTML = `
+    // Pre-format money + month values
+    const arrDisplay = item.arr != null ? formatShortMoney(item.arr) : '';
+    const apDisplay = item.ap_spend != null ? formatShortMoney(item.ap_spend) : '';
+    const currentForecast = item.forecast_month || '';
+
+    const monthOptionsHtml = `
+      <option value="">Forecast…</option>
+      ${FORECAST_MONTH_OPTIONS.map(m => `
+        <option value="${escapeHtml(m)}" ${m === currentForecast ? 'selected' : ''}>
+          ${escapeHtml(m)}
+        </option>
+      `).join('')}
+    `;
+
+    card.innerHTML = `
       <div class="dq-card-header">
         <div class="dq-card-main">
           <div class="dq-company">
@@ -326,6 +406,26 @@ function renderCard(item) {
             <input type="date" class="dq-done-custom-date" />
           </div>
 
+          <!-- 🔹 Inline lead fields (Forecast / ARR / AP Spend) -->
+          <div class="dq-control-group dq-control-lead-fields">
+            <span class="dq-control-label">Lead</span>
+            <select class="dq-edit-forecast-month">
+              ${monthOptionsHtml}
+            </select>
+            <input
+              type="text"
+              class="dq-edit-arr"
+              placeholder="ARR (e.g. 25M)"
+              value="${escapeHtml(arrDisplay)}"
+            />
+            <input
+              type="text"
+              class="dq-edit-ap-spend"
+              placeholder="AP Spend (e.g. 40M)"
+              value="${escapeHtml(apDisplay)}"
+            />
+          </div>
+
           <div class="dq-control-notes">
             <input
               type="text"
@@ -337,13 +437,17 @@ function renderCard(item) {
         </div>
 
         <div class="dq-card-actions">
+          <button class="dq-card-btn" data-action="save-lead">💾 Save</button>
           <button class="dq-card-btn" data-action="skip">⏭ Skip</button>
           <button class="dq-card-btn dq-card-btn-primary" data-action="done">✅ Done</button>
-  `;
+        </div>
+      </div>
+    `;
 
-  card.addEventListener('click', onCardClick);
-  return card;
-}
+    card.addEventListener('click', onCardClick);
+    return card;
+  }
+
 
 
   function updateActivityGoals() {
@@ -424,6 +528,105 @@ function renderCard(item) {
     // 🔹 Also refresh the Calls / Emails / Social goal bars
     updateActivityGoals();
   }
+  
+  async function saveLeadInline(itemId, cardEl) {
+    const item = items.find((i) => String(i.item_id || i.id) === String(itemId));
+    if (!item) {
+      alert('Could not find this lead in the current batch.');
+      return;
+    }
+
+    const leadId = item.lead_id || item.id;
+    if (!leadId) {
+      alert('Missing lead id for this item.');
+      return;
+    }
+
+    const forecastSelect = cardEl.querySelector('.dq-edit-forecast-month');
+    const arrInput = cardEl.querySelector('.dq-edit-arr');
+    const apInput = cardEl.querySelector('.dq-edit-ap-spend');
+
+    const forecastRaw = forecastSelect ? forecastSelect.value : '';
+    const arrRaw = arrInput ? arrInput.value : '';
+    const apRaw = apInput ? apInput.value : '';
+
+    // 🔹 Only include fields the user actually typed/selected
+    const payload = {};
+    if (forecastRaw) {
+      payload.forecast_month = forecastRaw;
+    }
+    if (arrRaw.trim() !== '') {
+      payload.arr = arrRaw.trim();          // backend will parse short money
+    }
+    if (apRaw.trim() !== '') {
+      payload.ap_spend = apRaw.trim();      // backend will parse short money
+    }
+
+    // If nothing was changed, bail early
+    if (!Object.keys(payload).length) {
+      alert('No lead changes to save.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/update-lead/${encodeURIComponent(leadId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        console.error('Failed to save lead inline', await res.text());
+        alert('Could not save lead updates. Check console for details.');
+        return;
+      }
+
+      const updated = await res.json();
+
+      // Update in-memory item so UI + future logic stay in sync
+      if ('forecast_month' in updated) {
+        item.forecast_month = updated.forecast_month;
+        if (item.lead) item.lead.forecast_month = updated.forecast_month;
+      }
+      if ('arr' in updated) {
+        item.arr = updated.arr;
+        if (item.lead) item.lead.arr = updated.arr;
+      }
+      if ('ap_spend' in updated) {
+        item.ap_spend = updated.ap_spend;
+        if (item.lead) item.lead.ap_spend = updated.ap_spend;
+      }
+
+      // Refresh the display values in the inputs
+      if (forecastSelect && 'forecast_month' in updated) {
+        forecastSelect.value = updated.forecast_month || '';
+      }
+      if (arrInput && 'arr' in updated) {
+        arrInput.value =
+          updated.arr != null ? formatShortMoney(updated.arr) : '';
+      }
+      if (apInput && 'ap_spend' in updated) {
+        apInput.value =
+          updated.ap_spend != null ? formatShortMoney(updated.ap_spend) : '';
+      }
+
+      // Tiny UX touch: flash the Save button text
+      const saveBtn = cardEl.querySelector('button[data-action="save-lead"]');
+      if (saveBtn) {
+        const original = saveBtn.textContent;
+        saveBtn.textContent = '✅ Saved';
+        setTimeout(() => {
+          saveBtn.textContent = original;
+        }, 900);
+      }
+    } catch (err) {
+      console.error('Error saving lead inline', err);
+      alert('Error reaching the server while saving this lead.');
+    }
+  }
+
+
+  
   async function markItemDone(itemId, cardEl) {
     // Pull values from the controls on this specific card
     const activitySelect = cardEl.querySelector('.dq-done-activity');
