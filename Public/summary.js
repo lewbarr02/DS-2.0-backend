@@ -540,6 +540,16 @@ function renderHighValue(leads) {
     if (touchesEl) {
       touchesEl.textContent = `Total touches: ${touches}`;
     }
+	
+	    // Touch breakdown (calls / emails / social)
+    const callsEl = el("kpi_calls");
+    const emailsEl = el("kpi_emails");
+    const socialEl = el("kpi_social");
+
+    if (callsEl) callsEl.textContent = act.calls ?? 0;
+    if (emailsEl) emailsEl.textContent = act.emails ?? 0;
+    if (socialEl) socialEl.textContent = act.social ?? 0;
+
 
 
 
