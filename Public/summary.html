@@ -286,6 +286,28 @@
         </div>
         <div class="muted" style="margin-top:6px;">*Up/Downgrades approximated from current status + recent status change date.</div>
       </section>
+	  
+	        <!-- Status Changes (Upgrades & Downgrades) -->
+      <section class="card span-12">
+        <h3 class="section-title">Status Changes (Upgrades & Downgrades)</h3>
+        <p class="muted" style="margin-top:4px;margin-bottom:8px;">
+          Most recent status changes within the selected date range.
+        </p>
+        <table id="tbl_status_changes">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Company</th>
+              <th>Old Status</th>
+              <th>New Status</th>
+              <th>State</th>
+              <th>AP Spend</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
 
       <!-- Performance Heatmap -->
       <section class="card span-8">
@@ -306,14 +328,7 @@
         </div>
       </section>
 
-      <!-- ARR Contribution -->
-      <section class="card span-4">
-        <h3 class="section-title">ARR Contribution</h3>
-        <div class="row"><div class="kpi"><span class="val" id="kpi_corpv">$0</span><span class="lbl">Hot + Warm</span></div></div>
-        <div class="row"><div class="kpi"><span class="val" id="kpi_added">$0</span><span class="lbl">ARR added this window</span></div></div>
-        <div class="row"><div class="kpi"><span class="val" id="kpi_avg">$0</span><span class="lbl">Avg deal size</span></div></div>
-        <div class="row"><div class="kpi"><span class="val" id="kpi_selfsourced">—%</span><span class="lbl">% self-sourced</span></div></div>
-      </section>
+
 	  
 	  <!-- BDR Forecasting Panel -->
 <!-- BDR Forecasting Panel -->

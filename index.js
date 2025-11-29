@@ -280,15 +280,24 @@ app.get('/summary', async (req, res) => {
     const corpv = sum(hotWarm.map((l) => num(l.arr)));
 
     // ----- 4) Status upgrades / downgrades + traction per region -----
+	
     const histSql = `
-      SELECT h.lead_id, h.old_status, h.new_status, h.changed_at,
-             l.state, l.ap_spend
+      SELECT
+        h.lead_id,
+        h.old_status,
+        h.new_status,
+        h.changed_at,
+        l.company,
+        l.state,
+        l.ap_spend
       FROM lead_status_history h
       JOIN leads l ON l.id = h.lead_id
       WHERE h.changed_at >= $1::date
         AND h.changed_at <  $2::date
+      ORDER BY h.changed_at DESC
     `;
     const { rows: historyRows } = await client.query(histSql, [fromStr, toStr]);
+
 
     const STATUS_ORDER = {
       'unspecified': 0,
@@ -382,6 +391,21 @@ app.get('/summary', async (req, res) => {
         !worst || s.traction_score < worst.traction_score ? s : worst
       , null);
     }
+	
+	    // Build detail list of status changes for UI panel
+    const statusChanges = historyRows
+      .map((h) => ({
+        lead_id: h.lead_id,
+        company: h.company || null,
+        old_status: h.old_status,
+        new_status: h.new_status,
+        changed_at: h.changed_at,
+        state: h.state,
+        ap_spend: num(h.ap_spend)
+      }))
+      .sort((a, b) => new Date(b.changed_at) - new Date(a.changed_at))
+      .slice(0, 50); // cap to the 50 most recent
+
 
     // ----- 5) Industry & Tag performance -----
     const byIndustry = new Map(); // key => { key, leads, converted }
@@ -468,9 +492,11 @@ app.get('/summary', async (req, res) => {
       ok: true,
       range: { from: fromStr, to: toStr },
       metrics,
+      status_changes: statusChanges,
       unplaced_count: unplacedCount,
       leads: leadsFiltered
     });
+
   } catch (err) {
     console.error('SUMMARY ERR (Finexio traction handler)', err);
     return res.status(500).json({ ok: false, error: 'summary_failed' });

@@ -378,6 +378,39 @@ function renderHighValue(leads) {
   `).join("");
 }
 
+  // ===== Upgrade / Downgrade Detail List =====
+  function renderStatusChanges(changes) {
+    const tbody = document.querySelector("#tbl_status_changes tbody");
+    if (!tbody) return;
+
+    const cleanDate = (d) => {
+      if (!d) return "—";
+      const dt = new Date(d);
+      if (isNaN(dt)) return "—";
+      return dt.toLocaleDateString();
+    };
+
+    const rows = (changes || []).slice(0, 50);
+
+    tbody.innerHTML = rows
+      .map((h) => `
+        <tr>
+          <td>${cleanDate(h.changed_at)}</td>
+          <td>${h.company || "—"}</td>
+          <td>${h.old_status || "—"}</td>
+          <td>${h.new_status || "—"}</td>
+          <td>${h.state || "—"}</td>
+          <td>${
+            h.ap_spend != null
+              ? "$" + Number(h.ap_spend).toLocaleString()
+              : "—"
+          }</td>
+        </tr>
+      `)
+      .join("");
+  }
+
+
 
   // ===== 1-on-1 Summary client =====
   function renderOneOnOne(data) {
@@ -485,16 +518,12 @@ function renderHighValue(leads) {
       touchesEl.textContent = `Total touches: ${touches}`;
     }
 
-    // Top-of-page value tiles now show Avg Prospect ARR + Avg AP Spend
-    el("kpi_corpv").textContent = money(arr.avg_arr || arr.avg_deal || 0);
-    el("kpi_added").textContent = (act.new_leads_added ?? 0).toLocaleString();
-    el("kpi_avg").textContent = money(spend.avg_ap_spend || 0);
-    el("kpi_selfsourced").textContent = percentSelfSourced(data.leads || []) + "%";
+
+
 
     const leads = Array.isArray(data.leads) ? data.leads : [];
-	renderHighValue(leads);
-
-	
+    renderHighValue(leads);
+    renderStatusChanges(data.status_changes || []);
 
     // Client-side derivations
     const chTop = topChannelsByConversion(leads, 3);
