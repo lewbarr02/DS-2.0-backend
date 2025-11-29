@@ -131,29 +131,354 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ ok: true, service: 'Deli Sandwich Backend', ts: new Date().toISOString() });
 });
 
-// TEMP: Simple summary endpoint just to prove DB + backend are wired.
-// We'll replace this with the full metrics/AI summary in the next phase.
+// === SUMMARY DASHBOARD (Finexio BDR Traction Engine) ===
+// GET /summary?from=YYYY-MM-DD&to=YYYY-MM-DD&pinned_only=1&count_mode=leads|accounts
 app.get('/summary', async (req, res) => {
   let client;
   try {
     client = await pool.connect();
 
-    // Very simple sanity check: how many leads are in the DB?
-    const result = await client.query('SELECT COUNT(*) AS total FROM leads;');
-    const totalLeads = parseInt(result.rows[0]?.total || '0', 10);
+    const { from, to } = req.query;
+    const pinnedOnly = qpBool(req.query.pinned_only, true);
+    const countMode  = qpCountMode(req.query.count_mode);
+
+    // ----- Date window (inclusive from; "to" treated as same-day, but we query [from, to+1) ) -----
+    const today = new Date();
+    const end   = to ? new Date(to) : today;
+    const start = from ? new Date(from) : new Date(end);
+    if (!from) start.setDate(end.getDate() - 7); // default last 7 days
+
+    const pad = (n) => (n < 10 ? '0' + n : '' + n);
+    const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    const fromStr = ymd(start);
+    const endExclusive = new Date(end);
+    endExclusive.setDate(endExclusive.getDate() + 1); // make 'to' exclusive
+    const toStr = ymd(endExclusive);
+
+    // ----- 1) Activities in window -----
+    const actSql = `
+      SELECT id, lead_id, happened_at, type
+      FROM activities
+      WHERE happened_at >= $1::date
+        AND happened_at <  $2::date
+      ORDER BY happened_at ASC
+    `;
+    const { rows: activities } = await client.query(actSql, [fromStr, toStr]);
+
+    // Basic activity metrics
+    const totalTouches = activities.length;
+    const byType = { call: 0, email: 0, social: 0 };
+    const leadIdsWithActivity = new Set();
+
+    for (const a of activities) {
+      const t = (a.type || '').toString().toLowerCase();
+      if (t === 'call') byType.call++;
+      else if (t === 'email') byType.email++;
+      else if (t === 'social') byType.social++;
+      leadIdsWithActivity.add(a.lead_id);
+    }
+
+    // ----- 2) Leads that matter for this window -----
+    const touchIds = Array.from(leadIdsWithActivity);
+    const params = [fromStr, toStr];
+    let leadWhere = `
+      (created_at >= $1::date AND created_at < $2::date)
+    `;
+
+    if (touchIds.length > 0) {
+      params.push(touchIds);
+      leadWhere = `
+        (${leadWhere})
+        OR id = ANY($3::int[])
+      `;
+    }
+
+    const leadSql = `
+      SELECT *
+      FROM leads
+      WHERE ${leadWhere}
+    `;
+    const { rows: allLeadsWindow } = await client.query(leadSql, params);
+
+    // Separate "new this window" for KPI
+    const leadsCreatedThisWindow = allLeadsWindow.filter((l) => {
+      if (!l.created_at) return false;
+      const d = new Date(l.created_at);
+      return d >= new Date(fromStr) && d < new Date(toStr);
+    });
+
+    // Apply pinned filter for map-related metrics + lead list
+    let leadsFiltered = allLeadsWindow;
+    if (pinnedOnly) {
+      leadsFiltered = leadsFiltered.filter(
+        (l) => l.latitude != null && l.longitude != null
+      );
+    }
+
+    // Map for quick lookup by id
+    const leadById = new Map();
+    for (const l of leadsFiltered) {
+      leadById.set(l.id, l);
+    }
+
+    // Leads that were actually contacted in the window (after pinned filter)
+    const leadsContactedList = [];
+    const seenContacted = new Set();
+    for (const a of activities) {
+      const lead = leadById.get(a.lead_id);
+      if (!lead) continue;
+      if (seenContacted.has(lead.id)) continue;
+      seenContacted.add(lead.id);
+      leadsContactedList.push(lead);
+    }
+
+    // Count mode: leads vs accounts (company)
+    const uniqCompany = new Set();
+    for (const l of leadsFiltered) {
+      if (!l.company) continue;
+      uniqCompany.add(l.company.toLowerCase());
+    }
+    const totalLeadsConsidered =
+      countMode === 'accounts' ? uniqCompany.size : leadsFiltered.length;
+
+    const uniqCompanyContacted = new Set();
+    for (const l of leadsContactedList) {
+      if (!l.company) continue;
+      uniqCompanyContacted.add(l.company.toLowerCase());
+    }
+    const leadsContactedWindow =
+      countMode === 'accounts'
+        ? uniqCompanyContacted.size
+        : leadsContactedList.length;
+
+    // ----- 3) ARR + AP Spend metrics (Finexio style) -----
+    function num(v) {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    const arrValues = [];
+    const apValues  = [];
+
+    for (const l of leadsContactedList) {
+      if (l.arr != null) arrValues.push(num(l.arr));
+      if (l.ap_spend != null) apValues.push(num(l.ap_spend));
+    }
+
+    const sum = (arr) => arr.reduce((s, v) => s + v, 0);
+    const avg = (arr) => (arr.length ? sum(arr) / arr.length : 0);
+
+    const avgArr      = avg(arrValues);
+    const avgApSpend  = avg(apValues);
+
+    // Total "pipeline-ish" value for hot+warm (still handy if you want it)
+    const hotWarm = leadsFiltered.filter((l) => {
+      const s = normalizeStatus(l.status);
+      return s === 'hot' || s === 'warm';
+    });
+    const corpv = sum(hotWarm.map((l) => num(l.arr)));
+
+    // ----- 4) Status upgrades / downgrades + traction per region -----
+    const histSql = `
+      SELECT h.lead_id, h.old_status, h.new_status, h.changed_at,
+             l.state, l.ap_spend
+      FROM lead_status_history h
+      JOIN leads l ON l.id = h.lead_id
+      WHERE h.changed_at >= $1::date
+        AND h.changed_at <  $2::date
+    `;
+    const { rows: historyRows } = await client.query(histSql, [fromStr, toStr]);
+
+    const STATUS_ORDER = {
+      'unspecified': 0,
+      'research':    1,
+      'cold':        2,
+      'follow-up':   3,
+      'warm':        4,
+      'hot':         5,
+      'converted':   6,
+      'no fit':      -1,
+      'no_fit':      -1
+    };
+
+    let upgrades = 0;
+    let downgrades = 0;
+
+    const stateStats = new Map(); // key => { warmUp, hotUp, converted, apSpendTouched, tractionScore }
+    const ensureState = (rawState) => {
+      const key = (rawState || 'Unspecified').toString().toUpperCase();
+      if (!stateStats.has(key)) {
+        stateStats.set(key, {
+          state: key,
+          warmUp: 0,
+          hotUp: 0,
+          converted: 0,
+          apSpendTouched: 0,
+          tractionScore: 0
+        });
+      }
+      return stateStats.get(key);
+    };
+
+    for (const h of historyRows) {
+      const oldNorm = normalizeStatus(h.old_status);
+      const newNorm = normalizeStatus(h.new_status);
+      const oldRank = STATUS_ORDER[oldNorm] ?? 0;
+      const newRank = STATUS_ORDER[newNorm] ?? 0;
+
+      if (newRank > oldRank) upgrades++;
+      else if (newRank < oldRank) downgrades++;
+
+      const st = ensureState(h.state);
+
+      if (newRank > oldRank) {
+        if (newNorm === 'warm') st.warmUp++;
+        else if (newNorm === 'hot') st.hotUp++;
+        else if (newNorm === 'converted') st.converted++;
+      }
+    }
+
+    // AP Spend contribution per state = from contacted leads
+    for (const l of leadsContactedList) {
+      const st = ensureState(l.state);
+      st.apSpendTouched += num(l.ap_spend);
+    }
+
+    // Traction score per state (success-based: upgrades + AP spend)
+    for (const st of stateStats.values()) {
+      st.tractionScore =
+        st.warmUp * 3 +
+        st.hotUp * 5 +
+        st.converted * 12 +  // heavy weight for converted
+        st.apSpendTouched / 1_000_000; // normalise AP spend
+    }
+
+    // Build perf_by_state array
+    const perfByState = Array.from(stateStats.values())
+      .map((s) => ({
+        key: s.state,
+        warm_upgrades: s.warmUp,
+        hot_upgrades: s.hotUp,
+        converted: s.converted,
+        ap_spend_touched: s.apSpendTouched,
+        traction_score: s.tractionScore,
+        // keep hw_arr for backwards compat, but now it represents AP Spend engaged
+        hw_arr: s.apSpendTouched
+      }))
+      .sort((a, b) => b.traction_score - a.traction_score);
+
+    // Strongest / weakest region by traction score (ignore zero-score states)
+    const nonZeroStates = perfByState.filter((s) => s.traction_score > 0);
+    let strongestRegion = null;
+    let weakestRegion = null;
+
+    if (nonZeroStates.length > 0) {
+      strongestRegion = nonZeroStates.reduce((best, s) =>
+        !best || s.traction_score > best.traction_score ? s : best
+      , null);
+
+      weakestRegion = nonZeroStates.reduce((worst, s) =>
+        !worst || s.traction_score < worst.traction_score ? s : worst
+      , null);
+    }
+
+    // ----- 5) Industry & Tag performance -----
+    const byIndustry = new Map(); // key => { key, leads, converted }
+    for (const l of leadsFiltered) {
+      const indKey = (l.industry || 'Unspecified').toString();
+      if (!byIndustry.has(indKey)) {
+        byIndustry.set(indKey, { key: indKey, leads: 0, converted: 0 });
+      }
+      const bucket = byIndustry.get(indKey);
+      bucket.leads++;
+      const s = normalizeStatus(l.status);
+      if (s === 'converted') bucket.converted++;
+    }
+
+    const perfByIndustry = Array.from(byIndustry.values())
+      .map((b) => ({
+        key: b.key,
+        leads: b.leads,
+        conv_pct: b.leads ? Math.round((b.converted / b.leads) * 100) : 0
+      }))
+      .sort((a, b) => b.conv_pct - a.conv_pct);
+
+    // Tags
+    const tagCounts = new Map();
+    for (const l of leadsFiltered) {
+      let tags = l.tags;
+      if (Array.isArray(tags)) {
+        for (const t of tags) {
+          const key = (t || '').toString().trim();
+          if (!key) continue;
+          tagCounts.set(key, (tagCounts.get(key) || 0) + 1);
+        }
+      }
+    }
+    const perfByTag = Array.from(tagCounts.entries())
+      .map(([key, cnt]) => ({ key, cnt }))
+      .sort((a, b) => b.cnt - a.cnt);
+
+    // ----- 6) Unplaced count (for reconcile panel) -----
+    const unplacedSql = `
+      SELECT COUNT(*) AS cnt
+      FROM leads
+      WHERE created_at >= $1::date
+        AND created_at <  $2::date
+        AND (latitude IS NULL OR longitude IS NULL)
+    `;
+    const { rows: unplacedRows } = await client.query(unplacedSql, [fromStr, toStr]);
+    const unplacedCount = parseInt(unplacedRows[0]?.cnt || '0', 10);
+
+    // ----- Assemble payload -----
+    const metrics = {
+      activity: {
+        total_touches: totalTouches,
+        calls: byType.call,
+        emails: byType.email,
+        social: byType.social,
+        leads_contacted_window: leadsContactedWindow,
+        total_leads_considered: totalLeadsConsidered,
+        new_leads_added: leadsCreatedThisWindow.length
+      },
+      arr: {
+        // historical naming, but now represents average ARR of contacted prospects
+        corpv: corpv,
+        avg_deal: avgArr,
+        avg_arr: avgArr
+      },
+      ap_spend: {
+        avg_ap_spend: avgApSpend
+      },
+      pipeline: {
+        upgrades,
+        downgrades
+      },
+      perf_by_industry: perfByIndustry,
+      perf_by_state: perfByState,
+      perf_by_tag: perfByTag,
+      regions: {
+        strongest: strongestRegion,
+        weakest: weakestRegion
+      }
+    };
 
     return res.json({
       ok: true,
-      message: 'Summary backend is wired. Detailed metrics coming next phase.',
-      total_leads: totalLeads
+      range: { from: fromStr, to: toStr },
+      metrics,
+      unplaced_count: unplacedCount,
+      leads: leadsFiltered
     });
   } catch (err) {
-    console.error('SUMMARY ERR (temp handler)', err);
-    return res.status(500).json({ error: 'summary_failed' });
+    console.error('SUMMARY ERR (Finexio traction handler)', err);
+    return res.status(500).json({ ok: false, error: 'summary_failed' });
   } finally {
     if (client) client.release();
   }
 });
+
 
 
 app.get('/map/summary', async (req, res) => {
