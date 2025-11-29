@@ -390,25 +390,48 @@ function renderHighValue(leads) {
       return dt.toLocaleDateString();
     };
 
+    // Simple status ranking so we can detect up vs down
+    const statusRank = (s) => {
+      const v = (s || "").toString().toLowerCase();
+      if (v.includes("convert")) return 6;
+      if (v.includes("hot")) return 5;
+      if (v.includes("warm")) return 4;
+      if (v.includes("follow")) return 3;    // follow-up
+      if (v.includes("cold")) return 2;
+      if (v.includes("research")) return 1;
+      if (v.includes("unspecified")) return 0;
+      return 0; // unknown / neutral
+    };
+
     const rows = (changes || []).slice(0, 50);
 
     tbody.innerHTML = rows
-      .map((h) => `
-        <tr>
-          <td>${cleanDate(h.changed_at)}</td>
-          <td>${h.company || "—"}</td>
-          <td>${h.old_status || "—"}</td>
-          <td>${h.new_status || "—"}</td>
-          <td>${h.state || "—"}</td>
-          <td>${
-            h.ap_spend != null
-              ? "$" + Number(h.ap_spend).toLocaleString()
-              : "—"
-          }</td>
-        </tr>
-      `)
+      .map((h) => {
+        const oldR = statusRank(h.old_status);
+        const newR = statusRank(h.new_status);
+        let trend = "—";
+        if (newR > oldR) trend = "📈";      // upgrade
+        else if (newR < oldR) trend = "📉"; // downgrade
+
+        return `
+          <tr>
+            <td>${cleanDate(h.changed_at)}</td>
+            <td>${h.company || "—"}</td>
+            <td>${h.old_status || "—"}</td>
+            <td>${h.new_status || "—"}</td>
+            <td>${trend}</td>
+            <td>${h.state || "—"}</td>
+            <td>${
+              h.ap_spend != null
+                ? "$" + Number(h.ap_spend).toLocaleString()
+                : "—"
+            }</td>
+          </tr>
+        `;
+      })
       .join("");
   }
+
 
 
 
