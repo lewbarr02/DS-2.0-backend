@@ -351,6 +351,34 @@
     }
   }
 
+// ===== High-Value Prospects Panel =====
+function renderHighValue(leads) {
+  const tbody = document.querySelector("#tbl_highvalue tbody");
+  if (!tbody) return;
+
+  const cleanDate = (d) => {
+    if (!d) return "—";
+    const dt = new Date(d);
+    if (isNaN(dt)) return "—";
+    return dt.toLocaleDateString();
+  };
+
+  const hv = leads
+    .filter(l => Number(l.ap_spend) > 0)
+    .sort((a, b) => Number(b.ap_spend) - Number(a.ap_spend))
+    .slice(0, 10);
+
+  tbody.innerHTML = hv.map(l => `
+    <tr>
+      <td>${l.company || "—"}</td>
+      <td>$${Number(l.ap_spend).toLocaleString()}</td>
+      <td>${l.status || "—"}</td>
+      <td>${cleanDate(l.last_contacted_at || l.last_touch_at)}</td>
+    </tr>
+  `).join("");
+}
+
+
   // ===== 1-on-1 Summary client =====
   function renderOneOnOne(data) {
     const $ = (id) => document.getElementById(id);
@@ -464,6 +492,9 @@
     el("kpi_selfsourced").textContent = percentSelfSourced(data.leads || []) + "%";
 
     const leads = Array.isArray(data.leads) ? data.leads : [];
+	renderHighValue(leads);
+
+	
 
     // Client-side derivations
     const chTop = topChannelsByConversion(leads, 3);

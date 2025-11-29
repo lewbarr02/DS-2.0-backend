@@ -377,50 +377,67 @@
 
 
 	  
-      <!-- 1-on-1 Summary -->
-      <section class="card span-6">
-        <h3 class="section-title">1-on-1 Summary</h3>
+<!-- 1-on-1 Summary -->
+<section class="card span-6">
+  <h3 class="section-title">1-on-1 Summary</h3>
 
-        <div class="row">
-          <div class="kpi">
-            <span class="val" id="o11_accounts">—</span>
-            <span class="lbl">Accounts added</span>
-          </div>
-          <div class="kpi">
-            <span class="val" id="o11_apspend">$0</span>
-            <span class="lbl">Total AP Spend</span>
-          </div>
-        </div>
+  <div class="row">
+    <div class="kpi">
+      <span class="val" id="o11_accounts">—</span>
+      <span class="lbl">Accounts added</span>
+    </div>
+    <div class="kpi">
+      <span class="val" id="o11_apspend">$0</span>
+      <span class="lbl">Total AP Spend</span>
+    </div>
+  </div>
 
-        <!-- Strongest / Weakest Region badges -->
-        <div class="row region-badges">
-          <div class="region-pill strong-region">
-            <span class="region-label">🏆 Strongest Region</span>
-            <span class="region-value" id="o11_region_strong">—</span>
-          </div>
-          <div class="region-pill weak-region">
-            <span class="region-label">🧊 Weakest Region</span>
-            <span class="region-value" id="o11_region_weak">—</span>
-          </div>
-        </div>
+  <!-- Strongest / Weakest Region badges -->
+  <div class="row region-badges">
+    <div class="region-pill strong-region">
+      <span class="region-label">🏆 Strongest Region</span>
+      <span class="region-value" id="o11_region_strong">—</span>
+    </div>
+    <div class="region-pill weak-region">
+      <span class="region-label">🧊 Weakest Region</span>
+      <span class="region-value" id="o11_region_weak">—</span>
+    </div>
+  </div>
 
-        <div class="row">
-          <div class="lbl muted">Customer vs Channel Partners</div>
-        </div>
-        <div id="o11_type_mix" class="row" style="flex-wrap:wrap;gap:8px;"></div>
+  <div class="row">
+    <div class="lbl muted">Customer vs Channel Partners</div>
+  </div>
+  <div id="o11_type_mix" class="row" style="flex-wrap:wrap;gap:8px;"></div>
 
-        <!-- Stage Breakdown -->
-        <div class="row">
-          <div class="lbl muted">Stage Breakdown</div>
-        </div>
-        <div id="o11_status_list" class="barlist"></div>
+  <!-- Stage Breakdown -->
+  <div class="row">
+    <div class="lbl muted">Stage Breakdown</div>
+  </div>
+  <div id="o11_status_list" class="barlist"></div>
 
-        <!-- Industry Mix (Top 5) -->
-        <div class="row">
-          <div class="lbl muted">Industry Mix (Top 5)</div>
-        </div>
-        <div id="o11_industry_list" class="barlist"></div>
-      </section>
+  <!-- Industry Mix (Top 5) -->
+  <div class="row">
+    <div class="lbl muted">Industry Mix (Top 5)</div>
+  </div>
+  <div id="o11_industry_list" class="barlist"></div>
+</section>
+
+<!-- High-Value Prospects -->
+<section class="card span-6">
+  <h3 class="section-title">High-Value Prospects</h3>
+  <table id="tbl_highvalue">
+    <thead>
+      <tr>
+        <th>Company</th>
+        <th>AP Spend</th>
+        <th>Status</th>
+        <th>Last Touch</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</section>
+
 
 
       <!-- AI Narrative -->
