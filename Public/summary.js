@@ -2,7 +2,6 @@
   // Use same-origin backend for both local dev and Railway
   const API = '';
 
-
   // ----- Date helpers -----
   const pad = (n) => String(n).padStart(2, "0");
   const fmt = (d) =>
@@ -174,7 +173,7 @@
       if (s.includes("warm")) return "#ffa500"; // orange
       if (s.includes("follow")) return "#ffd700"; // yellow
       if (s.includes("cold")) return "#59a5ff"; // blue
-      if (s.includes("research")) return "#9b59b6"; // 💜 purple
+      if (s.includes("research")) return "#9b59b6"; // purple
       return "#808080"; // grey for Unspecified
     };
 
@@ -186,7 +185,7 @@
           <div class="barlabel">${e.label}</div>
           <div class="bartrack">
             <div class="barfill" style="
-              width:${Math.max(0, Math.min(100, e.pct))}%;
+              width:${Math.max(0, Math.min(100, e.pct))}% ;
               background:${color};
               box-shadow:0 0 6px ${color} inset;
             "></div>
@@ -341,7 +340,6 @@
     if ($("rec_missing"))
       $("rec_missing").textContent = unplaced.toLocaleString();
 
-    // Simple click handler for now (we can replace with a real list modal next)
     const link = document.getElementById("rec_unplaced");
     if (link) {
       link.onclick = (e) => {
@@ -409,7 +407,7 @@
       }));
       renderBars("o11_industry_list", rows);
     }
-  } // end renderOneOnOne
+  }
 
   async function loadOneOnOne(range) {
     try {
@@ -425,97 +423,10 @@
     }
   }
 
-  // ===== Forecasting Panel client =====
+  // ===== Forecasting Panel client (temporarily disabled) =====
   async function loadForecast(range) {
-    try {
-      const mode = getCountModeFromUrl();
-      const url = `${API}/api/forecast?from=${range.from}&to=${range.to}&count_mode=${mode}`;
-      const res = await fetch(url, { cache: "no-store" });
-      const json = await res.json();
-      if (!json.ok) throw new Error("forecast API failed");
-
-      const f = json.data || {};
-
-      // Core elements
-      const quotaEl = el("forecast-quota-percent");
-      const quotaFillEl = el("forecast-quota-fill");
-      const meetingsEl = el("forecast-meetings");
-      const coverageEl = el("forecast-coverage");
-      const convEl = el("forecast-conversion");
-      const runrateEl = el("forecast-runrate");
-      const dot = el("forecast-pacing-dot");
-      const label = el("forecast-pacing-label");
-
-      const kpiQuota = el("kpi_forecast_quota");
-      const kpiMeetings = el("kpi_forecast_meetings");
-      const kpiCoverage = el("kpi_forecast_coverage");
-
-      if (
-        !quotaEl ||
-        !quotaFillEl ||
-        !meetingsEl ||
-        !coverageEl ||
-        !convEl ||
-        !runrateEl ||
-        !dot ||
-        !label
-      ) {
-        return;
-      }
-
-      const quotaPercent = Math.max(
-        0,
-        Math.min(100, Number(f.quota_percent || 0))
-      );
-      const meetingsForecast = Number(f.meetings_forecast || 0);
-      const pipelineCoverage = Number(f.pipeline_coverage || 0);
-      const conversionRate = Number(f.conversion_rate || 0);
-      const dailyRequired = Number(f.daily_required || 0);
-
-      // Fill KPI strip
-      if (kpiQuota) kpiQuota.textContent = quotaPercent + "%";
-      if (kpiMeetings) kpiMeetings.textContent = meetingsForecast;
-      if (kpiCoverage)
-        kpiCoverage.textContent = pipelineCoverage.toFixed(1) + "×";
-
-      // Detail fields
-      quotaEl.textContent = quotaPercent + "%";
-      meetingsEl.textContent = meetingsForecast;
-      coverageEl.textContent = pipelineCoverage.toFixed(1) + "×";
-      convEl.textContent = conversionRate + "%";
-      runrateEl.textContent = dailyRequired.toFixed(2) + "/day";
-
-      // Animate quota bar
-      quotaFillEl.style.width = "0%";
-      requestAnimationFrame(() => {
-        quotaFillEl.style.width = quotaPercent + "%";
-      });
-
-      // Pacing dot + label
-      dot.classList.remove("pacing-green", "pacing-yellow", "pacing-red");
-      label.classList.remove("pacing-good", "pacing-warn", "pacing-bad");
-
-      let pacingStatus = "On Track";
-      let dotClass = "pacing-green";
-      let labelClass = "pacing-good";
-
-      if (f.pacing === "slightly_behind") {
-        pacingStatus = "Slightly Behind";
-        dotClass = "pacing-yellow";
-        labelClass = "pacing-warn";
-      } else if (f.pacing === "off_pace") {
-        pacingStatus = "Off Pace";
-        dotClass = "pacing-red";
-        labelClass = "pacing-bad";
-      }
-
-      dot.classList.add(dotClass);
-      label.classList.add(labelClass);
-      label.textContent = pacingStatus;
-    } catch (e) {
-      console.warn("loadForecast error", e);
-      // If it fails, we just leave the panel as-is (or whatever default HTML has).
-    }
+    // Forecast temporarily disabled while we rebuild the Finexio traction model.
+    return;
   }
 
   // ----- Load + Render -----
@@ -533,11 +444,24 @@
     const res = await fetch(url, { cache: "no-store" });
     const data = await res.json();
 
-    // KPIs from backend
-    el("kpi_contacted").textContent =
-      data.metrics?.activity?.leads_contacted_window ?? 0;
-    el("kpi_corpv").textContent = money(data.metrics?.arr?.corpv || 0);
-    el("kpi_avg").textContent = money(data.metrics?.arr?.avg_deal || 0);
+    // KPIs from backend (Finexio traction version)
+    const act = data.metrics?.activity || {};
+    const arr = data.metrics?.arr || {};
+    const spend = data.metrics?.ap_spend || {};
+
+    el("kpi_contacted").textContent = act.leads_contacted_window ?? 0;
+
+    const touches = act.total_touches ?? 0;
+    const touchesEl = el("kpi_touches");
+    if (touchesEl) {
+      touchesEl.textContent = `Total touches: ${touches}`;
+    }
+
+    // Top-of-page value tiles now show Avg Prospect ARR + Avg AP Spend
+    el("kpi_corpv").textContent = money(arr.avg_arr || arr.avg_deal || 0);
+    el("kpi_added").textContent = (act.new_leads_added ?? 0).toLocaleString();
+    el("kpi_avg").textContent = money(spend.avg_ap_spend || 0);
+    el("kpi_selfsourced").textContent = percentSelfSourced(data.leads || []) + "%";
 
     const leads = Array.isArray(data.leads) ? data.leads : [];
 
@@ -557,21 +481,14 @@
     const hu = hotUntouched(leads, 7);
     el("kpi_hot_untouched").textContent = hu;
 
-    // Prefer backend status_moves; fall back to client approx if missing
     const pip = data.metrics?.pipeline || {};
     const ud = approxUpDown(leads, range);
 
-    const upgrades   = pip.upgrades   != null ? pip.upgrades   : ud.up;
+    const upgrades = pip.upgrades != null ? pip.upgrades : ud.up;
     const downgrades = pip.downgrades != null ? pip.downgrades : ud.down;
 
     el("kpi_up").textContent = upgrades;
     el("kpi_down").textContent = downgrades;
-
-
-    const added = arrAddedThisWindow(leads, range);
-    el("kpi_added").textContent = money(added);
-
-    el("kpi_selfsourced").textContent = percentSelfSourced(leads) + "%";
 
     // Tables from backend aggregates
     const byInd = data.metrics?.perf_by_industry || [];
@@ -584,7 +501,7 @@
     const byState = data.metrics?.perf_by_state || [];
     fillTable(el("tbl_state").querySelector("tbody"), byState, [
       (r) => r.key || "—",
-      (r) => money(r.hw_arr || 0),
+      (r) => money(r.ap_spend_touched || r.hw_arr || 0),
     ]);
 
     const byTag = data.metrics?.perf_by_tag || [];
@@ -593,62 +510,57 @@
       (r) => r.cnt ?? 0,
     ]);
 
-    // Lightweight AI-style narrative from the data we have
-    const bestInd = [...byInd].sort(
-      (a, b) => (b.conv_pct || 0) - (a.conv_pct || 0)
-    )[0];
+    // Strongest / weakest regions
     const bestState = [...byState].sort(
-      (a, b) => (b.hw_arr || 0) - (a.hw_arr || 0)
+      (a, b) => (b.traction_score || 0) - (a.traction_score || 0)
     )[0];
 
-    // Weakest region by ARR (ignores states with 0 ARR)
     const weakestState =
       [...byState]
-        .filter((r) => (r.hw_arr || 0) > 0)
-        .sort((a, b) => (a.hw_arr || 0) - (b.hw_arr || 0))[0] || null;
+        .filter((r) => (r.traction_score || 0) > 0)
+        .sort((a, b) => (a.traction_score || 0) - (b.traction_score || 0))[0] ||
+      null;
 
-    // 👉 Update Strongest / Weakest Region badges in 1-on-1 panel
     const strongEl = el("o11_region_strong");
     const weakEl = el("o11_region_weak");
 
     if (strongEl) {
       strongEl.textContent = bestState
-        ? `${bestState.key} (${money(bestState.hw_arr || 0)})`
+        ? `${bestState.key} (${money(
+            bestState.ap_spend_touched || bestState.hw_arr || 0
+          )})`
         : "—";
     }
 
     if (weakEl) {
       weakEl.textContent = weakestState
-        ? `${weakestState.key} (${money(weakestState.hw_arr || 0)})`
+        ? `${weakestState.key} (${money(
+            weakestState.ap_spend_touched || weakestState.hw_arr || 0
+          )})`
         : "—";
     }
 
+    // AI-style narrative
+    const bestInd = [...byInd].sort(
+      (a, b) => (b.conv_pct || 0) - (a.conv_pct || 0)
+    )[0];
+
     const insights = [
       `Lead engagement this window: contacted ${
-        data.metrics?.activity?.leads_contacted_window ?? 0
-      }.`,
-      `Pipeline value (Hot+Warm): ${money(
-        data.metrics?.arr?.corpv || 0
-      )} • Avg deal size: ${money(data.metrics?.arr?.avg_deal || 0)}.`,
+        act.leads_contacted_window ?? 0
+      } across ${act.total_touches ?? 0} touches.`,
+      `Avg Prospect ARR: ${money(
+        arr.avg_arr || arr.avg_deal || 0
+      )} • Avg AP Spend: ${money(spend.avg_ap_spend || 0)}.`,
       `Status upgrades: ${upgrades}, downgrades: ${downgrades}.`,
-      pip.top_tag_upgrade
-        ? `Most common tag on upgrades: ${pip.top_tag_upgrade}.`
-        : null,
-      pip.top_tag_downgrade
-        ? `Most common tag on downgrades: ${pip.top_tag_downgrade}.`
-        : null,
       bestInd
         ? `Strongest industry: ${bestInd.key} (${bestInd.conv_pct}% conv).`
         : null,
       bestState
-        ? `Strongest state by ARR: ${bestState.key} (${money(
-            bestState.hw_arr
-          )}).`
+        ? `Strongest region by traction: ${bestState.key}.`
         : null,
       weakestState
-        ? `Weakest state by ARR: ${weakestState.key} (${money(
-            weakestState.hw_arr
-          )}).`
+        ? `Weakest region by traction: ${weakestState.key}.`
         : null,
       `Top channel: ${
         chTop[0]?.channel ?? "—"
@@ -658,59 +570,46 @@
       .filter(Boolean)
       .join(" ");
 
-;
+    const aiEl = el("aiText");
+    if (aiEl) {
+      aiEl.textContent = insights;
+    }
 
-
-    el("aiText").textContent =
-      `Lewis has accelerated momentum this period. ${insights}
-      
-(Full AI narrative can be swapped in from the backend when we hook OpenAI back up.)`;
-
-    // 👉 1-on-1 Summary
-    await loadOneOnOne(range);
-
-    // 👉 Reconcile chip
+    // Reconcile panel
     renderReconcile(data);
 
-    // 👉 Forecasting Panel
+    // Forecast panel – no-op (does nothing, but also doesn’t hit the API)
     await loadForecast(range);
   }
 
   // ----- Init -----
   document.addEventListener("DOMContentLoaded", () => {
-    // 1) Read URL
     const boot = parseUrlRange();
-    markActivePreset(boot.preset);
-
-    // Count-mode boot: mark active, persist to URL/localStorage, set labels
     const mode = getCountModeFromUrl();
     markActiveCount(mode);
-    setCountModeInUrl(mode);
     setCountLabels(mode);
+    setDatePickers(boot.range, boot.preset);
 
-    // Count-mode buttons
-    document
-      .getElementById("modeLeads")
-      ?.addEventListener("click", () => {
-        setCountModeInUrl("leads");
-        markActiveCount("leads");
-        setCountLabels("leads");
-        loadAndRender(parseUrlRange().range).catch(console.error);
-      });
-
-    document
-      .getElementById("modeAccounts")
-      ?.addEventListener("click", () => {
-        setCountModeInUrl("accounts");
-        markActiveCount("accounts");
-        setCountLabels("accounts");
-        loadAndRender(parseUrlRange().range).catch(console.error);
-      });
-
-    // initial load
     loadAndRender(boot.range, boot.preset).catch(console.error);
 
-    // 2) Apply (manual dates) -> custom
+    // Count toggle buttons
+    document.getElementById("modeLeads")?.addEventListener("click", () => {
+      setCountModeInUrl("leads");
+      markActiveCount("leads");
+      setCountLabels("leads");
+      const r = parseUrlRange();
+      loadAndRender(r.range, r.preset).catch(console.error);
+    });
+
+    document.getElementById("modeAccounts")?.addEventListener("click", () => {
+      setCountModeInUrl("accounts");
+      markActiveCount("accounts");
+      setCountLabels("accounts");
+      const r = parseUrlRange();
+      loadAndRender(r.range, r.preset).catch(console.error);
+    });
+
+    // Apply button
     el("applyRange")?.addEventListener("click", () => {
       const from = el("from").value || boot.range.from;
       const to = el("to").value || boot.range.to;
@@ -718,14 +617,13 @@
       loadAndRender({ from, to }, "custom").catch(console.error);
     });
 
-    // 3) Preset buttons
+    // Preset buttons
     document.querySelectorAll(".preset[data-range]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const key = btn.dataset.range;
         markActivePreset(key);
 
         if (key === "custom") {
-          // Do not reload; just focus From so user can pick manually
           el("from")?.focus();
           return;
         }
