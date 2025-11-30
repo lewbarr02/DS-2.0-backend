@@ -46,6 +46,24 @@
   margin:2px;
 }
 
+.trend {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.trend-up {
+  color: #56e39f;
+}
+
+.trend-down {
+  color: #ff6b6b;
+}
+
+.trend-flat {
+  color: #8aa0c6;
+}
+
+
 /* bars */
 .barlist{display:flex;flex-direction:column;gap:8px}
 .barrow{display:flex;align-items:center;gap:10px}
@@ -259,13 +277,15 @@
       <!-- Activity Pulse -->
       <section class="card span-6">
         <h3 class="section-title">Activity Pulse</h3>
-        <div class="row">
+<div class="row">
   <div class="kpi">
     <span class="val" id="kpi_contacted">—</span>
     <span class="lbl" id="kpi_contacted_lbl">Leads contacted</span>
+    <span class="trend" id="kpi_contacted_trend">—</span>
   </div>
-  <span class="pill" id="kpi_touches">Avg touches: —</span>
+  <span class="pill" id="kpi_touches">Total touches: —</span>
 </div>
+
         <div class="row"><div class="kpi"><span class="val" id="kpi_followup">—%</span><span class="lbl">Follow-ups on time</span></div><span class="pill" id="kpi_overdue">Overdue follow-ups: —</span></div>
         <div class="row" style="margin-top:8px;">
           <div class="lbl">Top Channels by Conversion</div>
@@ -279,33 +299,47 @@
       <!-- Pipeline Momentum -->
       <section class="card span-6">
         <h3 class="section-title">Pipeline Momentum</h3>
-        <div class="row">
-          <div class="kpi"><span class="val" id="kpi_up">—</span><span class="lbl">Upgrades</span></div>
-          <div class="kpi"><span class="val" id="kpi_down">—</span><span class="lbl">Downgrades</span></div>
-          <div class="kpi"><span class="val" id="kpi_hot_untouched">—</span><span class="lbl">Hot untouched ≥7d</span></div>
-        </div>
+<div class="row">
+  <div class="kpi">
+    <span class="val" id="kpi_up">—</span>
+    <span class="lbl">Upgrades</span>
+    <span class="trend" id="kpi_up_trend">—</span>
+  </div>
+  <div class="kpi">
+    <span class="val" id="kpi_down">—</span>
+    <span class="lbl">Downgrades</span>
+    <span class="trend" id="kpi_down_trend">—</span>
+  </div>
+  <div class="kpi">
+    <span class="val" id="kpi_hot_untouched">—</span>
+    <span class="lbl">Hot untouched ≥7d</span>
+  </div>
+</div>
+
         <div class="muted" style="margin-top:6px;">*Up/Downgrades approximated from current status + recent status change date.</div>
-      </section>
-	  
       </section>
 
       <!-- Touch Mix -->
-      <section class="card span-12">
-        <div class="row" style="margin-top:0; justify-content:flex-start; gap:32px;">
-          <div class="kpi">
-            <span class="val" id="kpi_calls">0</span>
-            <span class="lbl">Calls</span>
-          </div>
-          <div class="kpi">
-            <span class="val" id="kpi_emails">0</span>
-            <span class="lbl">Emails</span>
-          </div>
-          <div class="kpi">
-            <span class="val" id="kpi_social">0</span>
-            <span class="lbl">Social</span>
-          </div>
-        </div>
-      </section>
+<section class="card span-12">
+  <div class="row" style="margin-top:0; justify-content:flex-start; gap:32px;">
+    <div class="kpi">
+      <span class="val" id="kpi_calls">0</span>
+      <span class="lbl">Calls</span>
+      <span class="trend" id="kpi_calls_trend">—</span>
+    </div>
+    <div class="kpi">
+      <span class="val" id="kpi_emails">0</span>
+      <span class="lbl">Emails</span>
+      <span class="trend" id="kpi_emails_trend">—</span>
+    </div>
+    <div class="kpi">
+      <span class="val" id="kpi_social">0</span>
+      <span class="lbl">Social</span>
+      <span class="trend" id="kpi_social_trend">—</span>
+    </div>
+  </div>
+</section>
+
 
       <!-- Status Changes (Upgrades & Downgrades) -->
       <section class="card span-12">

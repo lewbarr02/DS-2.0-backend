@@ -54,6 +54,21 @@
     const from = new Date(now.getFullYear(), qStartMonth, 1);
     return { from: fmt(from), to: fmt(now) };
   }
+  
+    function prevRangeFor(range) {
+    const parse = (s) => {
+      const [y, m, d] = s.split("-").map(Number);
+      return new Date(y, m - 1, d);
+    };
+    const from = parse(range.from);
+    const to = parse(range.to);
+    const msDay = 24 * 3600 * 1000;
+    const lenDays = Math.round((to - from) / msDay) + 1;
+    const prevTo = new Date(from.getTime() - msDay);
+    const prevFrom = new Date(prevTo.getTime() - (lenDays - 1) * msDay);
+    return { from: fmt(prevFrom), to: fmt(prevTo) };
+  }
+
 
   const PRESET_FNS = {
     today: todayRange,
@@ -144,6 +159,34 @@
     if (v == null || isNaN(v)) return "$0";
     return "$" + Number(v).toLocaleString();
   }
+  
+    function setTrendIcon(id, current, previous) {
+    const node = el(id);
+    if (!node) return;
+
+    const curr = Number(current || 0);
+    const prev = Number(previous || 0);
+
+    node.classList.remove("trend-up", "trend-down", "trend-flat");
+
+    if (!isFinite(curr) || !isFinite(prev)) {
+      node.textContent = "—";
+      node.classList.add("trend-flat");
+      return;
+    }
+
+    if (curr > prev) {
+      node.textContent = "📈";
+      node.classList.add("trend-up");
+    } else if (curr < prev) {
+      node.textContent = "📉";
+      node.classList.add("trend-down");
+    } else {
+      node.textContent = "⏺";
+      node.classList.add("trend-flat");
+    }
+  }
+
 
   // --- 1-on-1 helpers ---
   function compactMoney(v) {
@@ -524,16 +567,42 @@ function renderHighValue(leads) {
     pushUrl(range, activePreset);
 
     const mode = getCountModeFromUrl();
-    const url = `${API}/summary?from=${range.from}&to=${range.to}&pinned_only=1&count_mode=${mode}`;
-    const res = await fetch(url, { cache: "no-store" });
-    const data = await res.json();
+
+    const urlCurrent = `${API}/summary?from=${range.from}&to=${range.to}&pinned_only=1&count_mode=${mode}`;
+    const prevRange = prevRangeFor(range);
+    const urlPrev = `${API}/summary?from=${prevRange.from}&to=${prevRange.to}&pinned_only=1&count_mode=${mode}`;
+
+    let data;
+    let prev = null;
+
+    try {
+      const [resCurr, resPrev] = await Promise.all([
+        fetch(urlCurrent, { cache: "no-store" }),
+        fetch(urlPrev, { cache: "no-store" }),
+      ]);
+      data = await resCurr.json();
+      prev = await resPrev.json();
+    } catch (err) {
+      console.warn("Summary fetch error", err);
+      const res = await fetch(urlCurrent, { cache: "no-store" });
+      data = await res.json();
+    }
 
     // KPIs from backend (Finexio traction version)
     const act = data.metrics?.activity || {};
     const arr = data.metrics?.arr || {};
     const spend = data.metrics?.ap_spend || {};
+    const prevAct = prev?.metrics?.activity || {};
+    const prevPip = prev?.metrics?.pipeline || {};
+
 
     el("kpi_contacted").textContent = act.leads_contacted_window ?? 0;
+	    setTrendIcon(
+      "kpi_contacted_trend",
+      act.leads_contacted_window ?? 0,
+      prevAct.leads_contacted_window ?? 0
+    );
+
 
     const touches = act.total_touches ?? 0;
     const touchesEl = el("kpi_touches");
@@ -549,6 +618,10 @@ function renderHighValue(leads) {
     if (callsEl) callsEl.textContent = act.calls ?? 0;
     if (emailsEl) emailsEl.textContent = act.emails ?? 0;
     if (socialEl) socialEl.textContent = act.social ?? 0;
+	    setTrendIcon("kpi_calls_trend", act.calls ?? 0, prevAct.calls ?? 0);
+    setTrendIcon("kpi_emails_trend", act.emails ?? 0, prevAct.emails ?? 0);
+    setTrendIcon("kpi_social_trend", act.social ?? 0, prevAct.social ?? 0);
+
 
 
 
@@ -582,6 +655,15 @@ function renderHighValue(leads) {
 
     el("kpi_up").textContent = upgrades;
     el("kpi_down").textContent = downgrades;
+	
+	    const prevUpgrades =
+      prevPip.upgrades != null ? prevPip.upgrades : null;
+    const prevDowngrades =
+      prevPip.downgrades != null ? prevPip.downgrades : null;
+
+    setTrendIcon("kpi_up_trend", upgrades, prevUpgrades);
+    setTrendIcon("kpi_down_trend", downgrades, prevDowngrades);
+
 
     // Tables from backend aggregates
     const byInd = data.metrics?.perf_by_industry || [];
