@@ -160,20 +160,28 @@
     return "$" + Number(v).toLocaleString();
   }
   
-    function setTrendIcon(id, current, previous) {
+  function setTrendIcon(id, current, previous) {
     const node = el(id);
     if (!node) return;
 
     const curr = Number(current || 0);
-    const prev = Number(previous || 0);
 
-    node.classList.remove("trend-up", "trend-down", "trend-flat");
-
-    if (!isFinite(curr) || !isFinite(prev)) {
-      node.textContent = "—";
-      node.classList.add("trend-flat");
+    // --- Fallback Case 1: NO previous data at all ---
+    // If prev undefined/null/empty → show simple fallback trend
+    if (previous == null || previous === '' || isNaN(Number(previous))) {
+      if (curr > 0) {
+        node.textContent = "📈";      // activity > 0 with no baseline → trending up
+        node.className = "trend trend-up";
+      } else {
+        node.textContent = "—";       // nothing happened & no baseline → blank
+        node.className = "trend trend-flat";
+      }
       return;
     }
+
+    // --- Normal Comparison Case ---
+    const prev = Number(previous || 0);
+    node.classList.remove("trend-up", "trend-down", "trend-flat");
 
     if (curr > prev) {
       node.textContent = "📈";
@@ -186,6 +194,7 @@
       node.classList.add("trend-flat");
     }
   }
+
 
 
   // --- 1-on-1 helpers ---
