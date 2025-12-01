@@ -368,13 +368,16 @@
   
     // ----- ICP Industry Breakdown Panel -----
   function renderIndustryPanel(byInd) {
-    const buckets = {
-      Education:  { leads: 0, convLeads: 0 },
-      Healthcare: { leads: 0, convLeads: 0 },
-      Government: { leads: 0, convLeads: 0 },
-      Hospitality:{ leads: 0, convLeads: 0 },
-      Other:      { leads: 0, convLeads: 0 },
-    };
+const buckets = {
+  Education:      { leads: 0, convLeads: 0 },
+  Healthcare:     { leads: 0, convLeads: 0 },
+  Government:     { leads: 0, convLeads: 0 },
+  Hospitality:    { leads: 0, convLeads: 0 },
+  Construction:   { leads: 0, convLeads: 0 },
+  Manufacturing:  { leads: 0, convLeads: 0 },
+  Other:          { leads: 0, convLeads: 0 },
+};
+
 
     for (const r of byInd || []) {
       const name  = String(r.key || "");
@@ -394,7 +397,12 @@
         bucket = "Government";
       } else if (s.includes("hospitality") || s.includes("hotel") || s.includes("lodging")) {
         bucket = "Hospitality";
+      } else if (s.includes("construct") || s.includes("contractor") || s.includes("builder")) {
+        bucket = "Construction";
+      } else if (s.includes("manufact") || s.includes("factory") || s.includes("industrial")) {
+        bucket = "Manufacturing";
       }
+
 
       const b = buckets[bucket];
       b.leads += leads;
@@ -416,11 +424,13 @@
       }
     };
 
-    setTile("education",   buckets.Education);
-    setTile("healthcare",  buckets.Healthcare);
-    setTile("government",  buckets.Government);
-    setTile("hospitality", buckets.Hospitality);
-    setTile("other",       buckets.Other);
+setTile("education",      buckets.Education);
+setTile("healthcare",     buckets.Healthcare);
+setTile("government",     buckets.Government);
+setTile("hospitality",    buckets.Hospitality);
+setTile("construction",   buckets.Construction);
+setTile("manufacturing",  buckets.Manufacturing);
+setTile("other",          buckets.Other);
   }
 
 
