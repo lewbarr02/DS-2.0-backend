@@ -249,6 +249,52 @@
       })
       .join("");
   }
+  
+  // ===== Next Touch Panel =====
+function computeNextTouch(leads) {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  let dueToday = 0;
+  let dueTomorrow = 0;
+  let overdue = 0;
+  let noAction = 0;
+
+  for (const l of leads || []) {
+    const na = l.next_action_at ? new Date(l.next_action_at) : null;
+
+    if (!na) {
+      noAction++;
+      continue;
+    }
+
+    const d = new Date(na);
+    d.setHours(0,0,0,0);
+
+    if (d.getTime() === today.getTime()) {
+      dueToday++;
+    } 
+    else if (d.getTime() === tomorrow.getTime()) {
+      dueTomorrow++;
+    }
+    else if (d.getTime() < today.getTime()) {
+      overdue++;
+    }
+  }
+
+  return { dueToday, dueTomorrow, overdue, noAction };
+}
+
+function renderNextTouchPanel(stats) {
+  document.getElementById("nt_due_today").textContent     = stats.dueToday;
+  document.getElementById("nt_due_tomorrow").textContent  = stats.dueTomorrow;
+  document.getElementById("nt_overdue").textContent       = stats.overdue;
+  document.getElementById("nt_no_action").textContent     = stats.noAction;
+}
+
 
   // ----- Computations we derive on the client from leads[] -----
   function topChannelsByConversion(leads, topN = 3) {
@@ -815,6 +861,10 @@ function renderHighValue(leads) {
 
 
     const leads = Array.isArray(data.leads) ? data.leads : [];
+	// Next Touch Panel
+const nt = computeNextTouch(leads);
+renderNextTouchPanel(nt);
+
     renderHighValue(leads);
     renderStatusChanges(data.status_changes || []);
 	
