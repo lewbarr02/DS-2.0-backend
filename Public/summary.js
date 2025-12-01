@@ -724,7 +724,40 @@ function renderHighValue(leads) {
           )})`
         : "—";
     }
+	
+	    // ----- Top Finexio KPI bar (Avg ARR / AP Spend / Regions) -----
+    const avgArrVal = arr.avg_arr || arr.avg_deal || 0;
+    const avgApVal = spend.avg_ap_spend || 0;
 
+    const avgArrEl = el("kpi_avg_arr");
+    if (avgArrEl) {
+      avgArrEl.textContent = money(avgArrVal);
+    }
+
+    const avgApEl = el("kpi_avg_ap");
+    if (avgApEl) {
+      avgApEl.textContent = money(avgApVal);
+    }
+
+    const strongKpiEl = el("kpi_strong_region");
+    if (strongKpiEl) {
+      strongKpiEl.textContent = bestState
+        ? `${bestState.key} · ${money(
+            bestState.ap_spend_touched || bestState.hw_arr || 0
+          )}`
+        : "—";
+    }
+
+    const weakKpiEl = el("kpi_weak_region");
+    if (weakKpiEl) {
+      weakKpiEl.textContent = weakestState
+        ? `${weakestState.key} · ${money(
+            weakestState.ap_spend_touched || weakestState.hw_arr || 0
+          )}`
+        : "—";
+    }
+
+	
     // AI-style narrative
     const bestInd = [...byInd].sort(
       (a, b) => (b.conv_pct || 0) - (a.conv_pct || 0)
