@@ -122,12 +122,148 @@ html, body {
       /* Logo (existing) */
       #logo { position: absolute; top: -122px; left: 10px; height: 400px; z-index: 2000; }
 
-      /* Presentation overlay (existing) */
-      #presentationDisplay {
-        display: none; position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
-        width: 600px; max-height: 70%; overflow-y: auto; background: white; border-radius: 12px;
-        padding: 20px; box-shadow: 0 0 20px rgba(0,0,0,0.4); z-index: 2000; font-family: 'Nunito Sans', sans-serif;
-      }
+/* Overlay container */
+.presentation-overlay {
+  position: fixed;
+  inset: 0;
+  background: #ffffff;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 48px;
+  box-sizing: border-box;
+}
+
+.presentation-overlay.hidden {
+  display: none;
+}
+
+.presentation-inner {
+  width: 100%;
+  max-width: 1200px;
+  height: 100%;
+  max-height: 650px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* Close button */
+.presentation-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+/* Titles */
+.presentation-title {
+  text-align: center;
+  font-size: 32px;
+  margin: 16px 0 4px;
+}
+
+.presentation-subtitle {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 500;
+  margin: 0 0 24px;
+}
+
+/* Main layout */
+.presentation-layout {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 48px;
+  align-items: center;
+  height: calc(100% - 120px);
+}
+
+/* Funnel */
+.pipeline-funnel {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.funnel-band {
+  position: relative;
+  height: 80px;
+  margin-bottom: 4px;
+  clip-path: polygon(0 0, 100% 0, 80% 100%, 20% 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Colors roughly matching your slide */
+.funnel-cold {
+  background: #0047ab; /* blue */
+}
+.funnel-followup {
+  background: #ffdf5b; /* yellow */
+}
+.funnel-warm {
+  background: #ffa552; /* orange */
+}
+.funnel-hot {
+  background: #b00000; /* red */
+}
+
+.funnel-converted {
+  background: #28a745; /* green */
+  clip-path: polygon(20% 0, 80% 0, 60% 100%, 40% 100%);
+}
+
+
+.funnel-count {
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 24px;
+}
+
+/* Legend */
+.pipeline-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.legend-emoji {
+  font-size: 32px;
+}
+
+.legend-text {
+  flex: 1;
+}
+
+.legend-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.legend-notes-line {
+  border-bottom: 1px dotted #444;
+  margin-bottom: 4px;
+}
+
+.legend-subtitle {
+  font-size: 13px;
+  color: #555;
+}
+
 
       /* --- VIEW SWITCHER --- */
       #viewSwitcher {
@@ -379,7 +515,89 @@ html, body {
     <div id="mapView">
       <div id="map"></div>
 
-      <div id="presentationDisplay"></div>
+         <!-- Presentation Mode Funnel Overlay -->
+      <div id="presentation-overlay" class="presentation-overlay hidden">
+        <div class="presentation-inner">
+          <button id="presentation-close" class="presentation-close">✖</button>
+
+          <h1 class="presentation-title">
+            Current Pipeline (<span id="pipeline_total">0</span> Prospects)
+          </h1>
+          <h2 class="presentation-subtitle">
+            <span id="pipeline_added">0</span> in current filtered time period
+          </h2>
+
+          <div class="presentation-layout">
+            <!-- Funnel -->
+            <div class="pipeline-funnel">
+              <div class="funnel-band funnel-cold">
+                <span class="funnel-count" id="funnel_cold">0</span>
+              </div>
+              <div class="funnel-band funnel-followup">
+                <span class="funnel-count" id="funnel_followup">0</span>
+              </div>
+              <div class="funnel-band funnel-warm">
+                <span class="funnel-count" id="funnel_warm">0</span>
+              </div>
+              <div class="funnel-band funnel-hot">
+                <span class="funnel-count" id="funnel_hot">0</span>
+              </div>
+              <div class="funnel-band funnel-converted">
+                <span class="funnel-count" id="funnel_converted">0</span>
+              </div>
+            </div>
+
+            <!-- Legend / Notes -->
+            <div class="pipeline-legend">
+              <div class="legend-row">
+                <div class="legend-emoji">🧊</div>
+                <div class="legend-text">
+                  <div class="legend-title">Cold Leads</div>
+                  <div class="legend-notes-line"></div>
+                  <div class="legend-subtitle">Notes on Cold Leads</div>
+                </div>
+              </div>
+
+              <div class="legend-row">
+                <div class="legend-emoji">⏳</div>
+                <div class="legend-text">
+                  <div class="legend-title">Follow-Up Leads</div>
+                  <div class="legend-notes-line"></div>
+                  <div class="legend-subtitle">Notes on Follow-Up Leads</div>
+                </div>
+              </div>
+
+              <div class="legend-row">
+                <div class="legend-emoji">🌞</div>
+                <div class="legend-text">
+                  <div class="legend-title">Warm Leads</div>
+                  <div class="legend-notes-line"></div>
+                  <div class="legend-subtitle">Notes on Warm Leads</div>
+                </div>
+              </div>
+
+              <div class="legend-row">
+                <div class="legend-emoji">🔥</div>
+                <div class="legend-text">
+                  <div class="legend-title">Hot Leads</div>
+                  <div class="legend-notes-line"></div>
+                  <div class="legend-subtitle">Notes on Hot Leads</div>
+                </div>
+              </div>
+
+              <div class="legend-row">
+                <div class="legend-emoji">🏆</div>
+                <div class="legend-text">
+                  <div class="legend-title">Converted Leads</div>
+                  <div class="legend-notes-line"></div>
+                  <div class="legend-subtitle">Notes on Converted Leads</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
 
       <div id="statsSummary">Status Breakdown: (loading...)</div>
       <div id="pinCount">Displaying 0 of 0 leads</div>
@@ -556,9 +774,6 @@ html, body {
       })();
     </script>
 
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 	
     <!-- your app scripts -->
     <script src="leads.js" defer></script>
@@ -1065,6 +1280,138 @@ function getCI(row, key) {
   });
 </script>
 
-	
-  </body>
+	<script>
+(function () {
+  function getPresentationLeads() {
+    const DS = window.DS || {};
+    const rows = (DS.state && (DS.state.filtered || DS.state.rawRows)) || [];
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  function bucketTotals(leads) {
+    const DS = window.DS || {};
+    const statusKey = typeof DS.statusKey === 'function'
+      ? DS.statusKey
+      : function fallbackStatusKey(s) {
+          if (!s || typeof s !== 'string') return 'unspecified';
+          const k = s.trim().toLowerCase();
+          if (k.includes('convert'))  return 'converted';
+          if (k.includes('hot'))      return 'hot';
+          if (k.includes('warm'))     return 'warm';
+          if (k.includes('cold'))     return 'cold';
+          if (k.includes('research')) return 'research';
+          if (k.includes('follow'))   return 'follow-up';
+          return 'unspecified';
+        };
+
+    const totals = {
+      cold: 0,
+      follow: 0,
+      warm: 0,
+      hot: 0,
+      converted: 0
+    };
+
+    leads.forEach((lead) => {
+      const raw = lead.status || lead.Status || '';
+      const key = statusKey(raw); // ← single source of truth
+
+      switch (key) {
+        case 'converted':
+          totals.converted++;
+          break;
+        case 'hot':
+          totals.hot++;
+          break;
+        case 'warm':
+          totals.warm++;
+          break;
+        case 'follow-up':
+          totals.follow++;
+          break;
+        case 'cold':
+        case 'research':
+          // Treat Research as Cold for funnel purposes
+          totals.cold++;
+          break;
+        default:
+          // unspecified → ignore in funnel
+          break;
+      }
+    });
+
+    return totals;
+  }
+
+  function openPresentationMode() {
+    const leads  = getPresentationLeads();
+    const totals = bucketTotals(leads);
+
+    const total        = leads.length;
+    const addedInRange = total; // later we can refine to “new in range”
+
+    // Update headline
+    const elTotal  = document.getElementById('pipeline_total');
+    const elAdded  = document.getElementById('pipeline_added');
+    if (elTotal) elTotal.textContent = total;
+    if (elAdded) elAdded.textContent = addedInRange;
+
+    // Update funnel bands
+    const elCold   = document.getElementById('funnel_cold');
+    const elFollow = document.getElementById('funnel_followup');
+    const elWarm   = document.getElementById('funnel_warm');
+    const elHot    = document.getElementById('funnel_hot');
+    const elConv   = document.getElementById('funnel_converted');
+
+    if (elCold)   elCold.textContent   = totals.cold;
+    if (elFollow) elFollow.textContent = totals.follow;
+    if (elWarm)   elWarm.textContent   = totals.warm;
+    if (elHot)    elHot.textContent    = totals.hot;
+    if (elConv)   elConv.textContent   = totals.converted;
+
+    // Show overlay
+    const overlay = document.getElementById('presentation-overlay');
+    if (overlay) overlay.classList.remove('hidden');
+  }
+
+  function closePresentationMode() {
+    const overlay = document.getElementById('presentation-overlay');
+    if (overlay) overlay.classList.add('hidden');
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const launchBtn = document.getElementById('launchPresentation');
+    const closeBtn  = document.getElementById('presentation-close');
+    const overlay   = document.getElementById('presentation-overlay');
+
+    // Launch from dashboard button
+    launchBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      openPresentationMode();
+    });
+
+    // Close via ✖
+    closeBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      closePresentationMode();
+    });
+
+    // Click outside content closes
+    overlay?.addEventListener('click', (e) => {
+      if (e.target === overlay) closePresentationMode();
+    });
+
+    // ESC key closes
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closePresentationMode();
+    });
+  });
+
+  // Optional: expose globally if needed
+  window.openPresentationMode = openPresentationMode;
+})();
+</script>
+</body>
 </html>
+
+	

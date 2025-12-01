@@ -126,6 +126,10 @@ window.refreshLeads = async function refreshLeads() {
     if(k.includes('follow')) return 'follow-up';
     return 'unspecified';
   }
+  
+    // Expose for other scripts (Presentation Mode, etc.)
+  DS.statusKey = statusKey;
+
 
   function iconForStatus(status){
     const file = STATUS_ICON[statusKey(status)] || STATUS_ICON._default;
