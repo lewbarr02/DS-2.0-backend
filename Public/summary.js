@@ -471,6 +471,52 @@ setTile("other",          buckets.Other);
       };
     }
   }
+  
+    // ----- Regional Traction Breakdown Panel -----
+  function renderRegionalTraction(byState) {
+    const tbody = document.querySelector("#tbl_region_traction tbody");
+    if (!tbody) return;
+
+    const rows = (byState || [])
+      .slice()
+      .sort((a, b) => (b.traction_score || 0) - (a.traction_score || 0))
+      .slice(0, 20); // top 20 regions
+
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="5">No regional traction data yet.</td></tr>`;
+      return;
+    }
+
+    const tierFor = (score) => {
+      const s = Number(score || 0);
+      if (s >= 80) return "🏆 A+ Focus";
+      if (s >= 60) return "💪 A Strong";
+      if (s >= 40) return "📈 B Emerging";
+      if (s > 0)   return "🌱 C Nurture";
+      return "—";
+    };
+
+    tbody.innerHTML = rows
+      .map((r) => {
+        const name = r.key || "—";
+        const ap = r.ap_spend_touched ?? r.ap_spend ?? 0;
+        const arr = r.hw_arr ?? 0;
+        const score = Number(r.traction_score || 0);
+        const tier = tierFor(score);
+
+        return `
+          <tr>
+            <td>${name}</td>
+            <td>${money(ap)}</td>
+            <td>${money(arr)}</td>
+            <td>${score.toFixed(0)}</td>
+            <td>${tier}</td>
+          </tr>
+        `;
+      })
+      .join("");
+  }
+
 
 // ===== High-Value Prospects Panel =====
 function renderHighValue(leads) {
@@ -826,6 +872,9 @@ function renderHighValue(leads) {
       (r) => r.key || "—",
       (r) => money(r.ap_spend_touched || r.hw_arr || 0),
     ]);
+	
+	  // NEW: Regional Traction panel
+    renderRegionalTraction(byState);
 
     const byTag = data.metrics?.perf_by_tag || [];
     fillTable(el("tbl_tag").querySelector("tbody"), byTag, [
@@ -862,6 +911,7 @@ function renderHighValue(leads) {
           )})`
         : "—";
     }
+	
 	
 	    // ----- Top Finexio KPI bar (Avg ARR / AP Spend / Regions) -----
     const avgArrVal = arr.avg_arr || arr.avg_deal || 0;
