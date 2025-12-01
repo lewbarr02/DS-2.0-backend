@@ -197,6 +197,7 @@
 
 
 
+
   // --- 1-on-1 helpers ---
   function compactMoney(v) {
     const n = Number(v || 0);
