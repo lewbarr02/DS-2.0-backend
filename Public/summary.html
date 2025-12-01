@@ -225,6 +225,45 @@
   box-shadow: 0 0 10px rgba(255,80,80,0.25);
 }
 
+/* ICP Vertical Breakdown panel */
+.vertical-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.vertical-kpi {
+  flex: 1 1 150px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #2a3e66;
+  background: rgba(15,25,44,0.95);
+  box-shadow: 0 0 8px rgba(0,0,0,0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vertical-label {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.vertical-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.vertical-meta {
+  font-size: 12px;
+  color: #b7c7e6;
+}
+
+
 
   </style>
 </head>
@@ -542,6 +581,47 @@
     <tbody></tbody>
   </table>
 </section>
+
+
+      <!-- ICP Industry Breakdown Panel -->
+      <section class="card span-12">
+        <h3 class="section-title">ICP Vertical Breakdown</h3>
+        <p class="muted" style="margin-top:4px;margin-bottom:8px;">
+          How your core Finexio verticals are converting in this window.
+        </p>
+
+        <div class="vertical-row">
+          <div class="vertical-kpi">
+            <div class="vertical-label">Education</div>
+            <div class="vertical-value" id="ind_education_conv">—</div>
+            <div class="vertical-meta" id="ind_education_leads">No data</div>
+          </div>
+
+          <div class="vertical-kpi">
+            <div class="vertical-label">Healthcare</div>
+            <div class="vertical-value" id="ind_healthcare_conv">—</div>
+            <div class="vertical-meta" id="ind_healthcare_leads">No data</div>
+          </div>
+
+          <div class="vertical-kpi">
+            <div class="vertical-label">Government</div>
+            <div class="vertical-value" id="ind_government_conv">—</div>
+            <div class="vertical-meta" id="ind_government_leads">No data</div>
+          </div>
+
+          <div class="vertical-kpi">
+            <div class="vertical-label">Hospitality</div>
+            <div class="vertical-value" id="ind_hospitality_conv">—</div>
+            <div class="vertical-meta" id="ind_hospitality_leads">No data</div>
+          </div>
+
+          <div class="vertical-kpi">
+            <div class="vertical-label">Other</div>
+            <div class="vertical-value" id="ind_other_conv">—</div>
+            <div class="vertical-meta" id="ind_other_leads">No data</div>
+          </div>
+        </div>
+      </section>
 
 
 

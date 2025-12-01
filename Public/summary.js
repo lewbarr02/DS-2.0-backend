@@ -365,6 +365,64 @@
       )
       .join("");
   }
+  
+    // ----- ICP Industry Breakdown Panel -----
+  function renderIndustryPanel(byInd) {
+    const buckets = {
+      Education:  { leads: 0, convLeads: 0 },
+      Healthcare: { leads: 0, convLeads: 0 },
+      Government: { leads: 0, convLeads: 0 },
+      Hospitality:{ leads: 0, convLeads: 0 },
+      Other:      { leads: 0, convLeads: 0 },
+    };
+
+    for (const r of byInd || []) {
+      const name  = String(r.key || "");
+      const leads = Number(r.leads || 0);
+      const convPct = Number(r.conv_pct || 0); // 0–100 from backend
+
+      if (!leads) continue;
+
+      const s = name.toLowerCase();
+      let bucket = "Other";
+
+      if (s.includes("educ")) {
+        bucket = "Education";
+      } else if (s.includes("health")) {
+        bucket = "Healthcare";
+      } else if (s.includes("gov")) {
+        bucket = "Government";
+      } else if (s.includes("hospitality") || s.includes("hotel") || s.includes("lodging")) {
+        bucket = "Hospitality";
+      }
+
+      const b = buckets[bucket];
+      b.leads += leads;
+      b.convLeads += (convPct / 100) * leads; // approximate # converted
+    }
+
+    const setTile = (prefix, data) => {
+      const leads = data.leads || 0;
+      const convPct = leads ? Math.round((100 * data.convLeads) / leads) : 0;
+
+      const convEl  = el(`ind_${prefix}_conv`);
+      const leadsEl = el(`ind_${prefix}_leads`);
+
+      if (convEl) {
+        convEl.textContent = leads ? `${convPct}%` : "—";
+      }
+      if (leadsEl) {
+        leadsEl.textContent = leads ? `${leads} leads` : "No data";
+      }
+    };
+
+    setTile("education",   buckets.Education);
+    setTile("healthcare",  buckets.Healthcare);
+    setTile("government",  buckets.Government);
+    setTile("hospitality", buckets.Hospitality);
+    setTile("other",       buckets.Other);
+  }
+
 
   function setDatePickers(range, activePreset = null) {
     el("from").value = range.from;
@@ -682,8 +740,11 @@ function renderHighValue(leads) {
       (r) => (r.conv_pct ?? 0) + "%",
       (r) => r.leads ?? "—",
     ]);
+    // New: drive ICP Vertical Breakdown KPI tiles
+    renderIndustryPanel(byInd);
 
     const byState = data.metrics?.perf_by_state || [];
+
     fillTable(el("tbl_state").querySelector("tbody"), byState, [
       (r) => r.key || "—",
       (r) => money(r.ap_spend_touched || r.hw_arr || 0),
