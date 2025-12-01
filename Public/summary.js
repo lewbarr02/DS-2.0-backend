@@ -552,6 +552,69 @@ function renderHighValue(leads) {
       })
       .join("");
   }
+  
+    // ===== At-Risk / Dormant Leads =====
+  function buildAtRisk(leads) {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const nowMs = Date.now();
+
+    return (leads || [])
+      .filter((l) => l.last_contacted_at) // must have at least one touch
+      .map((l) => {
+        const dt = new Date(l.last_contacted_at);
+        if (isNaN(dt)) return null;
+
+        const days = Math.floor((nowMs - dt.getTime()) / DAY_MS);
+
+        let risk = "healthy";
+        if (days >= 30) risk = "dormant";   // 🔴 30+ days
+        else if (days >= 14) risk = "at-risk"; // 🟠 14–29 days
+
+        return {
+          company: l.company || "—",
+          ap_spend: Number(l.ap_spend || 0),
+          status: l.status || "—",
+          state: l.state || l.st || "—",
+          days_since: days,
+          risk,
+        };
+      })
+      .filter(Boolean)
+      .filter((r) => r.risk !== "healthy") // we only care about real risk
+      .sort((a, b) => b.ap_spend - a.ap_spend) // highest AP first
+      .slice(0, 25); // cap the table
+  }
+
+  function renderAtRisk(rows) {
+    const body = document.getElementById("at_risk_body");
+    if (!body) return;
+
+    if (!rows || rows.length === 0) {
+      body.innerHTML = `<tr><td colspan="6">No at-risk leads 🎉</td></tr>`;
+      return;
+    }
+
+    body.innerHTML = rows
+      .map((r) => {
+        const riskIcon =
+          r.risk === "dormant" ? "🔴" :
+          r.risk === "at-risk" ? "🟠" :
+          "🟢";
+
+        return `
+          <tr>
+            <td>${r.company}</td>
+            <td>$${Number(r.ap_spend || 0).toLocaleString()}</td>
+            <td>${r.days_since} days</td>
+            <td>${r.status}</td>
+            <td>${r.state}</td>
+            <td>${riskIcon} ${r.risk}</td>
+          </tr>
+        `;
+      })
+      .join("");
+  }
+
 
 
 
@@ -708,6 +771,10 @@ function renderHighValue(leads) {
     const leads = Array.isArray(data.leads) ? data.leads : [];
     renderHighValue(leads);
     renderStatusChanges(data.status_changes || []);
+	
+	    const atRisk = buildAtRisk(leads);
+    renderAtRisk(atRisk);
+
 
     // Client-side derivations
     const chTop = topChannelsByConversion(leads, 3);
