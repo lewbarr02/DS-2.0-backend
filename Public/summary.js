@@ -591,42 +591,66 @@ function renderHighValue(leads) {
   `).join("");
 }
 
-  // ===== Upgrade / Downgrade Detail List =====
-  function renderStatusChanges(changes) {
-    const tbody = document.querySelector("#tbl_status_changes tbody");
-    if (!tbody) return;
+// ===== AI Notes by Status Band =====
+function renderAiBandNotes(notes) {
+  const safe = (v) => {
+    if (!v) return "No AI notes for this band yet.";
+    const s = String(v).trim();
+    return s || "No AI notes for this band yet.";
+  };
 
-    const cleanDate = (d) => {
-      if (!d) return "—";
-      const dt = new Date(d);
-      if (isNaN(dt)) return "—";
-      return dt.toLocaleDateString();
-    };
+  const mapping = [
+    { id: "ai_note_hot",       key: "hot" },
+    { id: "ai_note_warm",      key: "warm" },
+    { id: "ai_note_followup",  key: "followup" },
+    { id: "ai_note_cold",      key: "cold" },
+    { id: "ai_note_research",  key: "research" },
+    { id: "ai_note_converted", key: "converted" },
+  ];
 
-    // Simple status ranking so we can detect up vs down
-    const statusRank = (s) => {
-      const v = (s || "").toString().toLowerCase();
-      if (v.includes("convert")) return 6;
-      if (v.includes("hot")) return 5;
-      if (v.includes("warm")) return 4;
-      if (v.includes("follow")) return 3;    // follow-up
-      if (v.includes("cold")) return 2;
-      if (v.includes("research")) return 1;
-      if (v.includes("unspecified")) return 0;
-      return 0; // unknown / neutral
-    };
+  mapping.forEach(({ id, key }) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = safe(notes && notes[key]);
+  });
+}
 
-    const rows = (changes || []).slice(0, 50);
+// ===== Upgrade / Downgrade Detail List =====
+function renderStatusChanges(changes) {
+  const tbody = document.querySelector("#tbl_status_changes tbody");
+  if (!tbody) return;
 
-    tbody.innerHTML = rows
-      .map((h) => {
-        const oldR = statusRank(h.old_status);
-        const newR = statusRank(h.new_status);
-        let trend = "—";
-        if (newR > oldR) trend = "📈";      // upgrade
-        else if (newR < oldR) trend = "📉"; // downgrade
+  const cleanDate = (d) => {
+    if (!d) return "—";
+    const dt = new Date(d);
+    if (isNaN(dt)) return "—";
+    return dt.toLocaleDateString();
+  };
 
-        return `
+  // Simple status ranking so we can detect up vs down
+  const statusRank = (s) => {
+    const v = (s || "").toString().toLowerCase();
+    if (v.includes("convert")) return 6;
+    if (v.includes("hot")) return 5;
+    if (v.includes("warm")) return 4;
+    if (v.includes("follow")) return 3;    // follow-up
+    if (v.includes("cold")) return 2;
+    if (v.includes("research")) return 1;
+    if (v.includes("unspecified")) return 0;
+    return 0; // unknown / neutral
+  };
+
+  const rows = (changes || []).slice(0, 50);
+
+  tbody.innerHTML = rows
+    .map((h) => {
+      const oldR = statusRank(h.old_status);
+      const newR = statusRank(h.new_status);
+      let trend = "—";
+      if (newR > oldR) trend = "📈";      // upgrade
+      else if (newR < oldR) trend = "📉"; // downgrade
+
+      return `
           <tr>
             <td>${cleanDate(h.changed_at)}</td>
             <td>${h.company || "—"}</td>
@@ -641,9 +665,10 @@ function renderHighValue(leads) {
             }</td>
           </tr>
         `;
-      })
-      .join("");
-  }
+    })
+    .join("");
+}
+
   
     // ===== At-Risk / Dormant Leads =====
   function buildAtRisk(leads) {
@@ -861,15 +886,19 @@ function renderHighValue(leads) {
 
 
     const leads = Array.isArray(data.leads) ? data.leads : [];
-	// Next Touch Panel
-const nt = computeNextTouch(leads);
-renderNextTouchPanel(nt);
+    // Next Touch Panel
+    const nt = computeNextTouch(leads);
+    renderNextTouchPanel(nt);
 
     renderHighValue(leads);
     renderStatusChanges(data.status_changes || []);
-	
-	    const atRisk = buildAtRisk(leads);
+
+    // NEW: AI notes by status band
+    renderAiBandNotes(data.ai_band_notes || {});
+
+    const atRisk = buildAtRisk(leads);
     renderAtRisk(atRisk);
+
 
 
     // Client-side derivations

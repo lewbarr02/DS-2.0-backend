@@ -455,7 +455,88 @@ app.get('/summary', async (req, res) => {
     const { rows: unplacedRows } = await client.query(unplacedSql, [fromStr, toStr]);
     const unplacedCount = parseInt(unplacedRows[0]?.cnt || '0', 10);
 
+// ----- AI BAND NOTES (Hot / Warm / Cold / Research / Follow-Up / Converted) -----
+
+async function generateBandNotes(leads) {
+  // Buckets
+  const buckets = {
+    hot:        [],
+    warm:       [],
+    cold:       [],
+    research:   [],
+    'follow-up':[],
+    converted:  []
+  };
+
+  for (const l of leads) {
+    const s = normalizeStatus(l.status);
+    if (buckets[s]) buckets[s].push(l);
+  }
+
+  // Helper: build message for OpenAI
+  function buildPrompt(status, items) {
+    if (!items.length) {
+      return `No ${status} leads touched this period. Return a single sentence noting that.`;
+    }
+
+    const industries = items.map(l => l.industry || "Unspecified");
+    const states     = items.map(l => l.state || "Unspecified");
+    const apSpend    = items.map(l => Number(l.ap_spend || 0));
+    const arr        = items.map(l => Number(l.arr || 0));
+
+    return `
+    Analyze this group of **${status.toUpperCase()}** leads.
+    
+    Count: ${items.length}
+    Industries: ${industries.join(", ")}
+    States: ${states.join(", ")}
+    Total ARR sum: ${arr.reduce((a,b)=>a+b,0)}
+    Total AP spend sum: ${apSpend.reduce((a,b)=>a+b,0)}
+
+    Produce **3–5 bullet points** describing what stands out:
+    - patterns
+    - ICP concentration
+    - AP spend intensity
+    - any notable risks or opportunities
+    - forecasting relevance
+    `.trim();
+  }
+
+  async function askAI(prompt) {
+    try {
+      const resp = await fetch(process.env.OPENAI_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type":"application/json",
+          "Authorization":`Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model:"gpt-4o-mini",
+          messages:[{ role:"user", content: prompt }],
+          max_tokens: 180
+        })
+      });
+
+      const json = await resp.json();
+      return json.choices?.[0]?.message?.content || "";
+    } catch (e) {
+      return "(AI note unavailable)";
+    }
+  }
+
+  return {
+    hot:        await askAI(buildPrompt("Hot",        buckets.hot)),
+    warm:       await askAI(buildPrompt("Warm",       buckets.warm)),
+    cold:       await askAI(buildPrompt("Cold",       buckets.cold)),
+    research:   await askAI(buildPrompt("Research",   buckets.research)),
+    followup:   await askAI(buildPrompt("Follow-Up",  buckets["follow-up"])),
+    converted:  await askAI(buildPrompt("Converted",  buckets.converted))
+  };
+}
+
     // ----- Assemble payload -----
+    const ai_band_notes = await generateBandNotes(leadsFiltered);
+
     const metrics = {
       activity: {
         total_touches: totalTouches,
@@ -494,8 +575,10 @@ app.get('/summary', async (req, res) => {
       metrics,
       status_changes: statusChanges,
       unplaced_count: unplacedCount,
-      leads: leadsFiltered
+      leads: leadsFiltered,
+      ai_band_notes
     });
+
 
   } catch (err) {
     console.error('SUMMARY ERR (Finexio traction handler)', err);
