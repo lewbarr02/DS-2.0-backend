@@ -128,14 +128,18 @@ html, body {
   inset: 0;
   z-index: 9999;
   display: flex;
-  align-items: center;
+  align-items: flex-start;      /* top-align instead of dead-center */
   justify-content: center;
-  padding: 24px;
+  padding: 24px 0;              /* vertical padding only */
   box-sizing: border-box;
+
+  /* let the overlay scroll on smaller screens */
+  overflow-y: auto;
 
   /* full-screen dark glass */
   background: rgba(2, 6, 23, 0.92);
 }
+
 
 .presentation-overlay.hidden {
   display: none;
@@ -146,6 +150,7 @@ html, body {
   position: relative;
   width: 100%;
   max-width: 1100px;
+  margin: 24px auto;            /* centers horizontally, adds breathing room */
   background: #020617;
   border-radius: 22px;
   box-shadow:
@@ -154,6 +159,7 @@ html, body {
   padding: 32px 40px 36px;
   box-sizing: border-box;
 }
+
 
 /* Close button */
 .presentation-close {
