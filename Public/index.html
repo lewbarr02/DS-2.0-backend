@@ -848,7 +848,7 @@ html, body {
             Current Pipeline (<span id="pipeline_total">0</span> Prospects)
           </h1>
           <h2 class="presentation-subtitle">
-            <span id="pipeline_added">0</span> in current filtered time period
+            <span id="pipeline_range">Date Range</span>
           </h2>
 <!-- 🧠 Mini AI Summary (3 KPI lines + narrative) -->
 <div class="presentation-ai">
@@ -2203,10 +2203,36 @@ function getCI(row, key) {
     const addedInRange = total; // later we can refine to “new in range”
 
     // Update headline
-    const elTotal  = document.getElementById('pipeline_total');
-    const elAdded  = document.getElementById('pipeline_added');
-    if (elTotal) elTotal.textContent = total;
-    if (elAdded) elAdded.textContent = addedInRange;
+const elTotal = document.getElementById('pipeline_total');
+const elRange = document.getElementById('pipeline_range');
+
+// Format the date range
+const from = document.getElementById('startDate')?.value;
+const to   = document.getElementById('endDate')?.value || from;
+
+function formatDate(d) {
+  if (!d) return '';
+  const obj = new Date(d + "T00:00:00");
+  return obj.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric'
+  });
+}
+
+if (elRange) {
+  if (from) {
+    const fromTxt = formatDate(from);
+    const toTxt   = to ? formatDate(to) : fromTxt;
+    elRange.textContent = `${fromTxt} – ${toTxt}`;
+  } else {
+    elRange.textContent = '';
+  }
+}
+
+ if (elTotal) {
+      elTotal.textContent = total;
+    }
+
 
     // Update funnel bands (counts + percentages)
     const elCold   = document.getElementById('funnel_cold');
