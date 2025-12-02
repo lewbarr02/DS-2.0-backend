@@ -136,6 +136,11 @@ app.get('/health', (_req, res) => {
 app.get('/summary', async (req, res) => {
   let client;
   try {
+	      // --- TEMP DEBUG LOGS: check OpenAI env vars ---
+    console.log("🔍 OpenAI URL:", process.env.OPENAI_API_URL);
+    console.log("🔍 OpenAI Key Exists:", !!process.env.OPENAI_API_KEY);
+    console.log("🔍 Loaded ENV Keys:", Object.keys(process.env).filter(k => k.includes("OPENAI")));
+
     client = await pool.connect();
 
     const { from, to } = req.query;
@@ -190,7 +195,7 @@ app.get('/summary', async (req, res) => {
       params.push(touchIds);
       leadWhere = `
         (${leadWhere})
-        OR id = ANY($3::int[])
+        OR id = ANY($3::uuid[])
       `;
     }
 
@@ -519,9 +524,11 @@ async function generateBandNotes(leads) {
 
       const json = await resp.json();
       return json.choices?.[0]?.message?.content || "";
-    } catch (e) {
-      return "(AI note unavailable)";
-    }
+} catch (e) {
+  console.error("🔥 OpenAI request failed:", e);
+  return "(AI note unavailable)";
+}
+
   }
 
   return {

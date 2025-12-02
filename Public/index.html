@@ -761,42 +761,63 @@ html, body {
 
 
             <!-- Legend / Notes -->
-            <div class="pipeline-legend">
-              <div class="legend-row">
-                <div class="legend-emoji">🧊</div>
-                <div class="legend-text">
-                  <div class="legend-title">Cold Leads</div>
-                  <div class="legend-notes-line"></div>
-                  <div class="legend-subtitle">Notes on Cold Leads</div>
-                </div>
-              </div>
+<div class="pipeline-legend">
+  <div class="legend-row">
+    <div class="legend-emoji">🧊</div>
+    <div class="legend-text">
+      <div class="legend-title">Cold Leads</div>
+      <div class="legend-notes-line"></div>
+      <div class="legend-subtitle" id="ai_note_cold_presentation">
+        Notes on Cold Leads
+      </div>
+    </div>
+  </div>
 
-              <div class="legend-row">
-                <div class="legend-emoji">⏳</div>
-                <div class="legend-text">
-                  <div class="legend-title">Follow-Up Leads</div>
-                  <div class="legend-notes-line"></div>
-                  <div class="legend-subtitle">Notes on Follow-Up Leads</div>
-                </div>
-              </div>
+  <div class="legend-row">
+    <div class="legend-emoji">⏳</div>
+    <div class="legend-text">
+      <div class="legend-title">Follow-Up Leads</div>
+      <div class="legend-notes-line"></div>
+      <div class="legend-subtitle" id="ai_note_followup_presentation">
+        Notes on Follow-Up Leads
+      </div>
+    </div>
+  </div>
 
-              <div class="legend-row">
-                <div class="legend-emoji">🌞</div>
-                <div class="legend-text">
-                  <div class="legend-title">Warm Leads</div>
-                  <div class="legend-notes-line"></div>
-                  <div class="legend-subtitle">Notes on Warm Leads</div>
-                </div>
-              </div>
+  <div class="legend-row">
+    <div class="legend-emoji">🌞</div>
+    <div class="legend-text">
+      <div class="legend-title">Warm Leads</div>
+      <div class="legend-notes-line"></div>
+      <div class="legend-subtitle" id="ai_note_warm_presentation">
+        Notes on Warm Leads
+      </div>
+    </div>
+  </div>
 
-              <div class="legend-row">
-                <div class="legend-emoji">🔥</div>
-                <div class="legend-text">
-                  <div class="legend-title">Hot Leads</div>
-                  <div class="legend-notes-line"></div>
-                  <div class="legend-subtitle">Notes on Hot Leads</div>
-                </div>
-              </div>
+  <div class="legend-row">
+    <div class="legend-emoji">🔥</div>
+    <div class="legend-text">
+      <div class="legend-title">Hot Leads</div>
+      <div class="legend-notes-line"></div>
+      <div class="legend-subtitle" id="ai_note_hot_presentation">
+        Notes on Hot Leads
+      </div>
+    </div>
+  </div>
+
+  <div class="legend-row">
+    <div class="legend-emoji">🏆</div>
+    <div class="legend-text">
+      <div class="legend-title">Converted</div>
+      <div class="legend-notes-line"></div>
+      <div class="legend-subtitle" id="ai_note_converted_presentation">
+        Notes on Converted Leads
+      </div>
+    </div>
+  </div>
+</div>
+  
 
               <div class="legend-row">
                 <div class="legend-emoji">🏆</div>
@@ -1682,10 +1703,68 @@ function getCI(row, key) {
       container.appendChild(tile);
     });
   }
+  
+    // ===== Presentation Mode: AI band notes =====
+  function renderPresentationBandNotes(notes) {
+    const safe = (v) => {
+      if (!v) return 'No AI notes for this band yet.';
+      const s = String(v).trim();
+      return s || 'No AI notes for this band yet.';
+    };
+
+    const mapping = [
+      { id: 'ai_note_cold_presentation',      key: 'cold' },
+      { id: 'ai_note_followup_presentation',  key: 'followup' },
+      { id: 'ai_note_warm_presentation',      key: 'warm' },
+      { id: 'ai_note_hot_presentation',       key: 'hot' },
+      { id: 'ai_note_converted_presentation', key: 'converted' }
+    ];
+
+    mapping.forEach(({ id, key }) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = safe(notes && notes[key]);
+    });
+  }
+
+  async function loadPresentationBandNotesFromSummary() {
+    try {
+      const base = window.DELI_API_BASE || '';
+
+      // Use the same date range as the main dashboard
+      const fromInput = document.getElementById('startDate');
+      const toInput   = document.getElementById('endDate');
+
+      const from = (fromInput && fromInput.value) || '';
+      const to   = (toInput && toInput.value) || from;
+
+      // If no date is selected, just leave the default text
+      if (!from) return;
+
+      const url = `${base}/summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.warn('Presentation AI notes: /summary returned', res.status);
+        return;
+      }
+
+      const data = await res.json();
+      if (!data || !data.ai_band_notes) {
+        console.warn('Presentation AI notes: no ai_band_notes in payload');
+        return;
+      }
+
+      renderPresentationBandNotes(data.ai_band_notes);
+    } catch (err) {
+      console.error('Presentation AI notes failed:', err);
+    }
+  }
+
 
   // ---------- Open / close handlers ----------
 
-  function openPresentationMode() {
+  async function openPresentationMode() {
     const leads  = getPresentationLeads();
     const totals = bucketTotals(leads);
 
@@ -1732,44 +1811,39 @@ function getCI(row, key) {
     if (elHotPct)    elHotPct.textContent    = formatPct(totals.hot);
     if (elConvPct)   elConvPct.textContent   = formatPct(totals.converted);
 
-
     // NEW: update ICP tiles
     const icpRows = buildIcpBreakdown(leads);
     renderIcpBreakdown(icpRows);
+
+    // 🧠 NEW: pull AI notes for each band
+    await loadPresentationBandNotesFromSummary();
 
     // Show overlay
     const overlay = document.getElementById('presentation-overlay');
     if (overlay) overlay.classList.remove('hidden');
   }
 
+
   function closePresentationMode() {
     const overlay = document.getElementById('presentation-overlay');
     if (overlay) overlay.classList.add('hidden');
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    const launchBtn = document.getElementById('launchPresentation');
-    const closeBtn  = document.getElementById('presentation-close');
-    const overlay   = document.getElementById('presentation-overlay');
-
-    launchBtn?.addEventListener('click', (e) => {
+document.addEventListener('DOMContentLoaded', () => {
+  const launchBtn = document.getElementById('launchPresentation');
+  if (launchBtn) {
+    launchBtn.addEventListener('click', async (e) => {
       e.preventDefault();
-      openPresentationMode();
+      try {
+        await openPresentationMode();
+      } catch (err) {
+        console.error('Error opening presentation mode:', err);
+      }
     });
+  }
+});
 
-    closeBtn?.addEventListener('click', (e) => {
-      e.preventDefault();
-      closePresentationMode();
-    });
 
-    overlay?.addEventListener('click', (e) => {
-      if (e.target === overlay) closePresentationMode();
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closePresentationMode();
-    });
-  });
 
   // Optional: expose globally if needed
   window.openPresentationMode = openPresentationMode;
