@@ -373,6 +373,112 @@ html, body {
   color: #6b7280;
 }
 
+/* ---- Presentation Mode: Converted Trophy Panel ---- */
+
+.presentation-trophy-panel {
+  margin-top: 22px;
+  padding: 16px 18px 14px;
+  border-radius: 18px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trophy-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.trophy-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trophy-emoji {
+  font-size: 22px;
+}
+
+.trophy-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0f172a;
+}
+
+.trophy-subtitle {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.trophy-kpi {
+  text-align: right;
+}
+
+.trophy-kpi-label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9ca3af;
+}
+
+.trophy-kpi-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #16a34a;
+}
+
+.trophy-section {
+  border-top: 1px dashed #e5e7eb;
+  padding-top: 8px;
+  margin-top: 6px;
+}
+
+.trophy-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 4px;
+}
+
+.trophy-win-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trophy-win {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.trophy-win-company {
+  font-weight: 600;
+  color: #111827;
+}
+
+.trophy-win-location {
+  color: #6b7280;
+}
+
+.trophy-win-empty {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.trophy-insight-text {
+  font-size: 12px;
+  color: #4b5563;
+}
+
+
 /* ---- Presentation Mode: ICP Vertical Breakdown ---- */
 
 .presentation-icp-panel {
@@ -860,6 +966,44 @@ html, body {
               </div>
             </div>
           </div>
+		  
+		              <!-- Converted-only Trophy Panel -->
+            <div class="presentation-trophy-panel">
+              <div class="trophy-header-row">
+                <div class="trophy-title-wrap">
+                  <span class="trophy-emoji">🏆</span>
+                  <div>
+                    <div class="trophy-title">Converted Pipeline Highlights</div>
+                    <div class="trophy-subtitle">
+                      Wins in this filtered range
+                    </div>
+                  </div>
+                </div>
+                <div class="trophy-kpi">
+                  <span class="trophy-kpi-label">Converted leads</span>
+                  <span class="trophy-kpi-value" id="trophy_converted_total">—</span>
+                </div>
+              </div>
+
+              <div class="trophy-section">
+                <div class="trophy-section-title">Top wins</div>
+                <div id="trophy_top_wins" class="trophy-win-list">
+                  <div class="trophy-win trophy-win-empty">
+                    No converted wins in this view yet.
+                  </div>
+                </div>
+              </div>
+
+              <div class="trophy-section">
+                <div class="trophy-section-title">Insight</div>
+                <div id="trophy_insight" class="trophy-insight-text">
+                  Converted insights will appear here once you have wins in this
+                  window.
+                </div>
+              </div>
+            </div>
+
+
 
           <!-- ICP Vertical Breakdown bar (stacked under funnel + notes) -->
           <div class="presentation-icp-panel">
@@ -1872,6 +2016,138 @@ function getCI(row, key) {
     const narrative = parts.join(' ');
     textEl.textContent = narrative || 'No activity in this window yet — once you log touches, AI-style insights will appear here.';
   }
+  
+    // 🏆 Converted-only Trophy Panel
+  function renderPresentationTrophyPanel(summaryJson) {
+    const totalEl   = document.getElementById('trophy_converted_total');
+    const winsEl    = document.getElementById('trophy_top_wins');
+    const insightEl = document.getElementById('trophy_insight');
+
+    if (!totalEl || !winsEl || !insightEl) return;
+
+    const DS = window.DS || {};
+    const leads = Array.isArray(DS.presentationLeads) ? DS.presentationLeads : [];
+
+    // Reuse the same statusKey logic as the funnel
+    const statusKey =
+      typeof DS.statusKey === 'function'
+        ? DS.statusKey
+        : function fallbackStatusKey(s) {
+            if (!s || typeof s !== 'string') return 'unspecified';
+            const k = s.trim().toLowerCase();
+            if (k.includes('convert'))  return 'converted';
+            if (k.includes('hot'))      return 'hot';
+            if (k.includes('warm'))     return 'warm';
+            if (k.includes('cold'))     return 'cold';
+            if (k.includes('research')) return 'research';
+            if (k.includes('follow'))   return 'follow-up';
+            return 'unspecified';
+          };
+
+    const converted = leads.filter((lead) => {
+      const raw = lead.status || lead.Status || '';
+      return statusKey(raw) === 'converted';
+    });
+
+    // Big KPI
+    totalEl.textContent = converted.length.toString();
+
+    // Top wins list
+    winsEl.innerHTML = '';
+
+    if (!converted.length) {
+      winsEl.innerHTML = `
+        <div class="trophy-win trophy-win-empty">
+          No converted wins in this view yet.
+        </div>
+      `;
+      insightEl.textContent =
+        'Once you log converted wins in this filtered window, a quick insight will appear here.';
+      return;
+    }
+
+    // Score converted leads by AP Spend (or ARR fallback) to pick "top wins"
+    const scored = converted.map((lead) => {
+      const ap  = Number(lead.ap_spend || lead.AP_SPEND || 0) || 0;
+      const arr = Number(lead.arr || lead.ARR || 0) || 0;
+      const score = ap || arr;
+      return { lead, score };
+    });
+
+    const hasScore = scored.some((s) => s.score > 0);
+    const sorted = hasScore
+      ? scored.slice().sort((a, b) => b.score - a.score)
+      : scored;
+
+    const top = sorted.slice(0, 3);
+
+    top.forEach(({ lead }) => {
+      const company =
+        lead.company ||
+        lead.Company ||
+        lead.account ||
+        lead['Company / Account'] ||
+        'Unnamed company';
+
+      const city =
+        lead.city ||
+        lead.City ||
+        '';
+
+      const state =
+        lead.state ||
+        lead.State ||
+        lead['State/Province'] ||
+        '';
+
+      const location = [city, state].filter(Boolean).join(', ');
+
+      const row = document.createElement('div');
+      row.className = 'trophy-win';
+      row.innerHTML = `
+        <div class="trophy-win-company">🏢 ${company}</div>
+        <div class="trophy-win-location">
+          ${location || 'Location not set'}
+        </div>
+      `;
+      winsEl.appendChild(row);
+    });
+
+    // Insight line: reuse summary metrics (strongest industry + region)
+    const byInd   = summaryJson.metrics?.perf_by_industry || [];
+    const byState = summaryJson.metrics?.perf_by_state || [];
+
+    let bestInd = null;
+    if (byInd.length) {
+      bestInd = [...byInd].sort(
+        (a, b) => (b.conv_pct || 0) - (a.conv_pct || 0)
+      )[0];
+    }
+
+    let bestState = null;
+    if (byState.length) {
+      bestState = [...byState].sort(
+        (a, b) => (b.traction_score || 0) - (a.traction_score || 0)
+      )[0];
+    }
+
+    const verticalPart = bestInd?.key || '';
+    const regionPart   = bestState?.key || '';
+
+    let text = '';
+    if (verticalPart && regionPart) {
+      text = `Most conversions in this view came from ${verticalPart} in ${regionPart}.`;
+    } else if (verticalPart) {
+      text = `Most conversions in this view came from ${verticalPart}.`;
+    } else if (regionPart) {
+      text = `Most conversions in this view were concentrated in ${regionPart}.`;
+    } else {
+      text = 'Conversions in this window are still too light to surface a clear pattern yet.';
+    }
+
+    insightEl.textContent = text;
+  }
+
 
 
   async function loadPresentationBandNotesFromSummary() {
@@ -1907,6 +2183,10 @@ function getCI(row, key) {
 
       // 🧠 2) Mini AI Summary block (3 KPI lines + narrative)
       renderPresentationMiniSummary(data);
+
+      // 🏆 3) Converted-only Trophy Panel
+      renderPresentationTrophyPanel(data);
+
     } catch (err) {
       console.error('Presentation AI notes/summary failed:', err);
     }
@@ -1919,6 +2199,11 @@ function getCI(row, key) {
   async function openPresentationMode() {
     const leads  = getPresentationLeads();
     const totals = bucketTotals(leads);
+
+    // Make the current presentation dataset available to the trophy panel
+    window.DS = window.DS || {};
+    window.DS.presentationLeads = leads;
+
 
     const total        = leads.length;
     const addedInRange = total; // later we can refine to “new in range”
