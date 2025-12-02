@@ -192,6 +192,37 @@ html, body {
   color: #64748b;
 }
 
+/* Mini AI Summary block (top of Presentation Mode) */
+.presentation-ai {
+  margin-top: 18px;
+  padding: 10px 14px 12px;
+  border-radius: 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.presentation-ai-kpis {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.presentation-ai-kpis span {
+  display: block;
+}
+
+.presentation-ai-narrative {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+
 /* Layout: funnel + legend */
 .presentation-layout {
   display: flex;
@@ -719,106 +750,116 @@ html, body {
           <h2 class="presentation-subtitle">
             <span id="pipeline_added">0</span> in current filtered time period
           </h2>
-
+<!-- 🧠 Mini AI Summary (3 KPI lines + narrative) -->
+<div class="presentation-ai">
+  <div class="presentation-ai-kpis">
+    <span id="ai_summary_line1">🎯 Waiting for data…</span>
+    <span id="ai_summary_line2">📈 — upgrades | 📉 — downgrades</span>
+    <span id="ai_summary_line3">🔥 Strongest: — | Weakest: —</span>
+  </div>
+  <div class="presentation-ai-narrative" id="ai_summary_narrative">
+    Presentation insights will appear here once a date range is applied.
+  </div>
+</div>
           <div class="presentation-layout">
             <!-- Funnel -->
-<div class="pipeline-funnel">
-  <div class="funnel-band funnel-cold">
-    <div class="funnel-band-inner">
-      <span class="funnel-count" id="funnel_cold">0</span>
-      <span class="funnel-percent" id="funnel_cold_pct">0%</span>
-    </div>
-  </div>
+            <div class="pipeline-funnel">
+              <div class="funnel-band funnel-cold">
+                <div class="funnel-band-inner">
+                  <span class="funnel-count" id="funnel_cold">0</span>
+                  <span class="funnel-percent" id="funnel_cold_pct">0%</span>
+                </div>
+              </div>
 
-  <div class="funnel-band funnel-followup">
-    <div class="funnel-band-inner">
-      <span class="funnel-count" id="funnel_followup">0</span>
-      <span class="funnel-percent" id="funnel_followup_pct">0%</span>
-    </div>
-  </div>
+              <div class="funnel-band funnel-followup">
+                <div class="funnel-band-inner">
+                  <span class="funnel-count" id="funnel_followup">0</span>
+                  <span class="funnel-percent" id="funnel_followup_pct">0%</span>
+                </div>
+              </div>
 
-  <div class="funnel-band funnel-warm">
-    <div class="funnel-band-inner">
-      <span class="funnel-count" id="funnel_warm">0</span>
-      <span class="funnel-percent" id="funnel_warm_pct">0%</span>
-    </div>
-  </div>
+              <div class="funnel-band funnel-warm">
+                <div class="funnel-band-inner">
+                  <span class="funnel-count" id="funnel_warm">0</span>
+                  <span class="funnel-percent" id="funnel_warm_pct">0%</span>
+                </div>
+              </div>
 
-  <div class="funnel-band funnel-hot">
-    <div class="funnel-band-inner">
-      <span class="funnel-count" id="funnel_hot">0</span>
-      <span class="funnel-percent" id="funnel_hot_pct">0%</span>
-    </div>
-  </div>
+              <div class="funnel-band funnel-hot">
+                <div class="funnel-band-inner">
+                  <span class="funnel-count" id="funnel_hot">0</span>
+                  <span class="funnel-percent" id="funnel_hot_pct">0%</span>
+                </div>
+              </div>
 
-  <div class="funnel-band funnel-converted">
-    <div class="funnel-band-inner">
-      <span class="funnel-count" id="funnel_converted">0</span>
-      <span class="funnel-percent" id="funnel_converted_pct">0%</span>
-    </div>
-  </div>
-</div>
-
+              <div class="funnel-band funnel-converted">
+                <div class="funnel-band-inner">
+                  <span class="funnel-count" id="funnel_converted">0</span>
+                  <span class="funnel-percent" id="funnel_converted_pct">0%</span>
+                </div>
+              </div>
+            </div>
 
             <!-- Legend / Notes -->
-<div class="pipeline-legend">
-  <div class="legend-row">
-    <div class="legend-emoji">🧊</div>
-    <div class="legend-text">
-      <div class="legend-title">Cold Leads</div>
-      <div class="legend-notes-line"></div>
-      <div class="legend-subtitle" id="ai_note_cold_presentation">
-        Notes on Cold Leads
-      </div>
-    </div>
-  </div>
+            <div class="pipeline-legend">
+              <div class="legend-row">
+                <div class="legend-emoji">🧊</div>
+                <div class="legend-text">
+                  <div class="legend-title">Cold Leads</div>
+                  <div class="legend-notes-line"></div>
+                  <div class="legend-subtitle" id="ai_note_cold_presentation">
+                    Notes on Cold Leads
+                  </div>
+                </div>
+              </div>
 
-  <div class="legend-row">
-    <div class="legend-emoji">⏳</div>
-    <div class="legend-text">
-      <div class="legend-title">Follow-Up Leads</div>
-      <div class="legend-notes-line"></div>
-      <div class="legend-subtitle" id="ai_note_followup_presentation">
-        Notes on Follow-Up Leads
-      </div>
-    </div>
-  </div>
+              <div class="legend-row">
+                <div class="legend-emoji">⏳</div>
+                <div class="legend-text">
+                  <div class="legend-title">Follow-Up Leads</div>
+                  <div class="legend-notes-line"></div>
+                  <div class="legend-subtitle" id="ai_note_followup_presentation">
+                    Notes on Follow-Up Leads
+                  </div>
+                </div>
+              </div>
 
-  <div class="legend-row">
-    <div class="legend-emoji">🌞</div>
-    <div class="legend-text">
-      <div class="legend-title">Warm Leads</div>
-      <div class="legend-notes-line"></div>
-      <div class="legend-subtitle" id="ai_note_warm_presentation">
-        Notes on Warm Leads
-      </div>
-    </div>
-  </div>
+              <div class="legend-row">
+                <div class="legend-emoji">🌞</div>
+                <div class="legend-text">
+                  <div class="legend-title">Warm Leads</div>
+                  <div class="legend-notes-line"></div>
+                  <div class="legend-subtitle" id="ai_note_warm_presentation">
+                    Notes on Warm Leads
+                  </div>
+                </div>
+              </div>
 
-  <div class="legend-row">
-    <div class="legend-emoji">🔥</div>
-    <div class="legend-text">
-      <div class="legend-title">Hot Leads</div>
-      <div class="legend-notes-line"></div>
-      <div class="legend-subtitle" id="ai_note_hot_presentation">
-        Notes on Hot Leads
-      </div>
-    </div>
-  </div>
+              <div class="legend-row">
+                <div class="legend-emoji">🔥</div>
+                <div class="legend-text">
+                  <div class="legend-title">Hot Leads</div>
+                  <div class="legend-notes-line"></div>
+                  <div class="legend-subtitle" id="ai_note_hot_presentation">
+                    Notes on Hot Leads
+                  </div>
+                </div>
+              </div>
 
-  <div class="legend-row">
-    <div class="legend-emoji">🏆</div>
-    <div class="legend-text">
-      <div class="legend-title">Converted</div>
-      <div class="legend-notes-line"></div>
-      <div class="legend-subtitle" id="ai_note_converted_presentation">
-        Notes on Converted Leads
-      </div>
-    </div>
-  </div>
-</div>
-  
-          <!-- ICP Vertical Breakdown bar (inside card) -->
+              <div class="legend-row">
+                <div class="legend-emoji">🏆</div>
+                <div class="legend-text">
+                  <div class="legend-title">Converted</div>
+                  <div class="legend-notes-line"></div>
+                  <div class="legend-subtitle" id="ai_note_converted_presentation">
+                    Notes on Converted Leads
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ICP Vertical Breakdown bar (stacked under funnel + notes) -->
           <div class="presentation-icp-panel">
             <div class="icp-header">
               <div class="icp-title">ICP Vertical Breakdown</div>
@@ -832,6 +873,7 @@ html, body {
           </div>
         </div> <!-- /.presentation-inner -->
       </div>   <!-- /#presentation-overlay -->
+
 
 
 
@@ -1714,6 +1756,88 @@ function getCI(row, key) {
       el.textContent = safe(notes && notes[key]);
     });
   }
+  
+    // ===== Mini AI Summary for Presentation Mode =====
+  function renderPresentationMiniSummary(data) {
+    const line1El = document.getElementById('ai_summary_line1');
+    const line2El = document.getElementById('ai_summary_line2');
+    const line3El = document.getElementById('ai_summary_line3');
+    const textEl  = document.getElementById('ai_summary_narrative');
+
+    if (!line1El || !line2El || !line3El || !textEl || !data) return;
+
+    const act     = (data.metrics && data.metrics.activity) || {};
+    const pip     = (data.metrics && data.metrics.pipeline) || {};
+    const byState = (data.metrics && data.metrics.perf_by_state) || [];
+    const byInd   = (data.metrics && data.metrics.perf_by_industry) || [];
+
+    const touched   = act.leads_contacted_window ?? act.leads_contacted ?? 0;
+    const touches   = act.total_touches ?? 0;
+    const upgrades  = pip.upgrades ?? 0;
+    const downgrades= pip.downgrades ?? 0;
+
+    // Strongest / weakest regions by traction_score (same logic as summary.js)
+    let bestState = null;
+    if (byState.length) {
+      bestState = [...byState].sort(
+        (a, b) => (b.traction_score || 0) - (a.traction_score || 0)
+      )[0];
+    }
+
+    let weakestState = null;
+    if (byState.length) {
+      weakestState =
+        [...byState]
+          .filter((r) => (r.traction_score || 0) > 0)
+          .sort((a, b) => (a.traction_score || 0) - (b.traction_score || 0))[0] ||
+        null;
+    }
+
+    const bestName  = bestState ? bestState.key : '—';
+    const weakName  = weakestState ? weakestState.key : '—';
+
+    // Strongest industry by conversion pct (if available)
+    let bestInd = null;
+    if (byInd.length) {
+      bestInd = [...byInd].sort(
+        (a, b) => (b.conv_pct || 0) - (a.conv_pct || 0)
+      )[0];
+    }
+
+    // 3 KPI lines
+    line1El.textContent = `🎯 ${touched} leads touched this cycle`;
+    line2El.textContent = `📈 ${upgrades} upgrades | 📉 ${downgrades} downgrades`;
+    line3El.textContent = `🔥 Strongest region: ${bestName} | Weakest: ${weakName}`;
+
+    // Short narrative (3–4 sentences max)
+    const parts = [];
+
+    parts.push(
+      `You contacted ${touched} lead${touched === 1 ? '' : 's'} across ${touches} total touches in this window.`
+    );
+
+    if (upgrades || downgrades) {
+      parts.push(
+        `Status movement shows ${upgrades} upgrade${upgrades === 1 ? '' : 's'} and ${downgrades} downgrade${downgrades === 1 ? '' : 's'}.`
+      );
+    }
+
+    if (bestInd && bestInd.key) {
+      parts.push(
+        `The strongest converting vertical is ${bestInd.key} at ${bestInd.conv_pct || 0}% conversion.`
+      );
+    }
+
+    if (bestName !== '—' || weakName !== '—') {
+      parts.push(
+        `Regional traction is highest in ${bestName} and softer in ${weakName}, which can guide where you focus the next wave of outreach.`
+      );
+    }
+
+    const narrative = parts.join(' ');
+    textEl.textContent = narrative || 'No activity in this window yet — once you log touches, AI-style insights will appear here.';
+  }
+
 
   async function loadPresentationBandNotesFromSummary() {
     try {
@@ -1738,16 +1862,21 @@ function getCI(row, key) {
       }
 
       const data = await res.json();
-      if (!data || !data.ai_band_notes) {
-        console.warn('Presentation AI notes: no ai_band_notes in payload');
+      if (!data) {
+        console.warn('Presentation AI notes: empty payload');
         return;
       }
 
-      renderPresentationBandNotes(data.ai_band_notes);
+      // 🧠 1) Band-level notes (Cold / Follow-Up / Warm / Hot / Converted)
+      renderPresentationBandNotes(data.ai_band_notes || {});
+
+      // 🧠 2) Mini AI Summary block (3 KPI lines + narrative)
+      renderPresentationMiniSummary(data);
     } catch (err) {
-      console.error('Presentation AI notes failed:', err);
+      console.error('Presentation AI notes/summary failed:', err);
     }
   }
+
 
 
   // ---------- Open / close handlers ----------
@@ -1817,19 +1946,47 @@ function getCI(row, key) {
     if (overlay) overlay.classList.add('hidden');
   }
 
-document.addEventListener('DOMContentLoaded', () => {
-  const launchBtn = document.getElementById('launchPresentation');
-  if (launchBtn) {
-    launchBtn.addEventListener('click', async (e) => {
-      e.preventDefault();
-      try {
-        await openPresentationMode();
-      } catch (err) {
-        console.error('Error opening presentation mode:', err);
+  document.addEventListener('DOMContentLoaded', () => {
+    const launchBtn = document.getElementById('launchPresentation');
+    const closeBtn  = document.getElementById('presentation-close');
+    const overlay   = document.getElementById('presentation-overlay');
+
+    if (launchBtn) {
+      launchBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+          await openPresentationMode();
+        } catch (err) {
+          console.error('Error opening presentation mode:', err);
+        }
+      });
+    }
+
+    // Close when clicking the ✖ button
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        closePresentationMode();
+      });
+    }
+
+    // Optional: click on dim background closes too
+    if (overlay) {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          closePresentationMode();
+        }
+      });
+    }
+
+    // Escape key closes Presentation Mode
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closePresentationMode();
       }
     });
-  }
-});
+  });
+
 
 
 
