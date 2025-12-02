@@ -323,6 +323,86 @@ html, body {
   color: #6b7280;
 }
 
+/* ---- Presentation Mode: ICP Vertical Breakdown ---- */
+
+.presentation-icp-panel {
+  margin-top: 28px;
+  padding: 18px 20px 16px;
+  border-radius: 18px;
+  background: #020617;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.85);
+}
+
+.icp-header {
+  margin-bottom: 14px;
+}
+
+.icp-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #e5e7eb;
+}
+
+.icp-subtitle {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.icp-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.icp-tile {
+  flex: 1 1 calc(14.5% - 8px); /* 7 tiles across on wide screens */
+  min-width: 120px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(148, 163, 184, 0.2), transparent 55%),
+    #020617;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.5);
+}
+
+.icp-name {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #c7d2fe;
+  margin-bottom: 6px;
+}
+
+.icp-percent {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 2px;
+}
+
+.icp-count {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+/* Responsive: stack tiles nicely on small screens */
+@media (max-width: 960px) {
+  .icp-tile {
+    flex: 1 1 calc(33.33% - 8px);
+  }
+}
+
+@media (max-width: 640px) {
+  .icp-tile {
+    flex: 1 1 calc(50% - 8px);
+  }
+}
+
+
 /* Responsive tweaks */
 @media (max-width: 960px) {
   .presentation-inner {
@@ -356,7 +436,7 @@ html, body {
   }
 }
 
-}
+
 
 
       /* --- VIEW SWITCHER --- */
@@ -689,8 +769,23 @@ html, body {
               </div>
             </div>
           </div>
-        </div>
-      </div>
+
+          <!-- ICP Vertical Breakdown bar (inside card) -->
+          <div class="presentation-icp-panel">
+            <div class="icp-header">
+              <div class="icp-title">ICP Vertical Breakdown</div>
+              <div class="icp-subtitle">
+                How your core Finexio verticals are converting in this window.
+              </div>
+            </div>
+            <div class="icp-tiles" id="icp_tiles">
+              <!-- tiles are injected by JS -->
+            </div>
+          </div>
+        </div> <!-- /.presentation-inner -->
+      </div>   <!-- /#presentation-overlay -->
+
+
 
 
       <div id="statsSummary">Status Breakdown: (loading...)</div>
@@ -1371,29 +1466,32 @@ function getCI(row, key) {
   });
 </script>
 
-	<script>
+<script>
 (function () {
+  // Grab the same filtered data used everywhere else
   function getPresentationLeads() {
     const DS = window.DS || {};
     const rows = (DS.state && (DS.state.filtered || DS.state.rawRows)) || [];
     return Array.isArray(rows) ? rows : [];
   }
 
+  // Status funnel totals (Cold / Follow-Up / Warm / Hot / Converted)
   function bucketTotals(leads) {
     const DS = window.DS || {};
-    const statusKey = typeof DS.statusKey === 'function'
-      ? DS.statusKey
-      : function fallbackStatusKey(s) {
-          if (!s || typeof s !== 'string') return 'unspecified';
-          const k = s.trim().toLowerCase();
-          if (k.includes('convert'))  return 'converted';
-          if (k.includes('hot'))      return 'hot';
-          if (k.includes('warm'))     return 'warm';
-          if (k.includes('cold'))     return 'cold';
-          if (k.includes('research')) return 'research';
-          if (k.includes('follow'))   return 'follow-up';
-          return 'unspecified';
-        };
+    const statusKey =
+      typeof DS.statusKey === 'function'
+        ? DS.statusKey
+        : function fallbackStatusKey(s) {
+            if (!s || typeof s !== 'string') return 'unspecified';
+            const k = s.trim().toLowerCase();
+            if (k.includes('convert'))  return 'converted';
+            if (k.includes('hot'))      return 'hot';
+            if (k.includes('warm'))     return 'warm';
+            if (k.includes('cold'))     return 'cold';
+            if (k.includes('research')) return 'research';
+            if (k.includes('follow'))   return 'follow-up';
+            return 'unspecified';
+          };
 
     const totals = {
       cold: 0,
@@ -1405,7 +1503,7 @@ function getCI(row, key) {
 
     leads.forEach((lead) => {
       const raw = lead.status || lead.Status || '';
-      const key = statusKey(raw); // ← single source of truth
+      const key = statusKey(raw);
 
       switch (key) {
         case 'converted':
@@ -1422,7 +1520,6 @@ function getCI(row, key) {
           break;
         case 'cold':
         case 'research':
-          // Treat Research as Cold for funnel purposes
           totals.cold++;
           break;
         default:
@@ -1433,6 +1530,121 @@ function getCI(row, key) {
 
     return totals;
   }
+
+  // ---------- NEW: ICP Vertical Breakdown helpers ----------
+
+  function buildIcpBreakdown(leads) {
+    const DS = window.DS || {};
+    const statusKey =
+      typeof DS.statusKey === 'function'
+        ? DS.statusKey
+        : function fallbackStatusKey(s) {
+            if (!s || typeof s !== 'string') return 'unspecified';
+            const k = s.trim().toLowerCase();
+            if (k.includes('convert'))  return 'converted';
+            if (k.includes('hot'))      return 'hot';
+            if (k.includes('warm'))     return 'warm';
+            if (k.includes('cold'))     return 'cold';
+            if (k.includes('research')) return 'research';
+            if (k.includes('follow'))   return 'follow-up';
+            return 'unspecified';
+          };
+
+    // Map industry strings to Finexio ICP verticals
+    function industryKey(raw) {
+      if (!raw || typeof raw !== 'string') return 'Other';
+      const s = raw.toLowerCase();
+
+      if (s.includes('educ'))               return 'Education';
+      if (s.includes('health'))             return 'Healthcare';
+      if (s.includes('gov'))                return 'Government';
+      if (s.includes('hospitality')
+          || s.includes('hotel')
+          || s.includes('lodging')
+          || s.includes('resort'))          return 'Hospitality';
+      if (s.includes('construct')
+          || s.includes('contractor')
+          || s.includes('builder'))         return 'Construction';
+      if (s.includes('manufact')
+          || s.includes('factory')
+          || s.includes('plant'))           return 'Manufacturing';
+
+      return 'Other';
+    }
+
+    const buckets = {
+      Education:     { total: 0, converted: 0 },
+      Healthcare:    { total: 0, converted: 0 },
+      Government:    { total: 0, converted: 0 },
+      Hospitality:   { total: 0, converted: 0 },
+      Construction:  { total: 0, converted: 0 },
+      Manufacturing: { total: 0, converted: 0 },
+      Other:         { total: 0, converted: 0 }
+    };
+
+    leads.forEach((lead) => {
+      const rawIndustry =
+        lead.industry ||
+        lead.Industry ||
+        lead.vertical ||
+        lead.Vertical ||
+        '';
+
+      const vert = industryKey(rawIndustry);
+      const statusRaw = lead.status || lead.Status || '';
+      const key = statusKey(statusRaw);
+
+      const bucket = buckets[vert] || buckets.Other;
+      bucket.total++;
+      if (key === 'converted') bucket.converted++;
+    });
+
+    const order = [
+      'Education',
+      'Healthcare',
+      'Government',
+      'Hospitality',
+      'Construction',
+      'Manufacturing',
+      'Other'
+    ];
+
+    return order.map((name) => {
+      const b = buckets[name];
+      const pct = b.total > 0
+        ? Math.round((b.converted / b.total) * 100)
+        : 0;
+      return {
+        name,
+        percent: pct,
+        leads: b.total
+      };
+    });
+  }
+
+  function renderIcpBreakdown(rows) {
+    const container = document.getElementById('icp_tiles');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    rows.forEach((row) => {
+      const tile = document.createElement('div');
+      tile.className = 'icp-tile';
+
+      const label = row.leads === 1 ? '1 lead' : `${row.leads} leads`;
+
+      tile.innerHTML = `
+        <div class="icp-name">${row.name.toUpperCase()}</div>
+        <div class="icp-percent">${row.percent}%</div>
+        <div class="icp-count">${label}</div>
+      `;
+
+      container.appendChild(tile);
+    });
+  }
+
+  // ---------- Open / close handlers ----------
 
   function openPresentationMode() {
     const leads  = getPresentationLeads();
@@ -1460,6 +1672,10 @@ function getCI(row, key) {
     if (elHot)    elHot.textContent    = totals.hot;
     if (elConv)   elConv.textContent   = totals.converted;
 
+    // NEW: update ICP tiles
+    const icpRows = buildIcpBreakdown(leads);
+    renderIcpBreakdown(icpRows);
+
     // Show overlay
     const overlay = document.getElementById('presentation-overlay');
     if (overlay) overlay.classList.remove('hidden');
@@ -1475,24 +1691,20 @@ function getCI(row, key) {
     const closeBtn  = document.getElementById('presentation-close');
     const overlay   = document.getElementById('presentation-overlay');
 
-    // Launch from dashboard button
     launchBtn?.addEventListener('click', (e) => {
       e.preventDefault();
       openPresentationMode();
     });
 
-    // Close via ✖
     closeBtn?.addEventListener('click', (e) => {
       e.preventDefault();
       closePresentationMode();
     });
 
-    // Click outside content closes
     overlay?.addEventListener('click', (e) => {
       if (e.target === overlay) closePresentationMode();
     });
 
-    // ESC key closes
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') closePresentationMode();
     });
@@ -1502,6 +1714,7 @@ function getCI(row, key) {
   window.openPresentationMode = openPresentationMode;
 })();
 </script>
+
 </body>
 </html>
 
