@@ -762,43 +762,45 @@ html, body {
   </div>
 </div>
           <div class="presentation-layout">
+		  
             <!-- Funnel -->
-            <div class="pipeline-funnel">
-              <div class="funnel-band funnel-cold">
-                <div class="funnel-band-inner">
-                  <span class="funnel-count" id="funnel_cold">0</span>
-                  <span class="funnel-percent" id="funnel_cold_pct">0%</span>
-                </div>
-              </div>
+<div class="pipeline-funnel">
+  <div class="funnel-band funnel-cold" data-status="Cold">
+    <div class="funnel-band-inner">
+      <span class="funnel-count" id="funnel_cold">0</span>
+      <span class="funnel-percent" id="funnel_cold_pct">0%</span>
+    </div>
+  </div>
 
-              <div class="funnel-band funnel-followup">
-                <div class="funnel-band-inner">
-                  <span class="funnel-count" id="funnel_followup">0</span>
-                  <span class="funnel-percent" id="funnel_followup_pct">0%</span>
-                </div>
-              </div>
+  <div class="funnel-band funnel-followup" data-status="Follow-Up">
+    <div class="funnel-band-inner">
+      <span class="funnel-count" id="funnel_followup">0</span>
+      <span class="funnel-percent" id="funnel_followup_pct">0%</span>
+    </div>
+  </div>
 
-              <div class="funnel-band funnel-warm">
-                <div class="funnel-band-inner">
-                  <span class="funnel-count" id="funnel_warm">0</span>
-                  <span class="funnel-percent" id="funnel_warm_pct">0%</span>
-                </div>
-              </div>
+  <div class="funnel-band funnel-warm" data-status="Warm">
+    <div class="funnel-band-inner">
+      <span class="funnel-count" id="funnel_warm">0</span>
+      <span class="funnel-percent" id="funnel_warm_pct">0%</span>
+    </div>
+  </div>
 
-              <div class="funnel-band funnel-hot">
-                <div class="funnel-band-inner">
-                  <span class="funnel-count" id="funnel_hot">0</span>
-                  <span class="funnel-percent" id="funnel_hot_pct">0%</span>
-                </div>
-              </div>
+  <div class="funnel-band funnel-hot" data-status="Hot">
+    <div class="funnel-band-inner">
+      <span class="funnel-count" id="funnel_hot">0</span>
+      <span class="funnel-percent" id="funnel_hot_pct">0%</span>
+    </div>
+  </div>
 
-              <div class="funnel-band funnel-converted">
-                <div class="funnel-band-inner">
-                  <span class="funnel-count" id="funnel_converted">0</span>
-                  <span class="funnel-percent" id="funnel_converted_pct">0%</span>
-                </div>
-              </div>
-            </div>
+  <div class="funnel-band funnel-converted" data-status="Converted">
+    <div class="funnel-band-inner">
+      <span class="funnel-count" id="funnel_converted">0</span>
+      <span class="funnel-percent" id="funnel_converted_pct">0%</span>
+    </div>
+  </div>
+</div>
+
 
             <!-- Legend / Notes -->
             <div class="pipeline-legend">
@@ -1945,6 +1947,61 @@ function getCI(row, key) {
     const overlay = document.getElementById('presentation-overlay');
     if (overlay) overlay.classList.add('hidden');
   }
+  
+
+  // 👉 When you click a funnel band, we close Presentation Mode,
+  //    jump to List View, and auto-filter to that status.
+  function drillDownToStatus(statusLabel) {
+    // 1) Switch to List View (re-uses existing showList wiring)
+    const listBtn = document.getElementById('btnListView');
+    if (listBtn) {
+      listBtn.click();
+    }
+
+    // 2) After List View is visible, toggle the status chips
+    setTimeout(() => {
+      const toolbar = document.getElementById('listToolbar');
+      if (!toolbar) return;
+
+      // Clear all active status chips
+      document
+        .querySelectorAll('#listToolbar .chip[data-status]')
+        .forEach((btn) => {
+          btn.classList.remove('active');
+        });
+
+      // Decide which statuses to activate
+      let targets = [statusLabel];
+      // Special case: Cold funnel also represents Research in your funnel math
+      if (statusLabel === 'Cold') {
+        targets = ['Cold', 'Research'];
+      }
+
+      // Activate the matching chips
+      targets.forEach((label) => {
+        const chip = document.querySelector(
+          `#listToolbar .chip[data-status="${label}"]`
+        );
+        if (chip) {
+          chip.classList.add('active');
+        }
+      });
+
+      // Clear search box so we see full filtered set
+      const search = document.getElementById('listSearch');
+      if (search) search.value = '';
+
+      // Re-render list with new filters
+      if (typeof window.renderListView === 'function') {
+        window.renderListView();
+      }
+
+      // Scroll table to the top
+      const wrap = document.getElementById('leadTableWrap');
+      if (wrap) wrap.scrollTop = 0;
+    }, 60);
+  }
+
 
   document.addEventListener('DOMContentLoaded', () => {
     const launchBtn = document.getElementById('launchPresentation');
@@ -1985,7 +2042,24 @@ function getCI(row, key) {
         closePresentationMode();
       }
     });
+
+    // ⭐ NEW: Wire funnel bands → drill-down into List View
+    document
+      .querySelectorAll('.funnel-band[data-status]')
+      .forEach((band) => {
+        band.addEventListener('click', () => {
+          const status = band.getAttribute('data-status');
+          if (!status) return;
+
+          // Close Presentation overlay
+          closePresentationMode();
+
+          // Drill down into the right slice in List View
+          drillDownToStatus(status);
+        });
+      });
   });
+
 
 
 
