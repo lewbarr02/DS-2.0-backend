@@ -126,123 +126,167 @@ html, body {
 .presentation-overlay {
   position: fixed;
   inset: 0;
-  background: #ffffff;
   z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px 48px;
+  padding: 24px;
   box-sizing: border-box;
+
+  /* dimmed background instead of full white */
+  background: rgba(15, 23, 42, 0.55);
 }
 
 .presentation-overlay.hidden {
   display: none;
 }
 
+/* Inner card */
 .presentation-inner {
-  width: 100%;
-  max-width: 1200px;
-  height: 100%;
-  max-height: 650px;
-  margin: 0 auto;
   position: relative;
+  width: 100%;
+  max-width: 1100px;
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.22);
+  padding: 32px 40px 36px;
+  box-sizing: border-box;
 }
 
 /* Close button */
 .presentation-close {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 18px;
+  right: 18px;
   border: none;
   background: transparent;
-  font-size: 20px;
   cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  color: #64748b;
+  padding: 4px;
+  border-radius: 999px;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.presentation-close:hover {
+  background: rgba(148, 163, 184, 0.15);
+  color: #0f172a;
+  transform: scale(1.05);
 }
 
 /* Titles */
 .presentation-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
   text-align: center;
-  font-size: 32px;
-  margin: 16px 0 4px;
+  color: #0f172a;
 }
 
 .presentation-subtitle {
+  margin: 6px 0 0;
   text-align: center;
-  font-size: 18px;
-  font-weight: 500;
-  margin: 0 0 24px;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  color: #64748b;
 }
 
-/* Main layout */
+/* Layout: funnel + legend */
 .presentation-layout {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  gap: 48px;
+  display: flex;
   align-items: center;
-  height: calc(100% - 120px);
+  justify-content: center;
+  gap: 56px;
+  margin-top: 32px;
 }
 
-/* Funnel */
+/* Left: Funnel */
 .pipeline-funnel {
-  width: 100%;
-  max-width: 420px;
-  margin: 0 auto;
+  flex: 0 0 360px;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  gap: 8px;
 }
 
 .funnel-band {
   position: relative;
-  height: 80px;
-  margin-bottom: 4px;
-  clip-path: polygon(0 0, 100% 0, 80% 100%, 20% 100%);
+  height: 70px;
+  clip-path: polygon(0 0, 100% 0, 86% 100%, 14% 100%);
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+
+  /* subtle shadow + gloss */
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
 }
 
-/* Colors roughly matching your slide */
+.funnel-band::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 10% 0%, rgba(255, 255, 255, 0.45), transparent 55%);
+  mix-blend-mode: screen;
+  opacity: 0.85;
+}
+
+/* Funnel colors */
 .funnel-cold {
-  background: #0047ab; /* blue */
+  background: linear-gradient(135deg, #0052cc, #1d4ed8);
 }
 .funnel-followup {
-  background: #ffdf5b; /* yellow */
+  background: linear-gradient(135deg, #facc15, #f59e0b);
 }
 .funnel-warm {
-  background: #ffa552; /* orange */
+  background: linear-gradient(135deg, #fb923c, #f97316);
 }
 .funnel-hot {
-  background: #b00000; /* red */
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
 }
-
 .funnel-converted {
-  background: #28a745; /* green */
-  clip-path: polygon(20% 0, 80% 0, 60% 100%, 40% 100%);
+  background: linear-gradient(135deg, #22c55e, #16a34a);
 }
-
 
 .funnel-count {
-  color: #ffffff;
+  position: relative;
+  z-index: 1;
+  font-size: 22px;
   font-weight: 700;
-  font-size: 24px;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.35);
 }
 
-/* Legend */
+/* Right: Legend */
 .pipeline-legend {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 14px;
 }
 
 .legend-row {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.legend-row:hover {
+  background: #f3f4f6;
+  border-color: #cbd5f5;
+  transform: translateY(-1px);
 }
 
 .legend-emoji {
-  font-size: 32px;
+  font-size: 22px;
+  line-height: 1;
+  margin-top: 2px;
 }
 
 .legend-text {
@@ -250,18 +294,55 @@ html, body {
 }
 
 .legend-title {
-  font-weight: 700;
-  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 4px;
 }
 
 .legend-notes-line {
-  border-bottom: 1px dotted #444;
+  border-bottom: 1px dotted #9ca3af;
   margin-bottom: 4px;
 }
 
 .legend-subtitle {
-  font-size: 13px;
-  color: #555;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Responsive tweaks */
+@media (max-width: 960px) {
+  .presentation-inner {
+    padding: 24px 18px 26px;
+  }
+
+  .presentation-layout {
+    flex-direction: column;
+    gap: 24px;
+    align-items: stretch;
+  }
+
+  .pipeline-funnel {
+    flex: 0 0 auto;
+    max-width: 320px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .presentation-title {
+    font-size: 22px;
+  }
+
+  .presentation-subtitle {
+    font-size: 12px;
+  }
+
+  .legend-row {
+    padding: 8px 10px;
+  }
+}
+
 }
 
 
@@ -775,9 +856,6 @@ html, body {
     </script>
 
 	
-    <!-- your app scripts -->
-    <script src="leads.js" defer></script>
-
 	
 <!-- your app scripts -->
 <script src="leads.js" defer></script>
