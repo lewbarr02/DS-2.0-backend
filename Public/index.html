@@ -208,18 +208,21 @@ html, body {
   flex-direction: column;
   justify-content: center;
   gap: 8px;
+  align-items: center; /* center the narrower bands */
 }
 
 .funnel-band {
   position: relative;
   height: 70px;
-  clip-path: polygon(0 0, 100% 0, 86% 100%, 14% 100%);
+  width: 100%;
+  max-width: 360px;
+  clip-path: polygon(0 0, 100% 0, 90% 100%, 10% 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
 
-  /* subtle shadow + gloss */
+  /* subtle shadow + gloss (same as before) */
   box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
 }
 
@@ -235,19 +238,29 @@ html, body {
 /* Funnel colors */
 .funnel-cold {
   background: linear-gradient(135deg, #0052cc, #1d4ed8);
+  width: 100%;   /* widest */
 }
+
 .funnel-followup {
   background: linear-gradient(135deg, #facc15, #f59e0b);
+  width: 88%;
 }
+
 .funnel-warm {
   background: linear-gradient(135deg, #fb923c, #f97316);
+  width: 76%;
 }
+
 .funnel-hot {
   background: linear-gradient(135deg, #ef4444, #b91c1c);
+  width: 64%;
 }
+
 .funnel-converted {
   background: linear-gradient(135deg, #22c55e, #16a34a);
+  width: 52%;   /* narrowest */
 }
+
 
 .funnel-count {
   position: relative;
