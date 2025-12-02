@@ -911,25 +911,31 @@ html, body {
 
     <!-- LIST VIEW -->
     <div id="listView" aria-label="Lead List">
-      <div id="listToolbar">
-        <input id="listSearch" type="search" placeholder="Search name, company, city, state, tags…" aria-label="Search"/>
-        <button class="chip" data-status="Converted">🏆 Converted</button>
-        <button class="chip" data-status="Hot">🔥 Hot</button>
-        <button class="chip" data-status="Warm">🌞 Warm</button>
-        <button class="chip" data-status="Cold">🧊 Cold</button>
-        <button class="chip" data-status="Follow-Up">⏳ Follow-Up</button>
-        <button class="chip" data-status="Research">🔍 Research</button>
-        <button class="chip" data-status="Unspecified">⚪ Unspecified</button>
+<div id="listToolbar">
+  <input id="listSearch" type="search" placeholder="Search name, company, city, state, tags…" aria-label="Search"/>
+  <button class="chip" data-status="Converted">🏆 Converted</button>
+  <button class="chip" data-status="Hot">🔥 Hot</button>
+  <button class="chip" data-status="Warm">🌞 Warm</button>
+  <button class="chip" data-status="Cold">🧊 Cold</button>
+  <button class="chip" data-status="Follow-Up">⏳ Follow-Up</button>
+  <button class="chip" data-status="Research">🔍 Research</button>
+  <button class="chip" data-status="Unspecified">⚪ Unspecified</button>
 
-        <button id="listReset" class="chip" style="margin-left:8px;">Reset</button>
+  <button id="listReset" class="chip" style="margin-left:8px;">Reset</button>
 
-        <div id="columnsMenu" style="margin-left:auto;">
-          <details>
-            <summary>Columns ▾</summary>
-            <div class="panel" id="columnsPanel"><!-- JS populates --></div>
-          </details>
-        </div>
-      </div>
+  <!-- ⭐ NEW: Back to Presentation button -->
+  <button id="backToPresentation" class="chip" style="margin-left:4px;">
+    ⬅ Back to Presentation
+  </button>
+
+  <div id="columnsMenu" style="margin-left:auto;">
+    <details>
+      <summary>Columns ▾</summary>
+      <div class="panel" id="columnsPanel"><!-- JS populates --></div>
+    </details>
+  </div>
+</div>
+
 
       <div id="leadTableWrap">
         <table id="leadTable" aria-describedby="leadCount">
@@ -1535,14 +1541,41 @@ function getCI(row, key) {
       .forEach(el => el && el.addEventListener('change', () => window.renderListView()));
   }
 
-  // Render on List tab click
+  // Render on List tab click + wire Back to Presentation
   document.addEventListener('DOMContentLoaded', () => {
     wireListControls();
+
+    // When user clicks "List" tab, render the list
     document.getElementById('btnListView')?.addEventListener('click', () => {
       setTimeout(() => window.renderListView(), 0);
     });
+
+    // ⭐ NEW: Back to Presentation button
+    const backBtn = document.getElementById('backToPresentation');
+    if (backBtn) {
+      backBtn.addEventListener('click', () => {
+        // 1) Manually switch back to Map view
+        const mapView = document.getElementById('mapView');
+        const listView = document.getElementById('listView');
+        const btnMap  = document.getElementById('btnMapView');
+        const btnList = document.getElementById('btnListView');
+
+        if (mapView && listView && btnMap && btnList) {
+          mapView.style.display = 'block';
+          listView.classList.remove('show');
+          btnMap.classList.add('active');
+          btnList.classList.remove('active');
+        }
+
+        // 2) Re-open Presentation Mode using current filters
+        if (typeof window.openPresentationMode === 'function') {
+          window.openPresentationMode();
+        }
+      });
+    }
   });
 })();
+
 </script>
 
 <script>
