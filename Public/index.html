@@ -122,7 +122,7 @@ html, body {
       /* Logo (existing) */
       #logo { position: absolute; top: -122px; left: 10px; height: 400px; z-index: 2000; }
 
-/* Overlay container */
+/* Overlay container – dark mode */
 .presentation-overlay {
   position: fixed;
   inset: 0;
@@ -133,22 +133,24 @@ html, body {
   padding: 24px;
   box-sizing: border-box;
 
-  /* dimmed background instead of full white */
-  background: rgba(15, 23, 42, 0.55);
+  /* full-screen dark glass */
+  background: rgba(2, 6, 23, 0.92);
 }
 
 .presentation-overlay.hidden {
   display: none;
 }
 
-/* Inner card */
+/* Inner card – full dark */
 .presentation-inner {
   position: relative;
   width: 100%;
   max-width: 1100px;
-  background: #ffffff;
-  border-radius: 18px;
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.22);
+  background: #020617;
+  border-radius: 22px;
+  box-shadow:
+    0 40px 120px rgba(15, 23, 42, 0.9),
+    0 0 0 1px rgba(30, 64, 175, 0.35);
   padding: 32px 40px 36px;
   box-sizing: border-box;
 }
@@ -163,25 +165,25 @@ html, body {
   cursor: pointer;
   font-size: 20px;
   line-height: 1;
-  color: #64748b;
+  color: #9ca3af;
   padding: 4px;
   border-radius: 999px;
   transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
 .presentation-close:hover {
-  background: rgba(148, 163, 184, 0.15);
-  color: #0f172a;
+  background: rgba(148, 163, 184, 0.18);
+  color: #e5e7eb;
   transform: scale(1.05);
 }
 
-/* Titles */
+/* Titles – light on dark */
 .presentation-title {
   margin: 0;
   font-size: 26px;
   font-weight: 600;
   text-align: center;
-  color: #0f172a;
+  color: #e5e7eb;
 }
 
 .presentation-subtitle {
@@ -189,16 +191,18 @@ html, body {
   text-align: center;
   font-size: 13px;
   letter-spacing: 0.01em;
-  color: #64748b;
+  color: #94a3b8;
 }
 
-/* Mini AI Summary block (top of Presentation Mode) */
+/* Mini AI Summary block (top of Presentation Mode) – dark card */
 .presentation-ai {
   margin-top: 18px;
   padding: 10px 14px 12px;
-  border-radius: 12px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.18), transparent 55%),
+    #020617;
+  border: 1px solid rgba(148, 163, 184, 0.45);
   text-align: center;
 }
 
@@ -208,7 +212,7 @@ html, body {
   gap: 2px;
   font-size: 13px;
   font-weight: 600;
-  color: #0f172a;
+  color: #e5e7eb;
 }
 
 .presentation-ai-kpis span {
@@ -218,10 +222,9 @@ html, body {
 .presentation-ai-narrative {
   margin-top: 6px;
   font-size: 12px;
-  color: #4b5563;
+  color: #94a3b8;
   line-height: 1.5;
 }
-
 
 /* Layout: funnel + legend */
 .presentation-layout {
@@ -239,9 +242,10 @@ html, body {
   flex-direction: column;
   justify-content: center;
   gap: 8px;
-  align-items: center; /* center the narrower bands */
+  align-items: center;
 }
 
+/* Funnel bands (keep same gradients, on dark background now) */
 .funnel-band {
   position: relative;
   height: 70px;
@@ -252,9 +256,7 @@ html, body {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-
-  /* subtle shadow + gloss (same as before) */
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.5);
 }
 
 .funnel-band::after {
@@ -266,7 +268,6 @@ html, body {
   opacity: 0.85;
 }
 
-/* NEW: inner wrapper to stack count + percent */
 .funnel-band-inner {
   position: relative;
   z-index: 1;
@@ -277,51 +278,45 @@ html, body {
   gap: 3px;
 }
 
-/* Funnel colors */
+/* gradients unchanged */
 .funnel-cold {
   background: linear-gradient(135deg, #0052cc, #1d4ed8);
-  width: 100%;   /* widest */
+  width: 100%;
 }
-
 .funnel-followup {
   background: linear-gradient(135deg, #facc15, #f59e0b);
   width: 88%;
 }
-
 .funnel-warm {
   background: linear-gradient(135deg, #fb923c, #f97316);
   width: 76%;
 }
-
 .funnel-hot {
   background: linear-gradient(135deg, #ef4444, #b91c1c);
   width: 64%;
 }
-
 .funnel-converted {
   background: linear-gradient(135deg, #22c55e, #16a34a);
-  width: 52%;   /* narrowest */
+  width: 52%;
 }
-
 
 .funnel-count {
   font-size: 22px;
   font-weight: 700;
   color: #ffffff;
-  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.35);
+  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.7);
 }
 
-/* NEW: percentage label under the count */
 .funnel-percent {
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.9);
-  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.35);
+  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.7);
 }
 
-/* Right: Legend */
+/* Right: Legend – dark cards */
 .pipeline-legend {
   flex: 1 1 auto;
   display: flex;
@@ -334,15 +329,16 @@ html, body {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: 12px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #020617;
+  border: 1px solid rgba(30, 64, 175, 0.5);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.8);
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
 }
 
 .legend-row:hover {
-  background: #f3f4f6;
-  border-color: #cbd5f5;
+  background: #02081f;
+  border-color: rgba(59, 130, 246, 0.85);
   transform: translateY(-1px);
 }
 
@@ -359,18 +355,18 @@ html, body {
 .legend-title {
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: #e5e7eb;
   margin-bottom: 4px;
 }
 
 .legend-notes-line {
-  border-bottom: 1px dotted #9ca3af;
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.6);
   margin-bottom: 4px;
 }
 
 .legend-subtitle {
   font-size: 12px;
-  color: #6b7280;
+  color: #cbd5f5;
 }
 
 /* ---- Presentation Mode: Converted Trophy Panel ---- */
@@ -379,9 +375,11 @@ html, body {
   margin-top: 22px;
   padding: 16px 18px 14px;
   border-radius: 18px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+  background: #020617;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  box-shadow:
+    0 20px 40px rgba(15, 23, 42, 0.7),
+    0 0 0 1px rgba(15, 23, 42, 0.9);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -409,12 +407,12 @@ html, body {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #0f172a;
+  color: #e5e7eb;
 }
 
 .trophy-subtitle {
   font-size: 12px;
-  color: #6b7280;
+  color: #a5b4fc;
 }
 
 .trophy-kpi {
@@ -426,17 +424,17 @@ html, body {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #9ca3af;
+  color: #64748b;
 }
 
 .trophy-kpi-value {
   font-size: 20px;
   font-weight: 700;
-  color: #16a34a;
+  color: #22c55e;
 }
 
 .trophy-section {
-  border-top: 1px dashed #e5e7eb;
+  border-top: 1px dashed rgba(148, 163, 184, 0.5);
   padding-top: 8px;
   margin-top: 6px;
 }
@@ -444,7 +442,7 @@ html, body {
 .trophy-section-title {
   font-size: 12px;
   font-weight: 600;
-  color: #0f172a;
+  color: #e5e7eb;
   margin-bottom: 4px;
 }
 
@@ -461,23 +459,22 @@ html, body {
 
 .trophy-win-company {
   font-weight: 600;
-  color: #111827;
+  color: #f9fafb;
 }
 
 .trophy-win-location {
-  color: #6b7280;
+  color: #9ca3af;
 }
 
 .trophy-win-empty {
-  color: #9ca3af;
+  color: #6b7280;
   font-style: italic;
 }
 
 .trophy-insight-text {
   font-size: 12px;
-  color: #4b5563;
+  color: #cbd5f5;
 }
-
 
 /* ---- Presentation Mode: ICP Vertical Breakdown ---- */
 
@@ -486,7 +483,9 @@ html, body {
   padding: 18px 20px 16px;
   border-radius: 18px;
   background: #020617;
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.85);
+  box-shadow:
+    inset 0 0 0 1px rgba(15, 23, 42, 0.9),
+    0 32px 60px rgba(15, 23, 42, 0.9);
 }
 
 .icp-header {
@@ -514,15 +513,15 @@ html, body {
 }
 
 .icp-tile {
-  flex: 1 1 calc(14.5% - 8px); /* 7 tiles across on wide screens */
+  flex: 1 1 calc(14.5% - 8px);
   min-width: 120px;
   padding: 10px 12px;
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.55);
   background:
-    radial-gradient(circle at 0% 0%, rgba(148, 163, 184, 0.2), transparent 55%),
+    radial-gradient(circle at 0% 0%, rgba(148, 163, 184, 0.22), transparent 55%),
     #020617;
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.5);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.7);
 }
 
 .icp-name {
@@ -550,17 +549,7 @@ html, body {
   .icp-tile {
     flex: 1 1 calc(33.33% - 8px);
   }
-}
 
-@media (max-width: 640px) {
-  .icp-tile {
-    flex: 1 1 calc(50% - 8px);
-  }
-}
-
-
-/* Responsive tweaks */
-@media (max-width: 960px) {
   .presentation-inner {
     padding: 24px 18px 26px;
   }
@@ -579,6 +568,10 @@ html, body {
 }
 
 @media (max-width: 640px) {
+  .icp-tile {
+    flex: 1 1 calc(50% - 8px);
+  }
+
   .presentation-title {
     font-size: 22px;
   }
@@ -591,6 +584,7 @@ html, body {
     padding: 8px 10px;
   }
 }
+
 
 
 
