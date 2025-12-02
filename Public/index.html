@@ -235,6 +235,17 @@ html, body {
   opacity: 0.85;
 }
 
+/* NEW: inner wrapper to stack count + percent */
+.funnel-band-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+
 /* Funnel colors */
 .funnel-cold {
   background: linear-gradient(135deg, #0052cc, #1d4ed8);
@@ -263,11 +274,19 @@ html, body {
 
 
 .funnel-count {
-  position: relative;
-  z-index: 1;
   font-size: 22px;
   font-weight: 700;
   color: #ffffff;
+  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.35);
+}
+
+/* NEW: percentage label under the count */
+.funnel-percent {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.9);
   text-shadow: 0 1px 2px rgba(15, 23, 42, 0.35);
 }
 
@@ -703,23 +722,43 @@ html, body {
 
           <div class="presentation-layout">
             <!-- Funnel -->
-            <div class="pipeline-funnel">
-              <div class="funnel-band funnel-cold">
-                <span class="funnel-count" id="funnel_cold">0</span>
-              </div>
-              <div class="funnel-band funnel-followup">
-                <span class="funnel-count" id="funnel_followup">0</span>
-              </div>
-              <div class="funnel-band funnel-warm">
-                <span class="funnel-count" id="funnel_warm">0</span>
-              </div>
-              <div class="funnel-band funnel-hot">
-                <span class="funnel-count" id="funnel_hot">0</span>
-              </div>
-              <div class="funnel-band funnel-converted">
-                <span class="funnel-count" id="funnel_converted">0</span>
-              </div>
-            </div>
+<div class="pipeline-funnel">
+  <div class="funnel-band funnel-cold">
+    <div class="funnel-band-inner">
+      <span class="funnel-count" id="funnel_cold">0</span>
+      <span class="funnel-percent" id="funnel_cold_pct">0%</span>
+    </div>
+  </div>
+
+  <div class="funnel-band funnel-followup">
+    <div class="funnel-band-inner">
+      <span class="funnel-count" id="funnel_followup">0</span>
+      <span class="funnel-percent" id="funnel_followup_pct">0%</span>
+    </div>
+  </div>
+
+  <div class="funnel-band funnel-warm">
+    <div class="funnel-band-inner">
+      <span class="funnel-count" id="funnel_warm">0</span>
+      <span class="funnel-percent" id="funnel_warm_pct">0%</span>
+    </div>
+  </div>
+
+  <div class="funnel-band funnel-hot">
+    <div class="funnel-band-inner">
+      <span class="funnel-count" id="funnel_hot">0</span>
+      <span class="funnel-percent" id="funnel_hot_pct">0%</span>
+    </div>
+  </div>
+
+  <div class="funnel-band funnel-converted">
+    <div class="funnel-band-inner">
+      <span class="funnel-count" id="funnel_converted">0</span>
+      <span class="funnel-percent" id="funnel_converted_pct">0%</span>
+    </div>
+  </div>
+</div>
+
 
             <!-- Legend / Notes -->
             <div class="pipeline-legend">
@@ -1659,18 +1698,40 @@ function getCI(row, key) {
     if (elTotal) elTotal.textContent = total;
     if (elAdded) elAdded.textContent = addedInRange;
 
-    // Update funnel bands
+    // Update funnel bands (counts + percentages)
     const elCold   = document.getElementById('funnel_cold');
     const elFollow = document.getElementById('funnel_followup');
     const elWarm   = document.getElementById('funnel_warm');
     const elHot    = document.getElementById('funnel_hot');
     const elConv   = document.getElementById('funnel_converted');
 
+    const elColdPct   = document.getElementById('funnel_cold_pct');
+    const elFollowPct = document.getElementById('funnel_followup_pct');
+    const elWarmPct   = document.getElementById('funnel_warm_pct');
+    const elHotPct    = document.getElementById('funnel_hot_pct');
+    const elConvPct   = document.getElementById('funnel_converted_pct');
+
     if (elCold)   elCold.textContent   = totals.cold;
     if (elFollow) elFollow.textContent = totals.follow;
     if (elWarm)   elWarm.textContent   = totals.warm;
     if (elHot)    elHot.textContent    = totals.hot;
     if (elConv)   elConv.textContent   = totals.converted;
+
+    const funnelTotal =
+      totals.cold + totals.follow + totals.warm + totals.hot + totals.converted;
+
+    function formatPct(count) {
+      if (!funnelTotal) return '0%';
+      const pct = Math.round((count / funnelTotal) * 100);
+      return `${pct}%`;
+    }
+
+    if (elColdPct)   elColdPct.textContent   = formatPct(totals.cold);
+    if (elFollowPct) elFollowPct.textContent = formatPct(totals.follow);
+    if (elWarmPct)   elWarmPct.textContent   = formatPct(totals.warm);
+    if (elHotPct)    elHotPct.textContent    = formatPct(totals.hot);
+    if (elConvPct)   elConvPct.textContent   = formatPct(totals.converted);
+
 
     // NEW: update ICP tiles
     const icpRows = buildIcpBreakdown(leads);
