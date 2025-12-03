@@ -542,29 +542,44 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // Inline lead fields
     const forecastSelect = cardEl.querySelector('.dq-edit-forecast-month');
-    const arrInput = cardEl.querySelector('.dq-edit-arr');
-    const apInput = cardEl.querySelector('.dq-edit-ap-spend');
+    const arrInput       = cardEl.querySelector('.dq-edit-arr');
+    const apInput        = cardEl.querySelector('.dq-edit-ap-spend');
+
+    // Touch / status fields we ALSO want to allow saving
+    const statusSelect   = cardEl.querySelector('.dq-done-status');
+    const notesInput     = cardEl.querySelector('.dq-done-notes');
 
     const forecastRaw = forecastSelect ? forecastSelect.value : '';
-    const arrRaw = arrInput ? arrInput.value : '';
-    const apRaw = apInput ? apInput.value : '';
+    const arrRaw      = arrInput ? arrInput.value : '';
+    const apRaw       = apInput ? apInput.value : '';
+    const statusRaw   = statusSelect ? statusSelect.value : '';
+    const notesRaw    = notesInput ? notesInput.value : '';
 
-    // 🔹 Only include fields the user actually typed/selected
+    // 🔹 Build payload with ANY field the user actually changed
     const payload = {};
+
     if (forecastRaw) {
       payload.forecast_month = forecastRaw;
     }
     if (arrRaw.trim() !== '') {
-      payload.arr = arrRaw.trim();          // backend will parse short money
+      payload.arr = arrRaw.trim();          // backend parses short money (25M, 40k, etc.)
     }
     if (apRaw.trim() !== '') {
-      payload.ap_spend = apRaw.trim();      // backend will parse short money
+      payload.ap_spend = apRaw.trim();
+    }
+    if (statusRaw) {
+      // e.g. "warm", "follow-up", "converted"
+      payload.status = statusRaw;
+    }
+    if (notesRaw.trim() !== '') {
+      payload.notes = notesRaw.trim();
     }
 
-    // If nothing was changed, bail early
+    // If literally nothing was changed, bail
     if (!Object.keys(payload).length) {
-      alert('No lead changes to save.');
+      alert('No lead changes to save. Add Forecast, ARR, AP Spend, Status, or Notes first.');
       return;
     }
 
@@ -583,31 +598,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const updated = await res.json();
 
-      // Update in-memory item so UI + future logic stay in sync
+      // Keep in-memory item in sync with backend
       if ('forecast_month' in updated) {
         item.forecast_month = updated.forecast_month;
         if (item.lead) item.lead.forecast_month = updated.forecast_month;
+        if (forecastSelect) {
+          forecastSelect.value = updated.forecast_month || '';
+        }
       }
+
       if ('arr' in updated) {
         item.arr = updated.arr;
         if (item.lead) item.lead.arr = updated.arr;
+        if (arrInput) {
+          arrInput.value =
+            updated.arr != null ? formatShortMoney(updated.arr) : '';
+        }
       }
+
       if ('ap_spend' in updated) {
         item.ap_spend = updated.ap_spend;
         if (item.lead) item.lead.ap_spend = updated.ap_spend;
+        if (apInput) {
+          apInput.value =
+            updated.ap_spend != null ? formatShortMoney(updated.ap_spend) : '';
+        }
       }
 
-      // Refresh the display values in the inputs
-      if (forecastSelect && 'forecast_month' in updated) {
-        forecastSelect.value = updated.forecast_month || '';
+      if ('status' in updated) {
+        item.status = updated.status;
+        if (item.lead) item.lead.status = updated.status;
+
+        // Update status pill immediately
+        const pill = cardEl.querySelector('.dq-status-pill');
+        if (pill) {
+          const displayLabel = formatStatusLabelForDisplay(updated.status);
+          pill.textContent = displayLabel;
+          pill.className = 'dq-status-pill ' + mapStatusClass(updated.status);
+        }
       }
-      if (arrInput && 'arr' in updated) {
-        arrInput.value =
-          updated.arr != null ? formatShortMoney(updated.arr) : '';
-      }
-      if (apInput && 'ap_spend' in updated) {
-        apInput.value =
-          updated.ap_spend != null ? formatShortMoney(updated.ap_spend) : '';
+
+      if ('notes' in updated && notesInput) {
+        notesInput.value = updated.notes || notesRaw; // keep what user typed
       }
 
       // Tiny UX touch: flash the Save button text
@@ -624,6 +656,7 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('Error reaching the server while saving this lead.');
     }
   }
+
 
 
   
