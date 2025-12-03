@@ -57,27 +57,91 @@ function qpCountMode(v) {
 // === SINGLE ADDRESS GEOCODER ===
 // Calls OpenStreetMap Nominatim and returns { lat, lon } or null
 async function geocodeOne({ company, city, state }) {
-  try {
-    // Build the query string
-    const qParts = [company, city, state].filter(Boolean);
-    const query = encodeURIComponent(qParts.join(', '));
+  // Normalize inputs
+  const norm = (v) => {
+    if (!v) return null;
+    const s = String(v).trim();
+    return s === '' ? null : s;
+  };
 
-    const url = `${NOMINATIM_BASE}?format=json&q=${query}&limit=1&addressdetails=0&email=${encodeURIComponent(CONTACT_EMAIL)}`;
-    const response = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  company = norm(company);
+  city    = norm(city);
+  state   = norm(state);
 
-    const results = await response.json();
-    if (!Array.isArray(results) || results.length === 0) return null;
-
-    const { lat, lon } = results[0];
-    if (!lat || !lon) return null;
-
-    return { lat: parseFloat(lat), lon: parseFloat(lon) };
-  } catch (err) {
-    console.error('geocodeOne() failed:', err.message);
+  // If we truly have *no* location info, bail early
+  if (!company && !city && !state) {
+    console.warn('geocodeOne: no location data at all for lead');
     return null;
   }
+
+  // Try several query shapes from most-specific to least-specific
+  const attempts = [];
+
+  // 1) Company + City + State
+  if (company || city || state) {
+    attempts.push([company, city, state]);
+  }
+  // 2) City + State
+  if (city || state) {
+    attempts.push([null, city, state]);
+  }
+  // 3) City only
+  if (city) {
+    attempts.push([null, city, null]);
+  }
+  // 4) State only
+  if (state) {
+    attempts.push([null, null, state]);
+  }
+
+  for (const [cCo, cCi, cSt] of attempts) {
+    const parts = [cCo, cCi, cSt].filter(Boolean);
+    if (!parts.length) continue;
+
+    const queryStr = parts.join(', ');
+    const url = `${NOMINATIM_BASE}?format=json&q=${encodeURIComponent(
+      queryStr
+    )}&limit=1&addressdetails=0&email=${encodeURIComponent(CONTACT_EMAIL)}`;
+
+    try {
+      const response = await fetch(url, {
+        headers: { 'User-Agent': USER_AGENT },
+      });
+
+      if (!response.ok) {
+        console.warn(
+          'geocodeOne HTTP failure',
+          response.status,
+          'for query:',
+          queryStr
+        );
+        continue;
+      }
+
+      const results = await response.json();
+      if (!Array.isArray(results) || results.length === 0) {
+        console.log('geocodeOne: no results for query:', queryStr);
+        continue;
+      }
+
+      const { lat, lon } = results[0] || {};
+      if (!lat || !lon) {
+        console.log('geocodeOne: missing lat/lon for query:', queryStr);
+        continue;
+      }
+
+      return { lat: parseFloat(lat), lon: parseFloat(lon) };
+    } catch (err) {
+      console.error('geocodeOne error for query:', queryStr, err.message);
+      // Try the next attempt
+      continue;
+    }
+  }
+
+  // All attempts failed
+  return null;
 }
+
 
 // Uses only `id` (no uuid column needed)
 async function geocodeMissingLeads({ limit = 25, delayMs = 1000 } = {}) {
@@ -2053,96 +2117,128 @@ app.post('/leads/bulk-delete-by-ids', async (req, res) => {
 
 
 
-// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-// === ONE-BY-ONE LEAD GEO-CODING ROUTE (ADD THIS) ===
-app.post("/leads/:id/geocode", async (req, res) => {
+// === ONE-BY-ONE LEAD GEO-CODING ROUTE ===
+app.post('/leads/:id/geocode', async (req, res) => {
   const id = req.params.id;
 
   try {
     // 1. Load the lead
     const result = await pool.query(
-      `SELECT id, company, city, state, latitude, longitude
-       FROM leads
-       WHERE id = $1`,
+      `
+      SELECT id, company, city, state, latitude, longitude
+      FROM leads
+      WHERE id = $1
+      `,
       [id]
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: "Lead not found" });
+      return res.status(404).json({ success: false, error: 'Lead not found' });
     }
 
     const lead = result.rows[0];
 
-    // 2. Make sure we have enough location info
-    if (!lead.city || !lead.state) {
+    // 2. Normalize fields
+    const norm = (v) => {
+      if (!v) return null;
+      const s = String(v).trim();
+      return s === '' ? null : s;
+    };
+
+    const company = norm(lead.company);
+    const city    = norm(lead.city);
+    const state   = norm(lead.state);
+
+    if (!company && !city && !state) {
+      // Truly nothing to geocode with
       return res.status(400).json({
-        error: "Missing city or state",
-        code: "MISSING_LOCATION_FIELDS"
+        success: false,
+        error: 'Lead has no location data (company/city/state all empty)',
+        code: 'NO_LOCATION_DATA'
       });
     }
 
-    // 3. Use your existing geocodeOne helper
-    const geo = await geocodeOne({
-      company: lead.company,
-      city: lead.city,
-      state: lead.state
-    });
+    // 3. Call geocoder (will try multiple query shapes)
+    const geo = await geocodeOne({ company, city, state });
 
     if (!geo) {
-      // Could not geocode
-      await pool.query(
-        `UPDATE leads
-         SET geocode_status = 'error',
-             geocode_error = 'No result from geocoder'
-         WHERE id = $1`,
-        [id]
-      );
+      // No result from Nominatim — log but don't crash the app
+      console.warn('Geocode: no result for lead', id, {
+        company,
+        city,
+        state,
+      });
 
-      return res.status(500).json({
+      // If you have these columns, keep them updated; if not, you can drop this block
+      try {
+        await pool.query(
+          `
+          UPDATE leads
+          SET geocode_status = 'error',
+              geocode_error  = 'No result from geocoder',
+              updated_at     = NOW()
+          WHERE id = $1
+          `,
+          [id]
+        );
+      } catch (e) {
+        console.warn('Geocode: could not update geocode_status for lead', id, e.message);
+      }
+
+      // Use 422 to indicate "valid request, but we could not find a location"
+      return res.status(422).json({
         success: false,
-        error: "Failed to geocode lead"
+        error: 'No geocode result for this lead'
       });
     }
 
     // 4. Save new lat/lng
     const update = await pool.query(
-      `UPDATE leads
-       SET latitude = $1,
-           longitude = $2,
-           geocode_status = 'ok',
-           geocode_error = NULL,
-           updated_at = NOW()
-       WHERE id = $3
-       RETURNING id, company, city, state, latitude, longitude, geocode_status`,
+      `
+      UPDATE leads
+      SET latitude       = $1,
+          longitude      = $2,
+          geocode_status = 'ok',
+          geocode_error  = NULL,
+          updated_at     = NOW()
+      WHERE id = $3
+      RETURNING id, company, city, state, latitude, longitude, geocode_status
+      `,
       [geo.lat, geo.lon, id]
     );
 
     const updatedLead = update.rows[0];
 
-    // 5. Send updated record back to UI
     return res.json({
       success: true,
       lead: updatedLead
     });
-
   } catch (err) {
-    console.error("Geocode single lead error:", err);
+    console.error('Geocode single lead error:', err);
 
-    await pool.query(
-      `UPDATE leads
-       SET geocode_status = 'error',
-           geocode_error = $1
-       WHERE id = $2`,
-      [err.message || "Unknown geocode error", id]
-    );
+    try {
+      await pool.query(
+        `
+        UPDATE leads
+        SET geocode_status = 'error',
+            geocode_error  = $1,
+            updated_at     = NOW()
+        WHERE id = $2
+        `,
+        [err.message || 'Unknown geocode error', id]
+      );
+    } catch (e) {
+      console.warn('Geocode: secondary update failed for lead', id, e.message);
+    }
 
     return res.status(500).json({
       success: false,
-      error: "Unexpected error",
+      error: 'Unexpected error during geocode',
       details: err.message
     });
   }
 });
+
 
 
 // === ON-DEMAND GEO-CODER ROUTE ===
