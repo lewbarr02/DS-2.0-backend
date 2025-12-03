@@ -869,13 +869,21 @@ function attachPopupEventDelegates() {
     }
   });
   
-    // ---------- LIST VIEW GEO-CODE BUTTON ----------
+  // ---------- LIST VIEW GEO-CODE BUTTON ----------
   document.addEventListener("click", async (e) => {
     const btn = e.target.closest(".geo-btn");
     if (!btn) return;
 
-    const leadId = btn.getAttribute("data-lead-id");
-    if (!leadId) return;
+    // Our HTML uses data-id, but be flexible just in case
+    const leadId =
+      btn.dataset.id ||
+      btn.getAttribute("data-id") ||
+      btn.getAttribute("data-lead-id");
+
+    if (!leadId) {
+      console.warn("[Geocode] .geo-btn clicked but no lead id found");
+      return;
+    }
 
     // If already disabled (already geocoded), do nothing
     if (btn.disabled) return;
@@ -887,9 +895,7 @@ function attachPopupEventDelegates() {
     try {
       const res = await fetch(
         `${API_BASE}/leads/${encodeURIComponent(leadId)}/geocode`,
-        {
-          method: "POST"
-        }
+        { method: "POST" }
       );
 
       if (!res.ok) {
@@ -897,13 +903,10 @@ function attachPopupEventDelegates() {
         throw new Error(text || `Geocode failed (${res.status})`);
       }
 
-      // Optional: backend might return updated lead; we can ignore
-      // and just refresh everything so map + list + stats stay in sync.
+      // Refresh everything so map + list + stats stay in sync
       if (window.refreshLeads) {
         await window.refreshLeads();
       }
-
-      // After refresh, the row will re-render, showing ✅ and a disabled button.
     } catch (err) {
       console.error("Geocode failed", err);
       alert("Geocode failed: " + (err.message || err));
@@ -913,6 +916,7 @@ function attachPopupEventDelegates() {
       btn.textContent = originalText;
     }
   });
+
 
 
   // Save submit
