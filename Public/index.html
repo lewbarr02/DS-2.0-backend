@@ -1542,8 +1542,13 @@ function getCI(row, key) {
               ? `<a class="website-link" href="${websiteUrl}" target="_blank" rel="noopener noreferrer">Visit</a>`
               : ''}</td>
         <td>${t(getCI(r,'notes'))}</td>
-        <td class="actions-cell">${deleteCell}</td>
-      </tr>`;
+       <td class="actions-cell">
+    ${hasPin
+    ? '' 
+    : `<button class="geo-btn" data-id="${id}" title="Geocode this lead">📍 Geocode</button>`}
+    ${deleteCell}
+   </td>
+</tr>`;
     }).join('');
 
     tbody.innerHTML = html;

@@ -2053,7 +2053,96 @@ app.post('/leads/bulk-delete-by-ids', async (req, res) => {
 
 
 
+// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+// === ONE-BY-ONE LEAD GEO-CODING ROUTE (ADD THIS) ===
+app.post("/leads/:id/geocode", async (req, res) => {
+  const id = req.params.id;
 
+  try {
+    // 1. Load the lead
+    const result = await pool.query(
+      `SELECT id, company, city, state, latitude, longitude
+       FROM leads
+       WHERE id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Lead not found" });
+    }
+
+    const lead = result.rows[0];
+
+    // 2. Make sure we have enough location info
+    if (!lead.city || !lead.state) {
+      return res.status(400).json({
+        error: "Missing city or state",
+        code: "MISSING_LOCATION_FIELDS"
+      });
+    }
+
+    // 3. Use your existing geocodeOne helper
+    const geo = await geocodeOne({
+      company: lead.company,
+      city: lead.city,
+      state: lead.state
+    });
+
+    if (!geo) {
+      // Could not geocode
+      await pool.query(
+        `UPDATE leads
+         SET geocode_status = 'error',
+             geocode_error = 'No result from geocoder'
+         WHERE id = $1`,
+        [id]
+      );
+
+      return res.status(500).json({
+        success: false,
+        error: "Failed to geocode lead"
+      });
+    }
+
+    // 4. Save new lat/lng
+    const update = await pool.query(
+      `UPDATE leads
+       SET latitude = $1,
+           longitude = $2,
+           geocode_status = 'ok',
+           geocode_error = NULL,
+           updated_at = NOW()
+       WHERE id = $3
+       RETURNING id, company, city, state, latitude, longitude, geocode_status`,
+      [geo.lat, geo.lon, id]
+    );
+
+    const updatedLead = update.rows[0];
+
+    // 5. Send updated record back to UI
+    return res.json({
+      success: true,
+      lead: updatedLead
+    });
+
+  } catch (err) {
+    console.error("Geocode single lead error:", err);
+
+    await pool.query(
+      `UPDATE leads
+       SET geocode_status = 'error',
+           geocode_error = $1
+       WHERE id = $2`,
+      [err.message || "Unknown geocode error", id]
+    );
+
+    return res.status(500).json({
+      success: false,
+      error: "Unexpected error",
+      details: err.message
+    });
+  }
+});
 
 
 // === ON-DEMAND GEO-CODER ROUTE ===

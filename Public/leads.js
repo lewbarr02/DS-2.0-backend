@@ -34,7 +34,13 @@ window.refreshLeads = async function refreshLeads() {
   computeFiltered();
   renderMarkers();
   updateStats();
+
+  // 🔁 Keep List View in sync whenever we reload leads
+  if (typeof window.renderListView === 'function') {
+    window.renderListView();
+  }
 };
+
 
 
 
@@ -419,6 +425,69 @@ function unwrapData(payload){
       els.pinCount().textContent = `Displaying ${shown} of ${total} leads`;
     }
   }
+  
+    // ---------- LIST VIEW (Filtered leads + pin status) ----------
+  window.renderListView = function renderListView() {
+    const tbody = document.getElementById("leadListBody");
+    if (!tbody) return;
+
+    const rows = DS.state.filtered || [];
+
+    if (!rows.length) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="7" style="text-align:center;padding:0.75rem;">
+            No leads in this filtered time period.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    const html = rows.map((row) => {
+      const id = row.id || row.uuid || "";
+      const coords = normalizeCoords(row);
+      const hasCoords = !!coords;
+
+      const pinIcon = hasCoords ? "✅" : "❌";
+      const pinLabel = hasCoords ? "Geocoded" : "Not geocoded";
+      const geoBtnLabel = hasCoords ? "Geocoded" : "Geocode";
+
+      const company = escapeHtml(row.company || row.Company || "(Company)");
+      const city    = escapeHtml(row.city || row.City || "");
+      const state   = escapeHtml(row.state || row.State || "");
+      const status  = escapeHtml(prettyStatus(row.status || row.Status) || "—");
+      const tags    = escapeHtml(
+        Array.isArray(row.tags)
+          ? row.tags.join(", ")
+          : (row.tags || "")
+      );
+
+      return `
+        <tr data-lead-id="${id}">
+          <td>${company}</td>
+          <td>${city}</td>
+          <td>${state}</td>
+          <td>${status}</td>
+          <td>${tags || "—"}</td>
+          <td title="${pinLabel}" style="text-align:center;">${pinIcon}</td>
+          <td style="text-align:center;">
+            <button
+              class="geo-btn"
+              data-lead-id="${id}"
+              ${hasCoords ? 'disabled aria-disabled="true"' : ""}
+              style="padding:0.25rem 0.6rem;font-size:12px;border-radius:6px;border:1px solid #ccc;cursor:pointer;"
+            >
+              ${geoBtnLabel}
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+
+    tbody.innerHTML = html;
+  };
+
 
 
 
@@ -452,8 +521,17 @@ function unwrapData(payload){
 	setOpts(els.industryFilter(), uniqueFrom('industry'));
   }
 
-  function wireDashboard() {
-    const rerender = () => { computeFiltered(); renderMarkers(); updateStats(); };
+function wireDashboard() {
+  const rerender = () => {
+    computeFiltered();
+    renderMarkers();
+    updateStats();
+
+    // 🔁 Also refresh List View to match current filters
+    if (typeof window.renderListView === 'function') {
+      window.renderListView();
+    }
+  };
 
     [els.tagFilter(), els.typeFilter(), els.cadenceFilter(), els.stateFilter(),els.industryFilter(), els.startDate(), els.endDate()]
       .forEach(el => el && el.addEventListener('change', rerender));
@@ -853,6 +931,52 @@ function attachPopupEventDelegates() {
       }
     }
   });
+  
+    // ---------- LIST VIEW GEO-CODE BUTTON ----------
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".geo-btn");
+    if (!btn) return;
+
+    const leadId = btn.getAttribute("data-lead-id");
+    if (!leadId) return;
+
+    // If already disabled (already geocoded), do nothing
+    if (btn.disabled) return;
+
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Geocoding…";
+
+    try {
+      const res = await fetch(
+        `${API_BASE}/leads/${encodeURIComponent(leadId)}/geocode`,
+        {
+          method: "POST"
+        }
+      );
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(text || `Geocode failed (${res.status})`);
+      }
+
+      // Optional: backend might return updated lead; we can ignore
+      // and just refresh everything so map + list + stats stay in sync.
+      if (window.refreshLeads) {
+        await window.refreshLeads();
+      }
+
+      // After refresh, the row will re-render, showing ✅ and a disabled button.
+    } catch (err) {
+      console.error("Geocode failed", err);
+      alert("Geocode failed: " + (err.message || err));
+
+      // Restore button so user can retry
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  });
+
 
   // Save submit
   document.addEventListener("submit", async (e) => {
@@ -961,13 +1085,19 @@ function attachPopupEventDelegates() {
       return;
     }
 
-    DS.state.rawRows = unwrapData(payload);
-    populateFilterOptions();
-    wireDashboard();
-    computeFiltered();
-    renderMarkers();
-    updateStats();
+  DS.state.rawRows = unwrapData(payload);
+  populateFilterOptions();
+  wireDashboard();
+  computeFiltered();
+  renderMarkers();
+  updateStats();
+
+  // 🔁 Initial List View render once data + filters are ready
+  if (typeof window.renderListView === 'function') {
+    window.renderListView();
   }
+}
+
 
 
   // Auto-run boot once when the page loads
