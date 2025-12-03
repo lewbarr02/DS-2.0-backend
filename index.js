@@ -36,23 +36,26 @@ app.get('/daily-queue', (_req, res) => {
 
 // === GEO-CODER HELPERS (AUTO LAT/LONG FILLER) ===
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org/search';
-const CONTACT_EMAIL = process.env.NOMINATIM_EMAIL || 'lewis.barr@finexio.com';
-const USER_AGENT = process.env.NOMINATIM_USER_AGENT || `DeliSandwich/1.0 (${CONTACT_EMAIL})`;
+const CONTACT_EMAIL =
+  process.env.NOMINATIM_EMAIL || 'lewis.barr@finexio.com';
+const USER_AGENT =
+  process.env.NOMINATIM_USER_AGENT ||
+  `DeliSandwich/1.0 (${CONTACT_EMAIL})`;
 
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+/**
+ * Make sure our geocode HTTP calls never hang forever.
+ * If Nominatim is slow or unreachable, this will abort after `timeoutMs`.
+ */
+async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
 
-// --- Query-param Boolean helper ---
-function qpBool(v, def = true) {
-  if (v === undefined || v === null || v === '') return def;
-  const s = String(v).toLowerCase();
-  return s === '1' || s === 'true' || s === 'yes';
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(id);
+  }
 }
-// leads | accounts
-function qpCountMode(v) {
-  const s = String(v || 'leads').toLowerCase();
-  return s === 'accounts' ? 'accounts' : 'leads';
-}
-
 
 // === SINGLE ADDRESS GEOCODER ===
 // Calls OpenStreetMap Nominatim and returns { lat, lon } or null
@@ -65,8 +68,8 @@ async function geocodeOne({ company, city, state }) {
   };
 
   company = norm(company);
-  city    = norm(city);
-  state   = norm(state);
+  city = norm(city);
+  state = norm(state);
 
   // If we truly have *no* location info, bail early
   if (!company && !city && !state) {
@@ -104,9 +107,14 @@ async function geocodeOne({ company, city, state }) {
     )}&limit=1&addressdetails=0&email=${encodeURIComponent(CONTACT_EMAIL)}`;
 
     try {
-      const response = await fetch(url, {
-        headers: { 'User-Agent': USER_AGENT },
-      });
+      // ⏱ IMPORTANT: this prevents long hangs → avoids 502s
+      const response = await fetchWithTimeout(
+        url,
+        {
+          headers: { 'User-Agent': USER_AGENT }
+        },
+        8000 // 8s per attempt; 4 attempts max
+      );
 
       if (!response.ok) {
         console.warn(
@@ -132,6 +140,7 @@ async function geocodeOne({ company, city, state }) {
 
       return { lat: parseFloat(lat), lon: parseFloat(lon) };
     } catch (err) {
+      // This will catch timeouts, network errors, etc.
       console.error('geocodeOne error for query:', queryStr, err.message);
       // Try the next attempt
       continue;
@@ -141,6 +150,7 @@ async function geocodeOne({ company, city, state }) {
   // All attempts failed
   return null;
 }
+
 
 
 // Uses only `id` (no uuid column needed)
