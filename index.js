@@ -2242,21 +2242,27 @@ app.post('/leads/:id/geocode', async (req, res) => {
 
 
 // === ON-DEMAND GEO-CODER ROUTE ===
-// lets you hit it manually from Postman or a button later
+// Hit this from the List View "Geocode All Missing" button
 app.post('/geocode/missing', async (req, res) => {
   try {
-    const { limit = 25, delayMs = 1000 } = req.body || {};
+    // Accept from body (preferred) OR fallback to querystring if needed
+    const rawLimit  = (req.body && req.body.limit)   ?? req.query.limit;
+    const rawDelay  = (req.body && req.body.delayMs) ?? req.query.delayMs;
+
+    const limit   = rawLimit ? Number(rawLimit) : 25;
+    const delayMs = rawDelay ? Number(rawDelay) : 1000;
+
+    console.log('🌎 Bulk geocode requested', { limit, delayMs });
+
     const result = await geocodeMissingLeads({ limit, delayMs });
-    res.json({ ok: true, ...result });
+
+    return res.json({
+      ok: true,
+      result
+    });
   } catch (e) {
     console.error('Geocode error:', e);
-    res.status(500).json({ ok: false, error: 'geocode_failed' });
+    return res.status(500).json({ ok: false, error: 'geocode_failed' });
   }
 });
 
-
-// --- LOCAL DEV PORT / RAILWAY PORT ---
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`[DS] Listening on :${PORT}`);
-});

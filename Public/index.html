@@ -1067,9 +1067,14 @@ html, body {
 
   <button id="listReset" class="chip" style="margin-left:8px;">Reset</button>
 
-  <!-- ⭐ NEW: Back to Presentation button -->
+  <!-- Back to Presentation -->
   <button id="backToPresentation" class="chip" style="margin-left:4px;">
     ⬅ Back to Presentation
+  </button>
+
+  <!-- ⭐ NEW: Geocode All Missing button -->
+  <button id="geocodeAllMissingBtn" class="chip" style="margin-left:4px;">
+    📡 Geocode All Missing
   </button>
 
   <div id="columnsMenu" style="margin-left:auto;">
@@ -1079,6 +1084,7 @@ html, body {
     </details>
   </div>
 </div>
+
 
 
       <div id="leadTableWrap">
@@ -1100,110 +1106,156 @@ html, body {
 
     <!-- Scripts -->
 
-    <script>
-      (function() {
-        // --- Upload CSV wiring ---
-        const uploadBtn    = document.getElementById('uploadCsvBtn');
-        const fileInput    = document.getElementById('csvInput');
-        const uploadStatus = document.getElementById('uploadStatus');
+<script>
+  (function() {
+    // --- Upload CSV wiring ---
+    const uploadBtn    = document.getElementById('uploadCsvBtn');
+    const fileInput    = document.getElementById('csvInput');
+    const uploadStatus = document.getElementById('uploadStatus');
 
-        if (uploadBtn && fileInput && uploadStatus) {
-          uploadBtn.addEventListener('click', () => fileInput.click());
+    if (uploadBtn && fileInput && uploadStatus) {
+      uploadBtn.addEventListener('click', () => fileInput.click());
 
-          fileInput.addEventListener('change', async () => {
-            const file = fileInput.files && fileInput.files[0];
-            if (!file) return;
+      fileInput.addEventListener('change', async () => {
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) return;
 
-            uploadStatus.style.display = 'inline';
-            uploadStatus.textContent = 'Uploading…';
-            uploadStatus.style.color = '#6b7280';
+        uploadStatus.style.display = 'inline';
+        uploadStatus.textContent = 'Uploading…';
+        uploadStatus.style.color = '#6b7280';
 
-            try {
-              const fd = new FormData();
-              fd.append('file', file, file.name); // field name matches backend
+        try {
+          const fd = new FormData();
+          fd.append('file', file, file.name); // field name matches backend
 
-              const res  = await fetch('/import/csv', { method: 'POST', body: fd });
-              const data = await res.json();
-              if (!res.ok) throw new Error(data?.error || 'Upload failed');
+          const res  = await fetch('/import/csv', { method: 'POST', body: fd });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data?.error || 'Upload failed');
 
-              const count  = data?.inserted_or_updated ?? 0;
-              const failed = Array.isArray(data?.failed_rows) ? data.failed_rows.length : 0;
+          const count  = data?.inserted_or_updated ?? 0;
+          const failed = Array.isArray(data?.failed_rows) ? data.failed_rows.length : 0;
 
-              uploadStatus.textContent = `✅ Imported ${count} row(s) • ${failed} failed`;
-              uploadStatus.style.color = '#16a34a';
+          uploadStatus.textContent = `✅ Imported ${count} row(s) • ${failed} failed`;
+          uploadStatus.style.color = '#16a34a';
 
-              if (window.refreshLeads) await window.refreshLeads();
-              if (window.autoGeocodeMissing) {
-                window.autoGeocodeMissing({ max: 25, delayMs: 1000 });
-              }
-            } catch (err) {
-              uploadStatus.textContent = `❌ ${err.message || 'Upload error'}`;
-              uploadStatus.style.color = '#dc2626';
-            } finally {
-              setTimeout(() => {
-                uploadStatus.style.display = 'none';
-                uploadStatus.textContent = '';
-                fileInput.value = '';
-              }, 3500);
-            }
+          if (window.refreshLeads) await window.refreshLeads();
+          if (window.autoGeocodeMissing) {
+            window.autoGeocodeMissing({ max: 25, delayMs: 1000 });
+          }
+        } catch (err) {
+          uploadStatus.textContent = `❌ ${err.message || 'Upload error'}`;
+          uploadStatus.style.color = '#dc2626';
+        } finally {
+          setTimeout(() => {
+            uploadStatus.style.display = 'none';
+            uploadStatus.textContent = '';
+            fileInput.value = '';
+          }, 3500);
+        }
+      });
+    }
+
+    // Helper: get IDs for current filtered/visible leads
+    function getFilteredLeadIdsForDelete() {
+      const DS   = window.DS || {};
+      const rows = (DS.state && (DS.state.filtered || DS.state.rawRows)) || [];
+      return rows
+        .map(r => r.id ?? r.ID ?? r.lead_id)
+        .filter(id => id !== null && id !== undefined);
+    }
+
+    // --- Bulk Delete Filtered Leads (Safe mode) wiring ---
+    const deleteFilteredBtn = document.getElementById('deleteFilteredLeadsBtn');
+
+    if (deleteFilteredBtn) {
+      deleteFilteredBtn.addEventListener('click', async () => {
+        const ids = getFilteredLeadIdsForDelete();
+
+        if (!ids.length) {
+          alert('No leads match the current filters, so there is nothing to delete.');
+          return;
+        }
+
+        const ok = window.confirm(
+          `Delete ${ids.length} lead(s) that match the CURRENT filters? This cannot be undone.`
+        );
+        if (!ok) return;
+
+        const originalText = deleteFilteredBtn.textContent;
+        deleteFilteredBtn.disabled = true;
+        deleteFilteredBtn.textContent = 'Deleting…';
+
+        try {
+          const res = await fetch('/leads/bulk-delete-by-ids', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids })
           });
+
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
+
+          const deletedCount = data.deleted ?? ids.length;
+          alert(`Deleted ${deletedCount} lead(s).`);
+
+          if (window.refreshLeads) await window.refreshLeads();
+        } catch (err) {
+          console.error('Bulk delete (filtered) failed', err);
+          alert(`Bulk delete failed: ${err.message || 'Unknown error'}`);
+        } finally {
+          deleteFilteredBtn.disabled = false;
+          deleteFilteredBtn.textContent = originalText;
         }
+      });
+    }
 
-        // Helper: get IDs for current filtered/visible leads
-        function getFilteredLeadIdsForDelete() {
-          const DS   = window.DS || {};
-          const rows = (DS.state && (DS.state.filtered || DS.state.rawRows)) || [];
-          return rows
-            .map(r => r.id ?? r.ID ?? r.lead_id)
-            .filter(id => id !== null && id !== undefined);
-        }
+    // --- ⭐ NEW: Geocode All Missing wiring ---
+    const geocodeAllBtn = document.getElementById('geocodeAllMissingBtn');
 
-        // --- Bulk Delete Filtered Leads (Safe mode) wiring ---
-        const deleteFilteredBtn = document.getElementById('deleteFilteredLeadsBtn');
+    if (geocodeAllBtn) {
+      geocodeAllBtn.addEventListener('click', async () => {
+        const ok = window.confirm(
+          'Geocode ALL leads that are missing latitude/longitude in the database?\n\n' +
+          'This will call the backend geocoder with a short delay between requests ' +
+          'to avoid rate limits.'
+        );
+        if (!ok) return;
 
-        if (deleteFilteredBtn) {
-          deleteFilteredBtn.addEventListener('click', async () => {
-            const ids = getFilteredLeadIdsForDelete();
+        const originalText = geocodeAllBtn.textContent;
+        geocodeAllBtn.disabled = true;
+        geocodeAllBtn.textContent = '⏳ Geocoding…';
 
-            if (!ids.length) {
-              alert('No leads match the current filters, so there is nothing to delete.');
-              return;
-            }
-
-            const ok = window.confirm(
-              `Delete ${ids.length} lead(s) that match the CURRENT filters? This cannot be undone.`
-            );
-            if (!ok) return;
-
-            const originalText = deleteFilteredBtn.textContent;
-            deleteFilteredBtn.disabled = true;
-            deleteFilteredBtn.textContent = 'Deleting…';
-
-            try {
-              const res = await fetch('/leads/bulk-delete-by-ids', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids })
-              });
-
-              const data = await res.json().catch(() => ({}));
-              if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
-
-              const deletedCount = data.deleted ?? ids.length;
-              alert(`Deleted ${deletedCount} lead(s).`);
-
-              if (window.refreshLeads) await window.refreshLeads();
-            } catch (err) {
-              console.error('Bulk delete (filtered) failed', err);
-              alert(`Bulk delete failed: ${err.message || 'Unknown error'}`);
-            } finally {
-              deleteFilteredBtn.disabled = false;
-              deleteFilteredBtn.textContent = originalText;
-            }
+        try {
+          // You can tweak limit/delay here if needed
+          const res = await fetch('/geocode/missing', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ limit: 500, delayMs: 1200 })
           });
+
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            console.error('Bulk geocode failed', res.status, data);
+            alert('Bulk geocode failed – check backend logs.');
+          } else {
+            const updated = data?.result?.updatedCount ?? 0;
+            const skipped = data?.result?.skippedCount ?? 0;
+            alert(`Geocode complete: ${updated} updated, ${skipped} skipped.`);
+
+            if (window.refreshLeads) await window.refreshLeads();
+          }
+        } catch (err) {
+          console.error('Bulk geocode error', err);
+          alert('Bulk geocode failed due to a network error.');
+        } finally {
+          geocodeAllBtn.disabled = false;
+          geocodeAllBtn.textContent = originalText;
         }
-      })();
-    </script>
+      });
+    }
+  })();
+</script>
+
 
 	
 	
@@ -1594,7 +1646,50 @@ function getCI(row, key) {
         }
       });
     });
+
+    // ⭐ Wire row-level geocode buttons
+    $$('#leadTbody .geo-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // don’t trigger row-level events later
+
+        const id = btn.dataset.id;
+        if (!id) return;
+
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '⏳ Geocoding…';
+
+        try {
+          const API_BASE = window.DELI_API_BASE || '';
+          const res = await fetch(`${API_BASE}/leads/${encodeURIComponent(id)}/geocode`, {
+            method: 'POST'
+          });
+
+          const data = await res.json().catch(() => null);
+          if (!res.ok || !data?.success) {
+            console.error('Row geocode failed', res.status, data);
+            alert('Geocode failed – please try again.');
+          } else {
+            // Refresh list/map so ✅ appears
+            if (typeof window.refreshLeads === 'function') {
+              await window.refreshLeads();
+            }
+            if (typeof window.renderListView === 'function') {
+              window.renderListView();
+            }
+          }
+        } catch (err) {
+          console.error('Row geocode error', err);
+          alert('Geocode failed due to a network error.');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      });
+    });
   }
+
 
 
   // Base rows from leads.js
