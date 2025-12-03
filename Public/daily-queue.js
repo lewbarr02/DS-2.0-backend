@@ -1,7 +1,7 @@
 // public/js/daily-queue.js
 document.addEventListener('DOMContentLoaded', () => {
   const listEl = document.getElementById('dq-list');
-    // Daily goals (Finexio targets)
+  // Daily goals (Finexio targets)
   const CALL_GOAL = 50;
   const EMAIL_GOAL = 30;
   const SOCIAL_GOAL = 10;
@@ -15,7 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadingPillEl = document.getElementById('dq-loading-pill');
   const newBatchBtn = document.getElementById('new-batch-btn');
   const todayDateEl = document.getElementById('dq-today-date');
-    // Daily goal bar elements
+
+  // Daily goal bar elements
   const callsBarEl = document.getElementById('dq-goal-calls-bar');
   const emailsBarEl = document.getElementById('dq-goal-emails-bar');
   const socialBarEl = document.getElementById('dq-goal-social-bar');
@@ -23,7 +24,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const callsCountEl = document.getElementById('dq-goal-calls-count');
   const emailsCountEl = document.getElementById('dq-goal-emails-count');
   const socialCountEl = document.getElementById('dq-goal-social-count');
-
 
   let currentBatch = null;
   let items = [];
@@ -99,64 +99,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     return formatDate(ts);
   }
-  
-    // Short money helpers for ARR/AP Spend (e.g. "25M", "2.5B", "750K")
-  function formatShortMoney(value) {
-    if (value == null) return '';
-    const n = Number(value);
-    if (!Number.isFinite(n)) return '';
-
-    const abs = Math.abs(n);
-
-    const fmt = (val) => {
-      // 10M -> "10", 2.5M -> "2.5"
-      return val >= 10 ? Math.round(val).toString()
-                       : (Math.round(val * 10) / 10).toString();
-    };
-
-    if (abs >= 1_000_000_000) return fmt(n / 1_000_000_000) + 'B';
-    if (abs >= 1_000_000)     return fmt(n / 1_000_000)     + 'M';
-    if (abs >= 1_000)         return fmt(n / 1_000)         + 'K';
-    return n.toString();
-  }
-
-  function parseShortMoneyClient(v) {
-    if (v == null) return null;
-
-    let s = String(v).trim();
-    if (!s) return null;
-
-    // strip $ and commas, normalize to lowercase
-    s = s.replace(/[\$,]/g, '').toLowerCase();
-
-    // allow K / M / MM / B suffix
-    const match = s.match(/^([\d.,]+)(k|m{1,2}|b)?$/);
-    if (!match) {
-      const n = Number(s.replace(/,/g, ''));
-      return Number.isFinite(n) ? n : null;
-    }
-
-    let num = parseFloat(match[1].replace(/,/g, ''));
-    if (!Number.isFinite(num)) return null;
-
-    const suffix = match[2];
-    if (suffix === 'k') {
-      num *= 1_000;
-    } else if (suffix === 'm' || suffix === 'mm') {
-      num *= 1_000_000;
-    } else if (suffix === 'b') {
-      num *= 1_000_000_000;
-    }
-
-    return num;
-  }
-
-  // Shared month options for inline Forecast Month dropdown
-  const FORECAST_MONTH_OPTIONS = [
-    'January','February','March','April','May','June',
-    'July','August','September','October','November','December'
-  ];
-
 
   function computeIsDone(item) {
     // Prefer backend flags if present
@@ -171,6 +113,26 @@ document.addEventListener('DOMContentLoaded', () => {
     return ['converted', 'no fit', 'no_fit', 'retired', 'done', 'completed'].includes(s);
   }
 
+  // 🔹 NEW: always show active leads first, then completed/skipped ones
+  function sortItemsForDisplay() {
+    if (!Array.isArray(items)) return;
+
+    items.sort((a, b) => {
+      const aDone = computeIsDone(a) ? 1 : 0;
+      const bDone = computeIsDone(b) ? 1 : 0;
+
+      // Incomplete first, then done ones
+      if (aDone !== bDone) {
+        return aDone - bDone;
+      }
+
+      // Keep natural order within each group if positions exist
+      const aPos = a.position ?? a.item_position ?? 0;
+      const bPos = b.position ?? b.item_position ?? 0;
+      return aPos - bPos;
+    });
+  }
+
   function mapStatusClass(statusRaw) {
     const s = (statusRaw || '').toString().toLowerCase();
     if (s === 'hot') return 'dq-status-hot';
@@ -181,7 +143,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (s === 'research') return 'dq-status-research';
     return 'dq-status-unspecified';
   }
-  
 
   // Make a status label look nice for the pill (e.g. "follow-up" -> "Follow-Up")
   function formatStatusLabelForDisplay(raw) {
@@ -212,15 +173,15 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
   }
-  
-   // Smoothly collapse a card out of the active queue before moving it
+
+  // Smoothly collapse a card out of the active queue before moving it
   function animateCardDone(cardEl, onFinished) {
     if (!cardEl) {
       if (typeof onFinished === 'function') onFinished();
       return;
     }
 
-    // If browser doesn't support transitions for some reason, just finish instantly
+    // If browser doesn't support transitions, just finish instantly
     const supportsTransition =
       'ontransitionend' in window || 'onwebkittransitionend' in window;
 
@@ -229,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Add collapsing class → triggers CSS animation (max-height → 0, fade, slight lift)
+    // Add collapsing class → triggers CSS animation
     cardEl.classList.add('dq-queue-card--collapsing');
 
     const handler = (event) => {
@@ -246,7 +207,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     cardEl.addEventListener('transitionend', handler);
   }
- 
 
   // ———————————————————————
   // Render
@@ -273,8 +233,8 @@ document.addEventListener('DOMContentLoaded', () => {
     updateProgress();
     focusFirstActiveCard();
   }
-  
-   // Handle clicks inside a card (activate card + Done/Skip buttons)
+
+  // Handle clicks inside a card (activate card + Done/Skip buttons)
   function onCardClick(event) {
     const cardEl = event.currentTarget;
     if (!cardEl) return;
@@ -285,13 +245,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const action = actionButton.dataset.action;
       const itemId = cardEl.dataset.itemId;
       if (!itemId) return;
-
-      if (action === 'save-lead') {
-        event.preventDefault();
-        event.stopPropagation();
-        saveLeadInline(itemId, cardEl);
-        return;
-      }
 
       if (action === 'done') {
         event.preventDefault();
@@ -308,13 +261,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-
     // Otherwise, just set this card as the active card
     const cards = listEl.querySelectorAll('.dq-queue-card');
     cards.forEach((c) => c.classList.remove('dq-queue-card--active'));
     cardEl.classList.add('dq-queue-card--active');
   }
- 
 
   function renderCard(item) {
     const isDone = computeIsDone(item);
@@ -324,20 +275,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const card = document.createElement('div');
     card.className = 'dq-queue-card' + (isDone ? ' dq-queue-card--done' : '');
     card.dataset.itemId = item.item_id || item.id || '';
-
-    // Pre-format money + month values
-    const arrDisplay = item.arr != null ? formatShortMoney(item.arr) : '';
-    const apDisplay = item.ap_spend != null ? formatShortMoney(item.ap_spend) : '';
-    const currentForecast = item.forecast_month || '';
-
-    const monthOptionsHtml = `
-      <option value="">Forecast…</option>
-      ${FORECAST_MONTH_OPTIONS.map(m => `
-        <option value="${escapeHtml(m)}" ${m === currentForecast ? 'selected' : ''}>
-          ${escapeHtml(m)}
-        </option>
-      `).join('')}
-    `;
 
     card.innerHTML = `
       <div class="dq-card-header">
@@ -406,26 +343,6 @@ document.addEventListener('DOMContentLoaded', () => {
             <input type="date" class="dq-done-custom-date" />
           </div>
 
-          <!-- 🔹 Inline lead fields (Forecast / ARR / AP Spend) -->
-          <div class="dq-control-group dq-control-lead-fields">
-            <span class="dq-control-label">Lead</span>
-            <select class="dq-edit-forecast-month">
-              ${monthOptionsHtml}
-            </select>
-            <input
-              type="text"
-              class="dq-edit-arr"
-              placeholder="ARR (e.g. 25M)"
-              value="${escapeHtml(arrDisplay)}"
-            />
-            <input
-              type="text"
-              class="dq-edit-ap-spend"
-              placeholder="AP Spend (e.g. 40M)"
-              value="${escapeHtml(apDisplay)}"
-            />
-          </div>
-
           <div class="dq-control-notes">
             <input
               type="text"
@@ -437,7 +354,6 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
 
         <div class="dq-card-actions">
-          <button class="dq-card-btn" data-action="save-lead">💾 Save</button>
           <button class="dq-card-btn" data-action="skip">⏭ Skip</button>
           <button class="dq-card-btn dq-card-btn-primary" data-action="done">✅ Done</button>
         </div>
@@ -448,8 +364,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return card;
   }
 
-
-
   function updateActivityGoals() {
     let calls = 0;
     let emails = 0;
@@ -457,7 +371,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Count only items we actually completed (not skipped)
     items.forEach((item) => {
-      if (!item || !item.is_completed || item.is_skipped) return;
+      if (!item) return;
+
+      // 🔹 NEW: treat both is_completed and is_done as "finished"
+      const finished = item.is_completed || item.is_done;
+      if (!finished || item.is_skipped) return;
+
       const t = (item.activity_type || '').toString().toLowerCase();
       if (t === 'call') calls += 1;
       else if (t === 'email') emails += 1;
@@ -490,8 +409,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-
-
   function updateProgress() {
     const total = items.length;
     const doneCount = items.filter((i) => computeIsDone(i)).length;
@@ -508,19 +425,18 @@ document.addEventListener('DOMContentLoaded', () => {
       progressLabelEl.textContent = '100% complete — You’re finished with this batch 🎉';
       if (finishedEl) finishedEl.style.display = 'flex';
 
-      // NEW → Hide all Done/Skip buttons when batch is finished
+      // Hide all Done/Skip buttons when batch is finished
       const buttons = document.querySelectorAll('.dq-card-actions');
-      buttons.forEach(btn => {
+      buttons.forEach((btn) => {
         btn.style.display = 'none';
       });
-
     } else {
       progressLabelEl.textContent = `${pct}% complete`;
       if (finishedEl) finishedEl.style.display = 'none';
 
       // Ensure actions reappear when new batch loads
       const buttons = document.querySelectorAll('.dq-card-actions');
-      buttons.forEach(btn => {
+      buttons.forEach((btn) => {
         btn.style.display = 'flex';
       });
     }
@@ -528,138 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // 🔹 Also refresh the Calls / Emails / Social goal bars
     updateActivityGoals();
   }
-  
-  async function saveLeadInline(itemId, cardEl) {
-    const item = items.find((i) => String(i.item_id || i.id) === String(itemId));
-    if (!item) {
-      alert('Could not find this lead in the current batch.');
-      return;
-    }
 
-    const leadId = item.lead_id || item.id;
-    if (!leadId) {
-      alert('Missing lead id for this item.');
-      return;
-    }
-
-    // Inline lead fields
-    const forecastSelect = cardEl.querySelector('.dq-edit-forecast-month');
-    const arrInput       = cardEl.querySelector('.dq-edit-arr');
-    const apInput        = cardEl.querySelector('.dq-edit-ap-spend');
-
-    // Touch / status fields we ALSO want to allow saving
-    const statusSelect   = cardEl.querySelector('.dq-done-status');
-    const notesInput     = cardEl.querySelector('.dq-done-notes');
-
-    const forecastRaw = forecastSelect ? forecastSelect.value : '';
-    const arrRaw      = arrInput ? arrInput.value : '';
-    const apRaw       = apInput ? apInput.value : '';
-    const statusRaw   = statusSelect ? statusSelect.value : '';
-    const notesRaw    = notesInput ? notesInput.value : '';
-
-    // 🔹 Build payload with ANY field the user actually changed
-    const payload = {};
-
-    if (forecastRaw) {
-      payload.forecast_month = forecastRaw;
-    }
-    if (arrRaw.trim() !== '') {
-      payload.arr = arrRaw.trim();          // backend parses short money (25M, 40k, etc.)
-    }
-    if (apRaw.trim() !== '') {
-      payload.ap_spend = apRaw.trim();
-    }
-    if (statusRaw) {
-      // e.g. "warm", "follow-up", "converted"
-      payload.status = statusRaw;
-    }
-    if (notesRaw.trim() !== '') {
-      payload.notes = notesRaw.trim();
-    }
-
-    // If literally nothing was changed, bail
-    if (!Object.keys(payload).length) {
-      alert('No lead changes to save. Add Forecast, ARR, AP Spend, Status, or Notes first.');
-      return;
-    }
-
-    try {
-      const res = await fetch(`/update-lead/${encodeURIComponent(leadId)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        console.error('Failed to save lead inline', await res.text());
-        alert('Could not save lead updates. Check console for details.');
-        return;
-      }
-
-      const updated = await res.json();
-
-      // Keep in-memory item in sync with backend
-      if ('forecast_month' in updated) {
-        item.forecast_month = updated.forecast_month;
-        if (item.lead) item.lead.forecast_month = updated.forecast_month;
-        if (forecastSelect) {
-          forecastSelect.value = updated.forecast_month || '';
-        }
-      }
-
-      if ('arr' in updated) {
-        item.arr = updated.arr;
-        if (item.lead) item.lead.arr = updated.arr;
-        if (arrInput) {
-          arrInput.value =
-            updated.arr != null ? formatShortMoney(updated.arr) : '';
-        }
-      }
-
-      if ('ap_spend' in updated) {
-        item.ap_spend = updated.ap_spend;
-        if (item.lead) item.lead.ap_spend = updated.ap_spend;
-        if (apInput) {
-          apInput.value =
-            updated.ap_spend != null ? formatShortMoney(updated.ap_spend) : '';
-        }
-      }
-
-      if ('status' in updated) {
-        item.status = updated.status;
-        if (item.lead) item.lead.status = updated.status;
-
-        // Update status pill immediately
-        const pill = cardEl.querySelector('.dq-status-pill');
-        if (pill) {
-          const displayLabel = formatStatusLabelForDisplay(updated.status);
-          pill.textContent = displayLabel;
-          pill.className = 'dq-status-pill ' + mapStatusClass(updated.status);
-        }
-      }
-
-      if ('notes' in updated && notesInput) {
-        notesInput.value = updated.notes || notesRaw; // keep what user typed
-      }
-
-      // Tiny UX touch: flash the Save button text
-      const saveBtn = cardEl.querySelector('button[data-action="save-lead"]');
-      if (saveBtn) {
-        const original = saveBtn.textContent;
-        saveBtn.textContent = '✅ Saved';
-        setTimeout(() => {
-          saveBtn.textContent = original;
-        }, 900);
-      }
-    } catch (err) {
-      console.error('Error saving lead inline', err);
-      alert('Error reaching the server while saving this lead.');
-    }
-  }
-
-
-
-  
   async function markItemDone(itemId, cardEl) {
     // Pull values from the controls on this specific card
     const activitySelect = cardEl.querySelector('.dq-done-activity');
@@ -693,16 +478,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (nextTouchSelect && nextTouchSelect.value) {
-      const choice = nextTouchSelect.value; // "tomorrow", "3_days", "next_week", "later_this_month", "custom"
+      const choice = nextTouchSelect.value;
 
       if (choice === 'custom') {
         if (customDateInput && customDateInput.value) {
           next_touch_choice = 'custom';
-          // send raw date string; backend can interpret as a date
           next_touch_at = customDateInput.value; // e.g. "2025-11-30"
         }
       } else {
-        // Non-custom options: we just send the symbolic choice
         next_touch_choice = choice;
       }
     }
@@ -732,13 +515,11 @@ document.addEventListener('DOMContentLoaded', () => {
         item.is_completed = true;
         item.is_done = true;
         item.is_skipped = false;
-        item.activity_type = activity_type; // 🔹 remember how we completed this
+        item.activity_type = activity_type; // remember how we completed this
 
         if (new_status) {
-          // update in-memory status so future logic sees it
           item.status = new_status;
 
-          // update the pill on this card immediately
           const pill = cardEl.querySelector('.dq-status-pill');
           if (pill) {
             const displayLabel = formatStatusLabelForDisplay(new_status);
@@ -748,7 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // 🔹 Visually mark as done (for grey styling)…
+      // Visually mark as done…
       cardEl.classList.add('dq-queue-card--done');
 
       // …then animate collapse, and only after that move it to the bottom
@@ -762,8 +543,6 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('Error reaching the server while marking this item as done.');
     }
   }
-
-
 
   async function markItemSkip(itemId, cardEl) {
     try {
@@ -800,8 +579,8 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('Error reaching the server while skipping this item.');
     }
   }
-  
-    // ———————————————————————
+
+  // ———————————————————————
   // Keyboard navigation helpers
   // ———————————————————————
   function getQueueCards() {
@@ -901,28 +680,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  
   // ———————————————————————
-// Custom date dropdown behavior (Step 2)
-// ———————————————————————
-document.addEventListener('change', (event) => {
-  const select = event.target.closest('.dq-done-next-touch');
-  if (!select) return;
+  // Custom date dropdown behavior
+  // ———————————————————————
+  document.addEventListener('change', (event) => {
+    const select = event.target.closest('.dq-done-next-touch');
+    if (!select) return;
 
-  const card = select.closest('.dq-queue-card');
-  if (!card) return;
+    const card = select.closest('.dq-queue-card');
+    if (!card) return;
 
-  const customDateInput = card.querySelector('.dq-done-custom-date');
-  if (!customDateInput) return;
+    const customDateInput = card.querySelector('.dq-done-custom-date');
+    if (!customDateInput) return;
 
-  if (select.value === 'custom') {
-    customDateInput.style.display = 'inline-block';
-  } else {
-    customDateInput.style.display = 'none';
-    customDateInput.value = '';
-  }
-});
-
+    if (select.value === 'custom') {
+      customDateInput.style.display = 'inline-block';
+    } else {
+      customDateInput.style.display = 'none';
+      customDateInput.value = '';
+    }
+  });
 
   // ———————————————————————
   // API calls
@@ -957,6 +734,9 @@ document.addEventListener('change', (event) => {
       currentBatch = data.batch || null;
       items = data.items || [];
 
+      // 🔹 NEW: keep active cards on top when we reload the page
+      sortItemsForDisplay();
+
       renderBatch();
     } catch (err) {
       console.error('Error loading current batch', err);
@@ -988,6 +768,9 @@ document.addEventListener('change', (event) => {
       const data = await res.json();
       currentBatch = data.batch || null;
       items = data.items || [];
+
+      // 🔹 NEW: consistent ordering for new batches too
+      sortItemsForDisplay();
 
       renderBatch();
     } catch (err) {
