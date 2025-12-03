@@ -426,69 +426,6 @@ function unwrapData(payload){
     }
   }
   
-    // ---------- LIST VIEW (Filtered leads + pin status) ----------
-  window.renderListView = function renderListView() {
-    const tbody = document.getElementById("leadListBody");
-    if (!tbody) return;
-
-    const rows = DS.state.filtered || [];
-
-    if (!rows.length) {
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="7" style="text-align:center;padding:0.75rem;">
-            No leads in this filtered time period.
-          </td>
-        </tr>
-      `;
-      return;
-    }
-
-    const html = rows.map((row) => {
-      const id = row.id || row.uuid || "";
-      const coords = normalizeCoords(row);
-      const hasCoords = !!coords;
-
-      const pinIcon = hasCoords ? "✅" : "❌";
-      const pinLabel = hasCoords ? "Geocoded" : "Not geocoded";
-      const geoBtnLabel = hasCoords ? "Geocoded" : "Geocode";
-
-      const company = escapeHtml(row.company || row.Company || "(Company)");
-      const city    = escapeHtml(row.city || row.City || "");
-      const state   = escapeHtml(row.state || row.State || "");
-      const status  = escapeHtml(prettyStatus(row.status || row.Status) || "—");
-      const tags    = escapeHtml(
-        Array.isArray(row.tags)
-          ? row.tags.join(", ")
-          : (row.tags || "")
-      );
-
-      return `
-        <tr data-lead-id="${id}">
-          <td>${company}</td>
-          <td>${city}</td>
-          <td>${state}</td>
-          <td>${status}</td>
-          <td>${tags || "—"}</td>
-          <td title="${pinLabel}" style="text-align:center;">${pinIcon}</td>
-          <td style="text-align:center;">
-            <button
-              class="geo-btn"
-              data-lead-id="${id}"
-              ${hasCoords ? 'disabled aria-disabled="true"' : ""}
-              style="padding:0.25rem 0.6rem;font-size:12px;border-radius:6px;border:1px solid #ccc;cursor:pointer;"
-            >
-              ${geoBtnLabel}
-            </button>
-          </td>
-        </tr>
-      `;
-    }).join("");
-
-    tbody.innerHTML = html;
-  };
-
-
 
 
   function populateFilterOptions() {
