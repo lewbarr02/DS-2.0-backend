@@ -2276,3 +2276,11 @@ app.post('/geocode/missing', async (req, res) => {
   }
 });
 
+// --- SERVER STARTUP ---
+const PORT = process.env.PORT || process.env.PORT0 || 8080;
+
+app.listen(PORT, () => {
+  console.log(`✅ Deli 2.0 backend listening on port ${PORT}`);
+});
+
+
