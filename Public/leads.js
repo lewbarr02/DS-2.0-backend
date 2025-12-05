@@ -247,10 +247,6 @@ function unwrapData(payload){
     const filtered = [];
 
     for (const r of rows) {
-      // ❌ DO NOT require coords here anymore
-      // const coords = normalizeCoords(r);
-      // if (!coords) continue;
-
       // Case-insensitive getter
       const get = (key) => {
         const hit = Object.keys(r).find(
@@ -259,7 +255,7 @@ function unwrapData(payload){
         return hit ? r[hit] : null;
       };
 
-      // Status filter (supports "Warm" and "warm")
+      // -------- STATUS FILTER --------
       const sKey = statusKey(get('status'));
       if (
         !statuses.includes(sKey.charAt(0).toUpperCase() + sKey.slice(1)) &&
@@ -268,27 +264,48 @@ function unwrapData(payload){
         if (!statuses.includes(sKey)) continue;
       }
 
-      // Tag / type / cadence / state / industry filters
-      if (!includesToken(get('tags'), tagSel)) continue;
+      // -------- TAG FILTER (exact tag match, case-insensitive) --------
+      // Support: tags OR tag, string OR array, split on , ; |
+      const rawTagsVal = get('tags') ?? get('tag') ?? '';
+      let rowTags = [];
 
+      if (Array.isArray(rawTagsVal)) {
+        rowTags = rawTagsVal;
+      } else if (rawTagsVal != null && rawTagsVal !== '') {
+        rowTags = String(rawTagsVal)
+          .split(/[;,|]/)
+          .map(t => t.trim())
+          .filter(Boolean);
+      }
+
+      if (tagSel && tagSel !== 'All') {
+        const want = String(tagSel).toLowerCase();
+        const hasTag = rowTags.some(t => t.toLowerCase() === want);
+        if (!hasTag) continue;
+      }
+
+      // -------- TYPE FILTER --------
       if (!includesToken(get('type') || get('lead_type'), typeSel)) continue;
 
+      // -------- CADENCE FILTER --------
       if (
         !includesToken(get('cadence_name'), cadenceSel) &&
         !includesToken(get('cadence'), cadenceSel)
       ) continue;
 
+      // -------- STATE FILTER --------
       if (
         !(stateSel === 'All' ||
           (get('state') || '').toLowerCase() === stateSel.toLowerCase())
       ) continue;
 
+      // -------- INDUSTRY FILTER --------
       if (
         industrySel !== 'All' &&
         (get('industry') || '').toLowerCase() !== industrySel.toLowerCase()
       ) continue;
 
-      // Date filter
+      // -------- DATE FILTER --------
       if (!withinDateRange(r, startStr, endStr)) continue;
 
       // ✅ Keep this row even if it has no lat/lon
@@ -298,6 +315,7 @@ function unwrapData(payload){
     DS.state.filtered = filtered;
     return filtered;
   }
+
 
 
   // ---------- RENDER ----------
@@ -430,33 +448,75 @@ function unwrapData(payload){
 
   function populateFilterOptions() {
     const rows = DS.state.rawRows || [];
-    const uniqueFrom = (key) => Array.from(new Set(
-      rows.map(r => {
-        const hit = Object.keys(r).find(k => k.toLowerCase() === key.toLowerCase());
-        return hit ? (r[hit] || '') : '';
-      }).filter(Boolean)
-    )).sort((a,b)=>(''+a).localeCompare((''+b)));
+
+    const uniqueFrom = (key) =>
+      Array.from(
+        new Set(
+          rows
+            .map((r) => {
+              const hit = Object.keys(r).find(
+                (k) => k.toLowerCase() === key.toLowerCase()
+              );
+              return hit ? (r[hit] || '') : '';
+            })
+            .filter(Boolean)
+        )
+      ).sort((a, b) => ('' + a).localeCompare('' + b));
 
     const setOpts = (el, values) => {
       if (!el) return;
-      el.innerHTML = '<option value="All">All</option>' + values.map(v=>`<option value="${v}">${v}</option>`).join('');
+      el.innerHTML =
+        '<option value="All">All</option>' +
+        values
+          .map((v) => `<option value="${v}">${v}</option>`)
+          .join('');
     };
 
-    setOpts(els.tagFilter(),     Array.from(new Set(rows.flatMap(r => {
-      const hit = Object.keys(r).find(k => k.toLowerCase() === 'tags');
-      const val = hit ? r[hit] : '';
-      return (val ? (''+val).split(',').map(s=>s.trim()).filter(Boolean) : []);
-    })) ).sort((a,b)=>a.localeCompare(b)));
+    // -------- TAG OPTIONS (tags OR tag, string OR array) --------
+    const tagSet = new Set();
 
-    const types = Array.from(new Set([ ...uniqueFrom('type'), ...uniqueFrom('lead_type') ]))
+    rows.forEach((r) => {
+      // Prefer 'tags', fall back to 'tag'
+      const hitKey =
+        Object.keys(r).find((k) => k.toLowerCase() === 'tags') ??
+        Object.keys(r).find((k) => k.toLowerCase() === 'tag');
+
+      if (!hitKey) return;
+
+      const val = r[hitKey];
+      if (!val && val !== 0) return;
+
+      if (Array.isArray(val)) {
+        val.forEach((t) => {
+          const trimmed = String(t).trim();
+          if (trimmed) tagSet.add(trimmed);
+        });
+      } else {
+        String(val)
+          .split(/[;,|]/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .forEach((t) => tagSet.add(t));
+      }
+    });
+
+    const tagValues = Array.from(tagSet).sort((a, b) => a.localeCompare(b));
+    setOpts(els.tagFilter(), tagValues);
+
+    // -------- TYPE OPTIONS --------
+    const types = Array.from(
+      new Set([...uniqueFrom('type'), ...uniqueFrom('lead_type')])
+    )
       .filter(Boolean)
-      .sort((a,b)=>(''+a).localeCompare((''+b)));
+      .sort((a, b) => ('' + a).localeCompare('' + b));
     setOpts(els.typeFilter(), types);
 
+    // -------- CADENCE / STATE / INDUSTRY OPTIONS --------
     setOpts(els.cadenceFilter(), uniqueFrom('cadence_name') || uniqueFrom('cadence'));
-    setOpts(els.stateFilter(),   uniqueFrom('state'));
-	setOpts(els.industryFilter(), uniqueFrom('industry'));
+    setOpts(els.stateFilter(), uniqueFrom('state'));
+    setOpts(els.industryFilter(), uniqueFrom('industry'));
   }
+
 
 function wireDashboard() {
   const rerender = () => {

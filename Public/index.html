@@ -1845,7 +1845,7 @@ function getCI(row, key) {
     });
 
     // React to main dashboard filter changes (from leads.js)
-    ['tagFilter','typeFilter','cadenceFilter','stateFilter','startDate','endDate']
+    ['tagFilter','typeFilter','cadenceFilter','stateFilter','industryFilter','startDate','endDate']
       .map(id => document.getElementById(id))
       .forEach(el => el && el.addEventListener('change', () => window.renderListView()));
   }
