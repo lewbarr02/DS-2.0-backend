@@ -4,9 +4,11 @@ const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });  // 👈 NEW
 const { parse } = require('csv-parse');
 const path = require('path');
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 app.set('json spaces', 2);
