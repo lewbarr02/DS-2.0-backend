@@ -996,16 +996,12 @@ app.post('/api/daily-queue/generate', async (req, res) => {
     }
 
     if (tag) {
-      params.push(tag);
-      // leads.tags is a text[] from the importer – match case-insensitively
-      whereClauses.push(`
-        EXISTS (
-          SELECT 1
-          FROM unnest(COALESCE(l.tags, ARRAY[]::text[])) AS t(tag_value)
-          WHERE LOWER(t.tag_value) = LOWER($${params.length})
-        )
-      `);
+      // Match the tag name inside the lead's stored tags (works for text / json / text[])
+      // We use ILIKE so "afp event" still hits "AFP Event", "AFP 2025", etc.
+      params.push(`%${tag}%`);
+      whereClauses.push(`l.tags::text ILIKE $${params.length}`);
     }
+
 
     const pickSql = `
       WITH candidate AS (
