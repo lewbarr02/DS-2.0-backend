@@ -812,11 +812,18 @@ html, body {
         <button id="exportDailyList">Daily List</button>
         <button id="resetFilters">Reset Filters</button>
       </div>
-      <div>
-        <button id="openSummaryBtn" onclick="location.href='summary.html?range=today'">📊 Open Today’s Summary</button>
-        <button id="startMyDayBtn">🚀 Start My Day (20)</button>
-        <button id="addLeadBtn">➕ Add Lead</button>
-      </div>
+<div>
+  <button id="openSummaryBtn" onclick="location.href='summary.html?range=today'">📊 Open Today’s Summary</button>
+  <button id="startMyDayBtn">🚀 Start My Day (20)</button>
+  <button id="startMyDayEventBtn">🎯 Start My Day (Event Mode)</button>
+
+  <!-- ⭐ NEW: Direct AFP Event Mode button -->
+  <button id="startMyDayAFPBtn">🏟 AFP Event Mode</button>
+
+  <button id="addLeadBtn">➕ Add Lead</button>
+</div>
+
+
       <!-- 📤 CSV Upload -->
       <!-- 📤 CSV Upload -->
       <div id="csvUploadBar" style="margin-top:8px;">
@@ -1888,17 +1895,47 @@ function getCI(row, key) {
 </script>
 
 <script>
-  // Redirect Start My Day → Hybrid Daily Queue (same-origin)
+  // Redirect Start My Day → Daily Queue
+  // Normal mode: mixed stack
+  // Event Mode: tag-locked stack (AFP / IOFM / etc.)
   document.addEventListener('DOMContentLoaded', () => {
-    const btn = document.getElementById('startMyDayBtn');
-    if (!btn) return;
+    const normalBtn = document.getElementById('startMyDayBtn');
+    const eventBtn  = document.getElementById('startMyDayEventBtn');
+    const tagSelect = document.getElementById('tagFilter'); // existing Tag filter dropdown
 
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      window.location.href = '/daily-queue?autostart=1';
-    });
+    // 🚀 Normal mode: ignore tags, just build the best next 20
+    if (normalBtn) {
+      normalBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.location.href = '/daily-queue?autostart=1';
+      });
+    }
+
+    // 🎯 Event Mode: lock Daily Queue to the *current* tag
+    if (eventBtn) {
+      eventBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+
+        if (!tagSelect) {
+          alert('Set a Tag filter first (e.g. AFP Event or IOFM Event).');
+          return;
+        }
+
+        const value = tagSelect.value || '';
+        const trimmed = value.trim();
+
+        if (!trimmed || trimmed.toLowerCase() === 'all') {
+          alert('Choose a specific Tag (e.g. AFP Event or IOFM Event) before starting Event Mode.');
+          return;
+        }
+
+        const url = '/daily-queue?autostart=1&tag=' + encodeURIComponent(trimmed);
+        window.location.href = url;
+      });
+    }
   });
 </script>
+
 
 <script>
 (function () {
