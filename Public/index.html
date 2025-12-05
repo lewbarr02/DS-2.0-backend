@@ -1901,6 +1901,7 @@ function getCI(row, key) {
   document.addEventListener('DOMContentLoaded', () => {
     const normalBtn = document.getElementById('startMyDayBtn');
     const eventBtn  = document.getElementById('startMyDayEventBtn');
+    const afpBtn    = document.getElementById('startMyDayAFPBtn'); // 🏟 new stadium button
     const tagSelect = document.getElementById('tagFilter'); // existing Tag filter dropdown
 
     // 🚀 Normal mode: ignore tags, just build the best next 20
@@ -1933,8 +1934,19 @@ function getCI(row, key) {
         window.location.href = url;
       });
     }
+
+    // 🏟 AFP Event Mode: hard-lock to "AFP Event" tag, regardless of current filter
+    if (afpBtn) {
+      afpBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const afpTag = 'AFP Event';
+        const url = '/daily-queue?autostart=1&tag=' + encodeURIComponent(afpTag);
+        window.location.href = url;
+      });
+    }
   });
 </script>
+
 
 
 <script>
