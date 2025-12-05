@@ -996,11 +996,14 @@ app.post('/api/daily-queue/generate', async (req, res) => {
     }
 
     if (tag) {
-      // Match the tag name inside the lead's stored tags (works for text / json / text[])
-      // We use ILIKE so "afp event" still hits "AFP Event", "AFP 2025", etc.
+      // Match the tag name inside the lead's stored tags array (text[])
+      // Convert the array to a comma-separated string, then ILIKE on that.
       params.push(`%${tag}%`);
-      whereClauses.push(`l.tags::text ILIKE $${params.length}`);
+      whereClauses.push(`
+        COALESCE(array_to_string(l.tags, ','), '') ILIKE $${params.length}
+      `);
     }
+
 
 
     const pickSql = `
