@@ -1766,19 +1766,21 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
       `;
 
       for (const r of normalized) {
-        // base tags from row
-        const tags = Array.isArray(r.tags) ? [...r.tags] : [];
+        // 🔹 Start from CSV tags
+        let tags = Array.isArray(r.tags) ? [...r.tags] : [];
 
         // 🔹 Inject default_tag if provided and not already present (case-insensitive)
         if (defaultTagRaw) {
           const hasDefault = tags.some(
             (t) => String(t).trim().toLowerCase() === defaultTagLower
           );
-          if (!hasDefault) tags.push(defaultTagRaw);
+          if (!hasDefault) {
+            tags.push(defaultTagRaw);
+          }
         }
 
-        // 🔹 Final source: row value > default_source > "csv-import"
-        const finalSource = r.source || defaultSource || 'csv-import';
+        // 🔹 Final source: row source > default_source > "csv-import"
+        const finalSource = r.source || defaultSourceRaw || 'csv-import';
 
         const values = [
           r.name ?? null,
@@ -1816,6 +1818,7 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
 
         await client.query(sql, values);
       }
+
 
       await client.query('COMMIT');
 
