@@ -974,7 +974,7 @@ app.post('/api/daily-queue/generate', async (req, res) => {
     ? req.body.industries.filter(Boolean)
     : [];
 
-  // 🔹 Optional tag filter for Event Mode (e.g. "AFP Event")
+  // 🔹 NEW: optional tag filter for Event Mode (e.g. "AFP Event", "IOFM Event")
   const tag = typeof req.body?.tag === 'string'
     ? req.body.tag.trim()
     : '';
@@ -987,7 +987,7 @@ app.post('/api/daily-queue/generate', async (req, res) => {
     const params = [size];
     const whereClauses = [
       "COALESCE(l.is_retired, false) = false",
-      "LOWER(COALESCE(l.status, '')) NOT IN ('converted','no fit','no_fit')"
+      "LOWER(COALESCE(l.status, '')) NOT IN ('converted','no fit','no_fit')",
     ];
 
     if (industries.length) {
@@ -996,11 +996,11 @@ app.post('/api/daily-queue/generate', async (req, res) => {
     }
 
     if (tag) {
-      // ✅ Safe for text, text[] or jsonb:
-      // cast to text and do a lowercase LIKE on the whole thing
-      params.push(`%${tag.toLowerCase()}%`);
+      // Match the tag name inside the lead's stored tags array (text[])
+      // Convert the array to a comma-separated string, then ILIKE on that.
+      params.push(`%${tag}%`);
       whereClauses.push(`
-        COALESCE(LOWER(l.tags::text), '') LIKE $${params.length}
+        COALESCE(array_to_string(l.tags, ','), '') ILIKE $${params.length}
       `);
     }
 
@@ -1048,18 +1048,18 @@ app.post('/api/daily-queue/generate', async (req, res) => {
         ok: true,
         batch: null,
         items: [],
-        message: tag ? 'no_candidates_for_tag' : 'no_candidates'
+        message: tag ? 'no_candidates_for_tag' : 'no_candidates',
       });
     }
 
+    // 🔧 FIX: do NOT reference non-existent filter_industries column
     const batchSql = `
-      INSERT INTO daily_batches (batch_size, is_completed, filter_industries)
-      VALUES ($1, false, $2)
+      INSERT INTO daily_batches (batch_size, is_completed)
+      VALUES ($1, false)
       RETURNING *;
     `;
     const { rows: batchRows } = await client.query(batchSql, [
       requestedSize,
-      industries.length ? industries : null
     ]);
     const batch = batchRows[0];
 
@@ -1073,8 +1073,8 @@ app.post('/api/daily-queue/generate', async (req, res) => {
       `;
       const { rows: itemRows } = await client.query(itemSql, [
         batch.id,
-        lead.id,
-        i + 1
+        lead.id,          // UUID
+        i + 1,            // position starts at 1
       ]);
       const item = itemRows[0];
 
@@ -1109,7 +1109,7 @@ app.post('/api/daily-queue/generate', async (req, res) => {
         last_activity_at: lead.last_contacted_at || lead.last_touch_at || null,
 
         // full lead object preserved for future use
-        lead
+        lead,
       });
     }
 
@@ -1122,23 +1122,24 @@ app.post('/api/daily-queue/generate', async (req, res) => {
         created_at: batch.created_at,
         batch_size_requested: requestedSize,
         batch_size_actual: actualSize,
-        is_completed: batch.is_completed
+        is_completed: batch.is_completed,
       },
-      items
+      items,
     });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('POST /api/daily-queue/generate error:', err);
-    // 🔍 temporarily surface error for debugging
+    // keep the helpful debug message
     return res.status(500).json({
       ok: false,
       error: 'generate_failed',
-      message: err.message
+      message: err.message,
     });
   } finally {
     client.release();
   }
 });
+
 
 
 
