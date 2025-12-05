@@ -1052,16 +1052,17 @@ if (tag) {
       });
     }
 
-    // 🔧 FIX: do NOT reference non-existent filter_industries column
-    const batchSql = `
-      INSERT INTO daily_batches (batch_size, is_completed)
-      VALUES ($1, false)
-      RETURNING *;
-    `;
-    const { rows: batchRows } = await client.query(batchSql, [
-      requestedSize,
-    ]);
-    const batch = batchRows[0];
+// 🔧 FIX: include batch_date so NOT NULL constraint is satisfied
+const batchSql = `
+  INSERT INTO daily_batches (batch_date, batch_size, is_completed)
+  VALUES (CURRENT_DATE, $1, false)
+  RETURNING *;
+`;
+const { rows: batchRows } = await client.query(batchSql, [
+  requestedSize,
+]);
+const batch = batchRows[0];
+
 
     const items = [];
     for (let i = 0; i < picked.length; i++) {
