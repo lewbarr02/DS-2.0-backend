@@ -224,13 +224,58 @@ function unwrapData(payload){
     return true;
   }
 
+  // Generic helper used for Type / Cadence filters
   function includesToken(fieldVal, selected){
     if(!selected || selected === 'All') return true;
     if(!fieldVal) return false;
     const norm = (''+fieldVal).toLowerCase();
     const want = (''+selected).toLowerCase();
-    // for Tags, allow comma-separated contains
     return norm.split(',').map(t=>t.trim()).includes(want) || norm.includes(want);
+  }
+
+  // 🔹 Normalize tag values from DB (handles JSON-ish strings, arrays, etc.)
+  function extractTags(rawVal) {
+    const tags = [];
+    const add = (v) => {
+      if (v == null) return;
+      const t = String(v).trim();
+      if (t) tags.push(t);
+    };
+
+    if (rawVal == null || rawVal === '') return tags;
+
+    // Already an array
+    if (Array.isArray(rawVal)) {
+      rawVal.forEach(add);
+      return tags;
+    }
+
+    let s = String(rawVal).trim();
+    if (!s) return tags;
+
+    // Try JSON parse first if it looks like JSON
+    if (s[0] === '[' || s[0] === '{') {
+      try {
+        const parsed = JSON.parse(s);
+        if (Array.isArray(parsed)) {
+          parsed.forEach(add);
+          return tags;
+        }
+        if (parsed && typeof parsed === 'object') {
+          Object.values(parsed).forEach(add);
+          return tags;
+        }
+      } catch {
+        // fall through to manual cleanup
+      }
+    }
+
+    // Strip common junk characters like { } "
+    s = s.replace(/[{}"]/g, '');
+
+    // Split on common separators
+    s.split(/[;,|]/).forEach(piece => add(piece));
+    return tags;
   }
 
   function computeFiltered() {
@@ -264,19 +309,9 @@ function unwrapData(payload){
         if (!statuses.includes(sKey)) continue;
       }
 
-      // -------- TAG FILTER (exact tag match, case-insensitive) --------
-      // Support: tags OR tag, string OR array, split on , ; |
+      // -------- TAG FILTER (uses normalized tags) --------
       const rawTagsVal = get('tags') ?? get('tag') ?? '';
-      let rowTags = [];
-
-      if (Array.isArray(rawTagsVal)) {
-        rowTags = rawTagsVal;
-      } else if (rawTagsVal != null && rawTagsVal !== '') {
-        rowTags = String(rawTagsVal)
-          .split(/[;,|]/)
-          .map(t => t.trim())
-          .filter(Boolean);
-      }
+      const rowTags = extractTags(rawTagsVal);
 
       if (tagSel && tagSel !== 'All') {
         const want = String(tagSel).toLowerCase();
@@ -315,6 +350,7 @@ function unwrapData(payload){
     DS.state.filtered = filtered;
     return filtered;
   }
+
 
 
 
@@ -472,32 +508,18 @@ function unwrapData(payload){
           .join('');
     };
 
-    // -------- TAG OPTIONS (tags OR tag, string OR array) --------
+    // -------- TAG OPTIONS (normalize crazy JSON-ish values) --------
     const tagSet = new Set();
 
     rows.forEach((r) => {
-      // Prefer 'tags', fall back to 'tag'
       const hitKey =
         Object.keys(r).find((k) => k.toLowerCase() === 'tags') ??
         Object.keys(r).find((k) => k.toLowerCase() === 'tag');
 
       if (!hitKey) return;
 
-      const val = r[hitKey];
-      if (!val && val !== 0) return;
-
-      if (Array.isArray(val)) {
-        val.forEach((t) => {
-          const trimmed = String(t).trim();
-          if (trimmed) tagSet.add(trimmed);
-        });
-      } else {
-        String(val)
-          .split(/[;,|]/)
-          .map((s) => s.trim())
-          .filter(Boolean)
-          .forEach((t) => tagSet.add(t));
-      }
+      const tags = extractTags(r[hitKey]);
+      tags.forEach((t) => tagSet.add(t));
     });
 
     const tagValues = Array.from(tagSet).sort((a, b) => a.localeCompare(b));
@@ -512,10 +534,14 @@ function unwrapData(payload){
     setOpts(els.typeFilter(), types);
 
     // -------- CADENCE / STATE / INDUSTRY OPTIONS --------
-    setOpts(els.cadenceFilter(), uniqueFrom('cadence_name') || uniqueFrom('cadence'));
+    setOpts(
+      els.cadenceFilter(),
+      uniqueFrom('cadence_name') || uniqueFrom('cadence')
+    );
     setOpts(els.stateFilter(), uniqueFrom('state'));
     setOpts(els.industryFilter(), uniqueFrom('industry'));
   }
+
 
 
 function wireDashboard() {
