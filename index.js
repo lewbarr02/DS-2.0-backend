@@ -965,13 +965,19 @@ function normalizeBatchSize(raw) {
 }
 
 // POST /api/daily-queue/generate
-// Body: { batch_size?: number, industries?: string[] }
+// Body: { batch_size?: number, industries?: string[], tag?: string }
 app.post('/api/daily-queue/generate', async (req, res) => {
   const rawSize = req.body?.batch_size;
   const size = normalizeBatchSize(rawSize);
+
   const industries = Array.isArray(req.body?.industries)
     ? req.body.industries.filter(Boolean)
     : [];
+
+  // 🔹 NEW: optional tag filter for Event Mode (e.g. "AFP Event", "IOFM Event")
+  const tag = typeof req.body?.tag === 'string'
+    ? req.body.tag.trim()
+    : '';
 
   const client = await pool.connect();
   try {
@@ -979,10 +985,26 @@ app.post('/api/daily-queue/generate', async (req, res) => {
 
     // 1) Pick candidate leads according to priority rules
     const params = [size];
-    let industryFilterSql = '';
+    const whereClauses = [
+      "COALESCE(l.is_retired, false) = false",
+      "LOWER(COALESCE(l.status, '')) NOT IN ('converted','no fit','no_fit')",
+    ];
+
     if (industries.length) {
       params.push(industries);
-      industryFilterSql = 'AND l.industry = ANY($2)';
+      whereClauses.push(`l.industry = ANY($${params.length})`);
+    }
+
+    if (tag) {
+      params.push(tag);
+      // leads.tags is a text[] from the importer – match case-insensitively
+      whereClauses.push(`
+        EXISTS (
+          SELECT 1
+          FROM unnest(COALESCE(l.tags, ARRAY[]::text[])) AS t(tag_value)
+          WHERE LOWER(t.tag_value) = LOWER($${params.length})
+        )
+      `);
     }
 
     const pickSql = `
@@ -1001,56 +1023,57 @@ app.post('/api/daily-queue/generate', async (req, res) => {
           CASE
             WHEN l.next_touch_at IS NOT NULL AND l.next_touch_at <= NOW() THEN 0
             WHEN l.last_touch_at IS NULL                                  THEN 1
-            WHEN l.last_touch_at <= NOW() - INTERVAL '4 days'            THEN 2
+            WHEN l.last_touch_at <= NOW() - INTERVAL '4 days'             THEN 2
             ELSE 3
           END AS touch_rank
         FROM leads l
-        WHERE COALESCE(l.is_retired, false) = false
-          AND LOWER(COALESCE(l.status, '')) NOT IN ('converted','no fit','no_fit')
-          ${industryFilterSql}
-
+        WHERE
+          ${whereClauses.join('\n          AND ')}
       )
       SELECT *
       FROM candidate
       ORDER BY
         status_rank ASC,
         touch_rank ASC,
-        COALESCE(last_touch_at, '1970-01-01'::timestamptz) ASC
+        COALESCE(last_touch_at, '1970-01-01'::timestamptz) ASC,
+        created_at ASC
       LIMIT $1;
     `;
 
     const { rows: picked } = await client.query(pickSql, params);
-    if (!picked.length) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        ok: false,
-        error: 'no_candidates',
-        message: 'No eligible leads found for a new daily queue.',
-      });
-    }
 
     const requestedSize = size;
     const actualSize = picked.length;
 
-    // 2) Create batch row
-    const batchSql = `
-      INSERT INTO daily_batches (batch_date, batch_size)
-      VALUES (CURRENT_DATE, $1)
-      RETURNING id, created_at, batch_date, batch_size, is_completed;
-    `;
+    if (!picked.length) {
+      await client.query('ROLLBACK');
+      return res.json({
+        ok: true,
+        batch: null,
+        items: [],
+        message: 'no_candidates',
+      });
+    }
 
-    const { rows: batchRows } = await client.query(batchSql, [requestedSize]);
+    const batchSql = `
+      INSERT INTO daily_batches (batch_size, is_completed, filter_industries)
+      VALUES ($1, false, $2)
+      RETURNING *;
+    `;
+    const { rows: batchRows } = await client.query(batchSql, [
+      requestedSize,
+      industries.length ? industries : null,
+    ]);
     const batch = batchRows[0];
 
-    // 3) Insert items
-    const itemSql = `
-      INSERT INTO daily_batch_items (batch_id, lead_id, position)
-      VALUES ($1, $2, $3)
-      RETURNING id, batch_id, lead_id, position, is_completed, is_skipped;
-    `;
     const items = [];
     for (let i = 0; i < picked.length; i++) {
       const lead = picked[i];
+      const itemSql = `
+        INSERT INTO daily_batch_items (batch_id, lead_id, position, is_completed, is_skipped)
+        VALUES ($1, $2, $3, false, false)
+        RETURNING *;
+      `;
       const { rows: itemRows } = await client.query(itemSql, [
         batch.id,
         lead.id,          // UUID
@@ -1058,43 +1081,40 @@ app.post('/api/daily-queue/generate', async (req, res) => {
       ]);
       const item = itemRows[0];
 
-    items.push({
-      // Batch item metadata
-      item_id: item.id,
-      batch_id: item.batch_id,
-      lead_id: item.lead_id,
-      position: item.position,
-      is_completed: item.is_completed,
-      is_skipped: item.is_skipped,
+      items.push({
+        // Batch item metadata
+        item_id: item.id,
+        batch_id: item.batch_id,
+        lead_id: item.lead_id,
+        position: item.position,
+        is_completed: item.is_completed,
+        is_skipped: item.is_skipped,
 
-      // 🔽 Flattened lead fields for Daily Queue cards
-      id: lead.id,
-      name: lead.name,
-      company: lead.company,
-      city: lead.city,
-      state: lead.state,
-      status: lead.status,
-      industry: lead.industry,
+        // 🔽 Flattened lead fields for Daily Queue cards
+        id: lead.id,
+        name: lead.name,
+        company: lead.company,
+        city: lead.city,
+        state: lead.state,
+        status: lead.status,
+        industry: lead.industry,
 
-      // key revenue / planning fields
-      forecast_month: lead.forecast_month,
-      lead_type:      lead.lead_type,
-      arr:            lead.arr,
-      ap_spend:       lead.ap_spend,
+        // key revenue / planning fields
+        forecast_month: lead.forecast_month,
+        lead_type:      lead.lead_type,
+        arr:            lead.arr,
+        ap_spend:       lead.ap_spend,
 
-      // touch fields
-      last_touch_at:  lead.last_touch_at,
-      next_touch_at:  lead.next_touch_at,
-      next_action_at: lead.next_action_at,
-      // fallback for “Last touch” if needed
-      last_activity_at: lead.last_contacted_at || lead.last_touch_at || null,
+        // touch fields
+        last_touch_at:  lead.last_touch_at,
+        next_touch_at:  lead.next_touch_at,
+        next_action_at: lead.next_action_at,
+        last_activity_at: lead.last_contacted_at || lead.last_touch_at || null,
 
-      // full lead object preserved for future use
-      lead,
-    });
-
+        // full lead object preserved for future use
+        lead,
+      });
     }
-
 
     await client.query('COMMIT');
 
@@ -1117,6 +1137,7 @@ app.post('/api/daily-queue/generate', async (req, res) => {
     client.release();
   }
 });
+
 
 // GET /api/daily-queue/current
 app.get('/api/daily-queue/current', async (_req, res) => {
