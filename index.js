@@ -1552,165 +1552,113 @@ app.post('/api/daily-queue/item/:id/skip', async (req, res) => {
  * Minimal required: Name, Company
  */
 const REQUIRED_HEADERS = ['name', 'company'];
-const OPTIONAL_HEADERS = [
-  'email',
-  'industry','owner','city','state','status','tags','cadence name','source','source channel',
-  'conversion stage','arr','ap spend','size','obstacle','net new','self sourced','engagement score',
-  'last contacted at','next action at','last status change','notes','latitude','longitude',
-  'forecast month','lead type','website'
-];
 
-const ALL_HEADERS = [...REQUIRED_HEADERS, ...OPTIONAL_HEADERS];
-
-// Map CSV -> DB columns
-const FIELD_MAP = {
-  'name'          : 'name',
-  'email'         : 'email',
-  'company'       : 'company',
-  'industry'      : 'industry',
-  'owner'         : 'owner',
-  'city'          : 'city',
-  'state'         : 'state',
-  'status'        : 'status',
-  'tags'          : 'tags',
-  'cadence name'  : 'cadence_name',
-  'source'        : 'source',
-  'source channel': 'source_channel',
-  'conversion stage': 'conversion_stage',
-  'arr'           : 'arr',
-  'ap spend'      : 'ap_spend',
-  'size'          : 'size',
-  'obstacle'      : 'obstacle',
-  'net new'       : 'net_new',
-  'self sourced'  : 'self_sourced',
-  'engagement score': 'engagement_score',
-  'last contacted at': 'last_contacted_at',
-  'next action at': 'next_action_at',
-  'last status change': 'last_status_change',
-  'notes'         : 'notes',
-  'latitude'      : 'latitude',
-  'longitude'     : 'longitude',
-  'forecast month': 'forecast_month',
-  'lead type'     : 'lead_type',
-  'website'       : 'website'
-};
-
-
-// --- Status normalization ---
-const ALLOWED_STATUS = new Set([
-  'converted','hot','warm','cold','research','follow-up','unspecified'
-]);
-
-function normalizeStatus(v) {
-  const s = (v ?? '').toString().trim().toLowerCase();
-  const aliases = {
-    'wam': 'warm',
-    'wrm': 'warm',
-    'w': 'warm',
-    'h': 'hot',
-    'c': 'cold',
-    'r': 'research',
-    'prospect': 'research',
-    'followup': 'follow-up',
-    'follow up': 'follow-up',
-    '': 'unspecified'
-  };
-  const mapped = aliases[s] || s;
-  return ALLOWED_STATUS.has(mapped) ? mapped : 'unspecified';
+// Normalize/clean status strings ("Hot", "hot ", "HOT" → "hot", etc.)
+function normalizeStatus(raw) {
+  if (!raw) return null;
+  return String(raw)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/-/g, '_');
 }
 
-// Parse money-ish input like "25000000", "25M", "2.5m", "10k", "1B"
-function parseShortMoney(v) {
-  if (v == null) return null;
-
-  let s = String(v).trim();
-  if (!s) return null;
-
-  // strip $ and commas, normalize to lowercase
-  s = s.replace(/[\$,]/g, '').toLowerCase();
-
-  // allow K / M / MM / B suffix
-  const match = s.match(/^([\d.,]+)(k|m{1,2}|b)?$/);
-  if (!match) {
-    const n = Number(s.replace(/,/g, ''));
-    return Number.isFinite(n) ? n : null;
+// Take a raw CSV row with arbitrary header casing and map into our DB shape
+function normalizeRow(rowRaw) {
+  const row = {};
+  for (const [k, v] of Object.entries(rowRaw)) {
+    row[String(k).toLowerCase()] = v;
   }
 
-  let num = parseFloat(match[1].replace(/,/g, ''));
-  if (!Number.isFinite(num)) return null;
-
-  const suffix = match[2];
-  if (suffix === 'k') {
-    num *= 1_000;
-  } else if (suffix === 'm' || suffix === 'mm') {
-    num *= 1_000_000;
-  } else if (suffix === 'b') {
-    num *= 1_000_000_000;
-  }
-
-  return num;
-}
-
-// CSV helper now just delegates to the new parser
-function toNumber(v) {
-  return parseShortMoney(v);
-}
-
-function toBool(v) {
-  if (v == null) return false;
-  const s = String(v).trim().toLowerCase();
-  return ['true','yes','y','1','t'].includes(s);
-}
-function toDate(v) {
-  if (!v) return null;
-  const d = new Date(v);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-
-
-// storage in memory is fine for <10MB CSVs; switch to disk if needed
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
-
-/** Normalize a single CSV row into DB-ready shape */
-function normalizeRow(rowObj) {
-  const obj = {};
-  // copy mapped fields, trimming strings
-  for (const [csvKey, dbKey] of Object.entries(FIELD_MAP)) {
-    const v = rowObj[csvKey] ?? rowObj[String(csvKey).toLowerCase()];
-    if (v === undefined) continue;
-
-    if (dbKey === 'tags') {
-      // split on comma or semicolon into text[]
-      if (typeof v === 'string' && v.trim() !== '') {
-        obj.tags = v.split(/[;,]/g).map(s => s.trim()).filter(Boolean);
-      } else {
-        obj.tags = []; // never null
-      }
-    } else if (['arr','ap_spend','engagement_score'].includes(dbKey)) {
-      obj[dbKey] = toNumber(v);
-    } else if (['latitude','longitude'].includes(dbKey)) {
-      const num = String(v).trim();
-      obj[dbKey] = num === '' || isNaN(Number(num)) ? null : Number(num);
-    } else if (['net_new','self_sourced'].includes(dbKey)) {
-      obj[dbKey] = toBool(v);
-    } else if (['last_contacted_at','next_action_at','last_status_change'].includes(dbKey)) {
-      obj[dbKey] = toDate(v);
-    } else {
-      const s = typeof v === 'string' ? v.trim() : v;
-      obj[dbKey] = s === '' ? null : s;
+  const mustExist = (key) => {
+    const val = row[key];
+    if (val == null || String(val).trim() === '') {
+      throw new Error(`Missing required field: ${key}`);
     }
+    return String(val).trim();
+  };
+
+  const pick = (key) => {
+    const val = row[key];
+    if (val == null) return null;
+    const s = String(val).trim();
+    return s === '' ? null : s;
+  };
+
+  const toNumber = (key) => {
+    const val = row[key];
+    if (val == null || String(val).trim() === '') return null;
+    const cleaned = String(val).replace(/[$,]/g, '').trim();
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const toBool = (key) => {
+    const val = row[key];
+    if (val == null) return false;
+    const s = String(val).trim().toLowerCase();
+    if (['true', 'yes', '1', 'y'].includes(s)) return true;
+    if (['false', 'no', '0', 'n'].includes(s)) return false;
+    return false;
+  };
+
+  const toDate = (key) => {
+    const val = row[key];
+    if (!val) return null;
+    const d = new Date(val);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
+  // Required base fields
+  const name    = mustExist('name');
+  const company = mustExist('company');
+
+  // Tags: either comma-separated string or already an array-ish
+  let tags = [];
+  const rawTags = row['tags'];
+  if (Array.isArray(rawTags)) {
+    tags = rawTags
+      .map((t) => String(t).trim())
+      .filter(Boolean);
+  } else if (typeof rawTags === 'string') {
+    tags = rawTags
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
   }
 
-  // enforce required
-  if (!obj.name || !obj.company) {
-    throw new Error('Missing required fields: name, company');
-  }
-
-  // status cleanup if present
-  if (obj.status) obj.status = normalizeStatus(obj.status);
-
-  return obj;
+  return {
+    zoominfo_id: pick('zoominfo_id') || pick('zoominfo id') || null,
+    name,
+    email: pick('email'),
+    company,
+    industry: pick('industry'),
+    owner: pick('owner'),
+    city: pick('city'),
+    state: pick('state'),
+    status: normalizeStatus(pick('status')),
+    tags,
+    cadence_name: pick('cadence name'),
+    source: pick('source'),
+    source_channel: pick('source channel'),
+    conversion_stage: pick('conversion stage'),
+    arr: toNumber('arr'),
+    ap_spend: toNumber('ap spend'),
+    size: pick('size'),
+    obstacle: pick('obstacle'),
+    net_new: toBool('net new'),
+    self_sourced: toBool('self sourced'),
+    engagement_score: toNumber('engagement score'),
+    last_contacted_at: toDate('last contacted at'),
+    next_action_at: toDate('next action at'),
+    last_status_change: toDate('last status change'),
+    notes: pick('notes'),
+    latitude: toNumber('latitude'),
+    longitude: toNumber('longitude'),
+    forecast_month: pick('forecast month'),
+    lead_type: pick('lead type'),
+    website: pick('website'),
+  };
 }
 
 // Template download (keeps Notes near end; Lat/Lon last-ish)
@@ -1734,8 +1682,8 @@ app.get('/import/template', (_req, res) => {
   res.send(header + '\n' + body + '\n');
 });
 
-
-// Upload & import
+// Upload & import CSV (Deli-ready format)
+// 🔹 NEW: supports ?default_source=. & ?default_tag=. query params
 app.post('/import/csv', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -1787,6 +1735,11 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'All rows failed validation.', examples: badExamples });
     }
 
+    // 🔹 NEW: defaults from query string
+    const defaultSource = (req.query.default_source || '').trim();
+    const defaultTagRaw = (req.query.default_tag || '').trim();
+    const defaultTagLower = defaultTagRaw.toLowerCase();
+
     // ---------- DB transaction ----------
     const client = await pool.connect();
     try {
@@ -1811,6 +1764,20 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
       `;
 
       for (const r of normalized) {
+        // base tags from row
+        const tags = Array.isArray(r.tags) ? [...r.tags] : [];
+
+        // 🔹 Inject default_tag if provided and not already present (case-insensitive)
+        if (defaultTagRaw) {
+          const hasDefault = tags.some(
+            (t) => String(t).trim().toLowerCase() === defaultTagLower
+          );
+          if (!hasDefault) tags.push(defaultTagRaw);
+        }
+
+        // 🔹 Final source: row value > default_source > "csv-import"
+        const finalSource = r.source || defaultSource || 'csv-import';
+
         const values = [
           r.name ?? null,
           r.email ?? null,
@@ -1820,9 +1787,9 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
           r.city ?? null,
           r.state ?? null,
           normalizeStatus(r.status),
-          Array.isArray(r.tags) ? r.tags : [],
+          tags,
           r.cadence_name ?? null,
-          r.source ?? 'csv-import',
+          finalSource,
           r.source_channel ?? null,
           r.conversion_stage ?? null,
           r.arr ?? null,
@@ -1845,7 +1812,6 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
           new Date()  // updated_at
         ];
 
-
         await client.query(sql, values);
       }
 
@@ -1865,18 +1831,18 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
       });
     } catch (err) {
       await client.query('ROLLBACK');
-      return res.status(500).json({
-        error: err.message || 'Import failed during database transaction.',
-        detail: err.detail, code: err.code, hint: err.hint, position: err.position
-      });
+      console.error('Error inserting CSV rows into leads:', err);
+      return res.status(500).json({ error: 'Failed to import CSV into leads table.' });
     } finally {
       client.release();
     }
   } catch (err) {
-    console.error('IMPORT ERR:', err);
-    return res.status(400).json({ error: err.message, detail: err.detail, code: err.code });
+    console.error('Error parsing CSV:', err);
+    return res.status(500).json({ error: 'Failed to parse CSV.' });
   }
 });
+
+
 
 
 // --- UPDATE A LEAD (Safe UPSERT; now logs status history) ---

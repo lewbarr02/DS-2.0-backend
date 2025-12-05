@@ -818,7 +818,46 @@ html, body {
         <button id="addLeadBtn">➕ Add Lead</button>
       </div>
       <!-- 📤 CSV Upload -->
+      <!-- 📤 CSV Upload -->
       <div id="csvUploadBar" style="margin-top:8px;">
+
+        <!-- NEW: defaults for CSV imports -->
+        <div style="
+          display:flex;
+          flex-wrap:wrap;
+          gap:8px;
+          align-items:flex-end;
+          margin-bottom:6px;
+        ">
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <label for="csvDefaultSource"
+                   style="font-size:11px; color:#6b7280;">
+              Source (optional)
+            </label>
+            <input
+              id="csvDefaultSource"
+              type="text"
+              placeholder="e.g. Conference"
+              style="font-size:12px; padding:4px 6px;
+                     border-radius:6px; border:1px solid #d1d5db;"
+            />
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <label for="csvDefaultTag"
+                   style="font-size:11px; color:#6b7280;">
+              Tag for all rows (optional)
+            </label>
+            <input
+              id="csvDefaultTag"
+              type="text"
+              placeholder="e.g. AFP Event"
+              style="font-size:12px; padding:4px 6px;
+                     border-radius:6px; border:1px solid #d1d5db;"
+            />
+          </div>
+        </div>
+
         <button
           id="uploadCsvBtn"
           style="padding:6px 10px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">
@@ -836,6 +875,7 @@ html, body {
           🗑️ Delete Filtered Leads (Safe)
         </button>
       </div>
+
 
 
 	  
@@ -1128,12 +1168,36 @@ html, body {
           const fd = new FormData();
           fd.append('file', file, file.name); // field name matches backend
 
-          const res  = await fetch('/import/csv', { method: 'POST', body: fd });
+          // 🔹 NEW: grab default Source + Tag from the new inputs
+          const defaultSourceInput = document.getElementById('csvDefaultSource');
+          const defaultTagInput    = document.getElementById('csvDefaultTag');
+
+          const defaultSource = defaultSourceInput
+            ? defaultSourceInput.value.trim()
+            : '';
+          const defaultTag = defaultTagInput
+            ? defaultTagInput.value.trim()
+            : '';
+
+          // Build URL with optional query params
+          const params = new URLSearchParams();
+          if (defaultSource) params.set('default_source', defaultSource);
+          if (defaultTag)    params.set('default_tag', defaultTag);
+
+          let url = '/import/csv';
+          const qs = params.toString();
+          if (qs) {
+            url += `?${qs}`;
+          }
+
+          const res  = await fetch(url, { method: 'POST', body: fd });
           const data = await res.json();
           if (!res.ok) throw new Error(data?.error || 'Upload failed');
 
-          const count  = data?.inserted_or_updated ?? 0;
-          const failed = Array.isArray(data?.failed_rows) ? data.failed_rows.length : 0;
+          const count = data?.inserted_or_updated ?? 0;
+          const failed =
+            data?.failed ??
+            (Array.isArray(data?.failed_rows) ? data.failed_rows.length : 0);
 
           uploadStatus.textContent = `✅ Imported ${count} row(s) • ${failed} failed`;
           uploadStatus.style.color = '#16a34a';
@@ -1153,6 +1217,7 @@ html, body {
           }, 3500);
         }
       });
+
     }
 
     // Helper: get IDs for current filtered/visible leads
