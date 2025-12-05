@@ -28,9 +28,15 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentBatch = null;
   let items = [];
 
-  // Read any query parameters (e.g., /daily-queue?autostart=1)
+  // Read any query parameters (e.g. /daily-queue?autostart=1&tag=AFP%20Event)
   const urlParams = new URLSearchParams(window.location.search);
   const autoStart = urlParams.get('autostart') === '1';
+
+  // 🔹 If this page was opened in Event Mode, lock the Daily Queue
+  // to that single tag for the entire session (all batches).
+  const batchTagRaw = urlParams.get('tag');
+  const batchTag = batchTagRaw && batchTagRaw.trim() ? batchTagRaw.trim() : null;
+
 
   // ———————————————————————
   // Helpers
@@ -705,6 +711,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // API calls
   // ———————————————————————
   async function loadCurrentBatch() {
+    // 🎯 Special case: Event Mode with autostart
+    // If we came here via /daily-queue?autostart=1&tag=..., do NOT reuse
+    // whatever "current" batch exists. Instead, force a fresh tag-locked batch.
+    if (batchTag && autoStart) {
+      await generateNewBatch();
+      return;
+    }
+
     toggleLoading(true);
     try {
       const res = await fetch('/api/daily-queue/current', {
@@ -746,18 +760,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+
   async function generateNewBatch() {
     toggleLoading(true);
     try {
       // For now, fixed 20 as you requested.
+      // If batchTag is set, this becomes "Event Mode" (tag-only leads).
       const res = await fetch('/api/daily-queue/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           batch_size: 20,
           industries: null,
+          tag: batchTag,   // 🔹 NEW: optional tag filter for Event Mode
         }),
       });
+
 
       if (!res.ok) {
         console.error('Failed to generate batch', await res.text());
