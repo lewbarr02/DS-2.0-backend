@@ -995,14 +995,14 @@ app.post('/api/daily-queue/generate', async (req, res) => {
       whereClauses.push(`l.industry = ANY($${params.length})`);
     }
 
-    if (tag) {
-      // Match the tag name inside the lead's stored tags array (text[])
-      // Convert the array to a comma-separated string, then ILIKE on that.
-      params.push(`%${tag}%`);
-      whereClauses.push(`
-        COALESCE(array_to_string(l.tags, ','), '') ILIKE $${params.length}
+if (tag) {
+  // Match the tag name inside the lead's tags field (stored as text)
+  params.push(`%${tag}%`);
+  whereClauses.push(`
+        COALESCE(l.tags::text, '') ILIKE $${params.length}
       `);
-    }
+}
+
 
     const pickSql = `
       WITH candidate AS (
@@ -1805,7 +1805,7 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
         }
 
         // 🔹 Final source: row source > default_source > "csv-import"
-        const finalSource = r.source || defaultSourceRaw || 'csv-import';
+        const finalSource = r.source || defaultSource || 'csv-import';
 
         const values = [
           r.name ?? null,
