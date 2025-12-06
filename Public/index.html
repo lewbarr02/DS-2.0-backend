@@ -2390,6 +2390,7 @@ function getCI(row, key) {
 
 
 
+// ===== Pull AI summary + band notes from /summary and render into Presentation Mode =====
 async function loadPresentationBandNotesFromSummary() {
   try {
     const fromInput = document.getElementById('startDate');
@@ -2424,40 +2425,28 @@ async function loadPresentationBandNotesFromSummary() {
     }
 
     const data = await res.json();
+    console.log('[Presentation AI] Summary payload:', data);
 
-    // ---- Mini “Waiting for data / upgrades / downgrades” block ----
+    // 1) Mini 3-line AI block at the top
     try {
       renderPresentationMiniSummary(data);
     } catch (err) {
       console.warn('[Presentation AI] Mini summary render failed:', err);
     }
 
-    // ---- Per-band notes (Cold / Follow-Up / Warm / Hot / Converted) ----
-    const notes = (data && data.ai_band_notes) || {};
-
-    const coldNote      = notes.cold       || 'No AI note for Cold leads yet.';
-    const followNote    = notes.follow_up  || 'No AI note for Follow-Up leads yet.';
-    const warmNote      = notes.warm       || 'No AI note for Warm leads yet.';
-    const hotNote       = notes.hot        || 'No AI note for Hot leads yet.';
-    const convertedNote = notes.converted  || 'No AI note for Converted leads yet.';
-
-    const elCold      = document.getElementById('presentation_cold_note');
-    const elFollow    = document.getElementById('presentation_followup_note');
-    const elWarm      = document.getElementById('presentation_warm_note');
-    const elHot       = document.getElementById('presentation_hot_note');
-    const elConv      = document.getElementById('presentation_converted_note');
-
-    if (elCold)   elCold.textContent   = coldNote;
-    if (elFollow) elFollow.textContent = followNote;
-    if (elWarm)   elWarm.textContent   = warmNote;
-    if (elHot)    elHot.textContent    = hotNote;
-    if (elConv)   elConv.textContent   = convertedNote;
-
-    console.log('[Presentation AI] Band notes updated from /summary.');
+    // 2) Per-band notes (Cold / Follow-Up / Warm / Hot / Converted)
+    try {
+      const notes = (data && data.ai_band_notes) || {};
+      renderPresentationBandNotes(notes);
+      console.log('[Presentation AI] Band notes updated from /summary.');
+    } catch (err) {
+      console.warn('[Presentation AI] Band notes render failed:', err);
+    }
   } catch (err) {
     console.error('[Presentation AI notes/summary failed]:', err);
   }
 }
+
 
 
 
