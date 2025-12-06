@@ -9,6 +9,13 @@ const { parse } = require('csv-parse');
 const path = require('path');
 const app = express();
 
+// ---- OPENAI SDK ----
+import OpenAI from "openai";
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+
 app.use(cors());
 app.use(express.json());
 app.set('json spaces', 2);
@@ -224,6 +231,54 @@ function qpCountMode(val) {
   return 'leads';
 }
 
+// =============================================
+// AI SUMMARY GENERATOR (Option B - Narrative AI)
+// =============================================
+async function generateAISummary(metrics, range, leads) {
+  try {
+    const prompt = `
+You are an expert BDR analyst generating a clear, leadership-ready summary.
+
+Date Range: ${range.from} to ${range.to}
+
+Metrics:
+- Total Touches: ${metrics.activity.total_touches}
+- Calls: ${metrics.activity.calls}
+- Emails: ${metrics.activity.emails}
+- Social: ${metrics.activity.social}
+- Upgrades: ${metrics.pipeline.upgrades}
+- Downgrades: ${metrics.pipeline.downgrades}
+- Strongest Region: ${metrics.regions.strongest?.key || "None"}
+- Weakest Region: ${metrics.regions.weakest?.key || "None"}
+
+Instructions:
+Write a short, polished summary in 4 parts:
+1) One opening sentence about traction this period
+2) One line about upgrades/downgrades
+3) One line about the strongest & weakest regions
+4) One paragraph of insights tying everything together
+
+Keep it concise. No markdown. No bullet points. Plain text only.
+    `;
+
+    const response = await client.chat.completions.create({
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      temperature: 0.4,
+      max_tokens: 300,
+      messages: [
+        { role: "system", content: "You produce clean, executive-ready summaries." },
+        { role: "user", content: prompt }
+      ]
+    });
+
+    return response.choices[0].message?.content || "";
+  } catch (err) {
+    console.error("AI Summary Error:", err);
+    return "AI summary unavailable.";
+  }
+}
+
+
 
 
 // === SUMMARY DASHBOARD (Finexio BDR Traction Engine) ===
@@ -231,10 +286,7 @@ function qpCountMode(val) {
 app.get('/summary', async (req, res) => {
   let client;
   try {
-	      // --- TEMP DEBUG LOGS: check OpenAI env vars ---
-    console.log("🔍 OpenAI URL:", process.env.OPENAI_API_URL);
-    console.log("🔍 OpenAI Key Exists:", !!process.env.OPENAI_API_KEY);
-    console.log("🔍 Loaded ENV Keys:", Object.keys(process.env).filter(k => k.includes("OPENAI")));
+
 
     client = await pool.connect();
 
@@ -611,14 +663,9 @@ console.log('SUMMARY after tag filter:', {
 // ----- AI BAND NOTES (Hot / Warm / Cold / Research / Follow-Up / Converted) -----
 
 async function generateBandNotes(leads) {
-  // Buckets
   const buckets = {
-    hot:        [],
-    warm:       [],
-    cold:       [],
-    research:   [],
-    'follow-up':[],
-    converted:  []
+    hot: [], warm: [], cold: [],
+    research: [], followup: [], converted: []
   };
 
   for (const l of leads) {
@@ -626,68 +673,52 @@ async function generateBandNotes(leads) {
     if (buckets[s]) buckets[s].push(l);
   }
 
-  // Helper: build message for OpenAI
-  function buildPrompt(status, items) {
-    if (!items.length) {
-      return `No ${status} leads touched this period. Return a single sentence noting that.`;
-    }
-
-    const industries = items.map(l => l.industry || "Unspecified");
-    const states     = items.map(l => l.state || "Unspecified");
-    const apSpend    = items.map(l => Number(l.ap_spend || 0));
-    const arr        = items.map(l => Number(l.arr || 0));
+  // Build short prompts for each bucket
+  function promptFor(label, items) {
+    if (!items.length)
+      return `No ${label} leads this period. Return one sentence noting that.`;
 
     return `
-    Analyze this group of **${status.toUpperCase()}** leads.
-    
-    Count: ${items.length}
-    Industries: ${industries.join(", ")}
-    States: ${states.join(", ")}
-    Total ARR sum: ${arr.reduce((a,b)=>a+b,0)}
-    Total AP spend sum: ${apSpend.reduce((a,b)=>a+b,0)}
+Analyze ${label.toUpperCase()} leads.
+Count: ${items.length}
+Industries: ${items.map(l => l.industry || "Unspecified").join(", ")}
+States: ${items.map(l => l.state || "Unspecified").join(", ")}
+AP Spend: ${items.reduce((a,b)=>a+(b.ap_spend||0),0)}
+ARR: ${items.reduce((a,b)=>a+(b.arr||0),0)}
 
-    Produce **3–5 bullet points** describing what stands out:
-    - patterns
-    - ICP concentration
-    - AP spend intensity
-    - any notable risks or opportunities
-    - forecasting relevance
+Return 2–3 short sentences highlighting:
+- ICP patterns
+- Opportunities
+- Risks
     `.trim();
   }
 
-  async function askAI(prompt) {
+  async function ask(prompt) {
     try {
-      const resp = await fetch(process.env.OPENAI_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type":"application/json",
-          "Authorization":`Bearer ${process.env.OPENAI_API_KEY}`
-        },
-        body: JSON.stringify({
-          model:"gpt-4o-mini",
-          messages:[{ role:"user", content: prompt }],
-          max_tokens: 180
-        })
+      const response = await client.chat.completions.create({
+        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+        temperature: 0.5,
+        max_tokens: 120,
+        messages: [{ role: "user", content: prompt }]
       });
 
-      const json = await resp.json();
-      return json.choices?.[0]?.message?.content || "";
-} catch (e) {
-  console.error("🔥 OpenAI request failed:", e);
-  return "(AI note unavailable)";
-}
-
+      return response.choices[0].message?.content || "";
+    } catch (e) {
+      console.error("Band Note AI Err:", e);
+      return "(AI note unavailable)";
+    }
   }
 
   return {
-    hot:        await askAI(buildPrompt("Hot",        buckets.hot)),
-    warm:       await askAI(buildPrompt("Warm",       buckets.warm)),
-    cold:       await askAI(buildPrompt("Cold",       buckets.cold)),
-    research:   await askAI(buildPrompt("Research",   buckets.research)),
-    followup:   await askAI(buildPrompt("Follow-Up",  buckets["follow-up"])),
-    converted:  await askAI(buildPrompt("Converted",  buckets.converted))
+    hot: await ask(promptFor("Hot", buckets.hot)),
+    warm: await ask(promptFor("Warm", buckets.warm)),
+    cold: await ask(promptFor("Cold", buckets.cold)),
+    research: await ask(promptFor("Research", buckets.research)),
+    followup: await ask(promptFor("Follow-Up", buckets.followup)),
+    converted: await ask(promptFor("Converted", buckets.converted)),
   };
 }
+
 
 // ----- Assemble payload -----
 let ai_band_notes = {
@@ -737,16 +768,22 @@ try {
         weakest: weakestRegion
       }
     };
+	
+	// ---- AI NARRATIVE SUMMARY (Option B - second call) ----
+let ai_summary = await generateAISummary(metrics, { from: fromStr, to: toStr }, leadsFiltered);
 
-    return res.json({
-      ok: true,
-      range: { from: fromStr, to: toStr },
-      metrics,
-      status_changes: statusChanges,
-      unplaced_count: unplacedCount,
-      leads: leadsFiltered,
-      ai_band_notes
-    });
+
+return res.json({
+  ok: true,
+  range: { from: fromStr, to: toStr },
+  metrics,
+  status_changes: statusChanges,
+  unplaced_count: unplacedCount,
+  leads: leadsFiltered,
+  ai_band_notes,
+  ai_summary
+});
+
 
 
   } catch (err) {
@@ -1072,7 +1109,7 @@ app.post('/api/daily-queue/generate', async (req, res) => {
     ? req.body.tag.trim()
     : '';
 
-  const client = await pool.connect();
+  const db = await pool.connect();
   try {
     await client.query('BEGIN');
 
@@ -1239,7 +1276,7 @@ const batch = batchRows[0];
 
 // GET /api/daily-queue/current
 app.get('/api/daily-queue/current', async (_req, res) => {
-  const client = await pool.connect();
+  const db = await pool.connect();
   try {
     const batchSql = `
       SELECT id, created_at, batch_size, is_completed
@@ -1364,7 +1401,7 @@ app.post('/api/daily-queue/item/:id/done', async (req, res) => {
     next_touch_at,     // only used when choice === "custom"
   } = req.body || {};
 
-  const client = await pool.connect();
+  const db = await pool.connect();
 
   // We'll compute an activity payload but insert it *after* the main transaction
   let activityPayload = null;
