@@ -195,7 +195,7 @@ async function geocodeMissingLeads({ limit = 25, delayMs = 1000 } = {}) {
 
   return { processed, success, failed };
 }
-
+ 
 // --- PG POOL ---
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PG_CONN_STRING,
