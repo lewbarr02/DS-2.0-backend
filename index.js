@@ -242,14 +242,22 @@ app.get('/summary', async (req, res) => {
     const toStr = ymd(endExclusive);
 
     // ----- 1) Activities in window -----
-    const actSql = `
-      SELECT id, lead_id, happened_at, type
-      FROM activities
-      WHERE happened_at >= $1::date
-        AND happened_at <  $2::date
-      ORDER BY happened_at ASC
-    `;
-    const { rows: activities } = await client.query(actSql, [fromStr, toStr]);
+    let activities = [];
+    try {
+      const actSql = `
+        SELECT id, lead_id, happened_at, type
+        FROM activities
+        WHERE happened_at >= $1::date
+          AND happened_at <  $2::date
+        ORDER BY happened_at ASC
+      `;
+      const actResult = await client.query(actSql, [fromStr, toStr]);
+      activities = actResult.rows;
+    } catch (errAct) {
+      console.error('SUMMARY: activities query failed (non-fatal):', errAct.message);
+      activities = [];
+    }
+
 
     // Basic activity metrics
     const totalTouches = activities.length;
@@ -380,23 +388,30 @@ if (eventTag) {
     const corpv = sum(hotWarm.map((l) => num(l.arr)));
 
     // ----- 4) Status upgrades / downgrades + traction per region -----
-	
-    const histSql = `
-      SELECT
-        h.lead_id,
-        h.old_status,
-        h.new_status,
-        h.changed_at,
-        l.company,
-        l.state,
-        l.ap_spend
-      FROM lead_status_history h
-      JOIN leads l ON l.id = h.lead_id
-      WHERE h.changed_at >= $1::date
-        AND h.changed_at <  $2::date
-      ORDER BY h.changed_at DESC
-    `;
-    const { rows: historyRows } = await client.query(histSql, [fromStr, toStr]);
+    let historyRows = [];
+    try {
+      const histSql = `
+        SELECT
+          h.lead_id,
+          h.old_status,
+          h.new_status,
+          h.changed_at,
+          l.company,
+          l.state,
+          l.ap_spend
+        FROM lead_status_history h
+        JOIN leads l ON l.id = h.lead_id
+        WHERE h.changed_at >= $1::date
+          AND h.changed_at <  $2::date
+        ORDER BY h.changed_at DESC
+      `;
+      const histResult = await client.query(histSql, [fromStr, toStr]);
+      historyRows = histResult.rows;
+    } catch (errHist) {
+      console.error('SUMMARY: lead_status_history query failed (non-fatal):', errHist.message);
+      historyRows = [];
+    }
+
 
 
     const STATUS_ORDER = {
