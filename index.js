@@ -312,17 +312,35 @@ if (pinnedOnly) {
   );
 }
 
-// NEW: Event Mode tag filtering
+// NEW: Event Mode tag filtering (defensive: handles arrays OR strings)
 if (eventTag) {
   leadsFiltered = leadsFiltered.filter((l) => {
-    if (!l.tags) return false;
+    if (!l || l.tags == null) return false;
 
-    // tags stored as text[] → each tag is a string
-    return l.tags.some(
+    let tags = l.tags;
+
+    // If it's a string (e.g. "AFP Event,Other"), split it
+    if (!Array.isArray(tags)) {
+      tags = String(tags)
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+    }
+
+    if (!tags.length) return false;
+
+    return tags.some(
       (t) => String(t).trim().toLowerCase() === eventTag
     );
   });
 }
+
+console.log('SUMMARY after tag filter:', {
+  totalWindowLeads: allLeadsWindow.length,
+  leadsFilteredCount: leadsFiltered.length,
+  eventTag,
+});
+
 
 
     // Map for quick lookup by id
