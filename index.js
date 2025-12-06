@@ -10,7 +10,7 @@ const path = require('path');
 const app = express();
 
 // ---- OPENAI SDK ----
-import OpenAI from "openai";
+const OpenAI = require("openai");
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
