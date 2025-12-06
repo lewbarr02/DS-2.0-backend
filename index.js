@@ -207,6 +207,25 @@ app.get('/health', (_req, res) => {
   res.status(200).json({ ok: true, service: 'Deli Sandwich Backend', ts: new Date().toISOString() });
 });
 
+// ---- Query param helpers ----
+function qpBool(val, defaultVal = false) {
+  if (val === undefined || val === null || val === '') return defaultVal;
+
+  const v = String(val).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'y', 'on'].includes(v)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].includes(v)) return false;
+
+  return defaultVal;
+}
+
+function qpCountMode(val) {
+  const v = String(val || 'leads').trim().toLowerCase();
+  if (v === 'account' || v === 'accounts') return 'accounts';
+  return 'leads';
+}
+
+
+
 // === SUMMARY DASHBOARD (Finexio BDR Traction Engine) ===
 // GET /summary?from=YYYY-MM-DD&to=YYYY-MM-DD&pinned_only=1&count_mode=leads|accounts
 app.get('/summary', async (req, res) => {
