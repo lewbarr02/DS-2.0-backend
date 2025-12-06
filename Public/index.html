@@ -2390,53 +2390,75 @@ function getCI(row, key) {
 
 
 
-  async function loadPresentationBandNotesFromSummary() {
-    try {
-      const base = window.DELI_API_BASE || '';
+async function loadPresentationBandNotesFromSummary() {
+  try {
+    const fromInput = document.getElementById('startDate');
+    const toInput   = document.getElementById('endDate');
+    const tagSelect = document.getElementById('tagFilter');
 
-      // Use the same date range as the main dashboard
-      const fromInput = document.getElementById('startDate');
-      const toInput   = document.getElementById('endDate');
+    const from = fromInput?.value;
+    const to   = toInput?.value;
+    const tag  = tagSelect?.value && tagSelect.value !== 'All'
+      ? tagSelect.value
+      : '';
 
-      const from = (fromInput && fromInput.value) || '';
-      const to   = (toInput && toInput.value) || from;
-
-      // If no date is selected, just leave the default text
-      if (!from) return;
-
-      // Build /summary URL
-      let url = `${base}/summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
-
-      // If Tag = "AFP Event", tell backend to scope summary to AFP Event leads only
-      if (typeof isEventMode === 'function' && isEventMode()) {
-        url += `&tag=${encodeURIComponent('AFP Event')}`;
-      }
-
-      const res = await fetch(url);
-      if (!res.ok) {
-        console.warn('Presentation AI notes: /summary returned', res.status);
-        return;
-      }
-
-      const data = await res.json();
-      if (!data) {
-        console.warn('Presentation AI notes: empty payload');
-        return;
-      }
-
-      // 🧠 1) Band-level notes (Cold / Follow-Up / Warm / Hot / Converted)
-      renderPresentationBandNotes(data.ai_band_notes || {});
-
-      // 🧠 2) Mini AI Summary block (3 KPI lines + narrative)
-      renderPresentationMiniSummary(data);
-
-      // 🏆 3) Converted-only Trophy Panel
-      renderPresentationTrophyPanel(data);
-
-    } catch (err) {
-      console.error('Presentation AI notes/summary failed:', err);
+    // If there’s no date range, don’t try to pull AI notes
+    if (!from || !to) {
+      console.log('[Presentation AI] No date range selected; skipping /summary call.');
+      return;
     }
+
+    // Build /summary URL with same filters as the main bar
+    const params = new URLSearchParams();
+    params.set('from', from);
+    params.set('to', to);
+    if (tag) params.set('tag', tag);
+
+    const url = `/summary?${params.toString()}`;
+    console.log('[Presentation AI] Fetching summary from:', url);
+
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn('[Presentation AI] /summary returned non-OK status:', res.status);
+      return;
+    }
+
+    const data = await res.json();
+
+    // ---- Mini “Waiting for data / upgrades / downgrades” block ----
+    try {
+      renderPresentationMiniSummary(data);
+    } catch (err) {
+      console.warn('[Presentation AI] Mini summary render failed:', err);
+    }
+
+    // ---- Per-band notes (Cold / Follow-Up / Warm / Hot / Converted) ----
+    const notes = (data && data.ai_band_notes) || {};
+
+    const coldNote      = notes.cold       || 'No AI note for Cold leads yet.';
+    const followNote    = notes.follow_up  || 'No AI note for Follow-Up leads yet.';
+    const warmNote      = notes.warm       || 'No AI note for Warm leads yet.';
+    const hotNote       = notes.hot        || 'No AI note for Hot leads yet.';
+    const convertedNote = notes.converted  || 'No AI note for Converted leads yet.';
+
+    const elCold      = document.getElementById('presentation_cold_note');
+    const elFollow    = document.getElementById('presentation_followup_note');
+    const elWarm      = document.getElementById('presentation_warm_note');
+    const elHot       = document.getElementById('presentation_hot_note');
+    const elConv      = document.getElementById('presentation_converted_note');
+
+    if (elCold)   elCold.textContent   = coldNote;
+    if (elFollow) elFollow.textContent = followNote;
+    if (elWarm)   elWarm.textContent   = warmNote;
+    if (elHot)    elHot.textContent    = hotNote;
+    if (elConv)   elConv.textContent   = convertedNote;
+
+    console.log('[Presentation AI] Band notes updated from /summary.');
+  } catch (err) {
+    console.error('[Presentation AI notes/summary failed]:', err);
   }
+}
+
 
 
 
