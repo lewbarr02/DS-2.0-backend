@@ -280,12 +280,13 @@ app.get('/summary', async (req, res) => {
     `;
 
     if (touchIds.length > 0) {
-      params.push(touchIds);
-      leadWhere = `
-        (${leadWhere})
-        OR id = ANY($3::uuid[])
-      `;
-    }
+    params.push(touchIds);
+    leadWhere = `
+    (${leadWhere})
+    OR id = ANY($3)
+  `;
+}
+
 
     const leadSql = `
       SELECT *
