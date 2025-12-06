@@ -652,8 +652,22 @@ async function generateBandNotes(leads) {
   };
 }
 
-    // ----- Assemble payload -----
-    const ai_band_notes = await generateBandNotes(leadsFiltered);
+// ----- Assemble payload -----
+let ai_band_notes = {
+  hot: "(AI note unavailable)",
+  warm: "(AI note unavailable)",
+  cold: "(AI note unavailable)",
+  research: "(AI note unavailable)",
+  followup: "(AI note unavailable)",
+  converted: "(AI note unavailable)"
+};
+
+try {
+  ai_band_notes = await generateBandNotes(leadsFiltered);
+} catch (errAI) {
+  console.error("SUMMARY: generateBandNotes failed (non-fatal):", errAI);
+  // keep the default fallback text above
+}
 
     const metrics = {
       activity: {
@@ -801,6 +815,9 @@ app.get('/api/oneonone', async (req, res) => {
     const endExclusive = new Date(end);
     endExclusive.setDate(endExclusive.getDate() + 1); // make 'to' exclusive
     const toStr = ymd(endExclusive);
+	
+	
+console.log("SUMMARY window:", { fromStr, toStr, eventTag, pinnedOnly, countMode });
 
 const baseDedupe = (countMode === 'accounts')
   ? `
