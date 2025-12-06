@@ -2014,6 +2014,14 @@ function getCI(row, key) {
 
     return totals;
   }
+  
+    // 🔎 AFP Event Mode detector (Presentation Mode → Event Mode)
+  function isEventMode() {
+    const tagSel = document.getElementById('tagFilter');
+    const tag = tagSel ? tagSel.value.trim() : '';
+    return tag === 'AFP Event';
+  }
+
 
   // ---------- NEW: ICP Vertical Breakdown helpers ----------
 
@@ -2165,10 +2173,10 @@ function getCI(row, key) {
     const byState = (data.metrics && data.metrics.perf_by_state) || [];
     const byInd   = (data.metrics && data.metrics.perf_by_industry) || [];
 
-    const touched   = act.leads_contacted_window ?? act.leads_contacted ?? 0;
-    const touches   = act.total_touches ?? 0;
-    const upgrades  = pip.upgrades ?? 0;
-    const downgrades= pip.downgrades ?? 0;
+    const touched    = act.leads_contacted_window ?? act.leads_contacted ?? 0;
+    const touches    = act.total_touches ?? 0;
+    const upgrades   = pip.upgrades ?? 0;
+    const downgrades = pip.downgrades ?? 0;
 
     // Strongest / weakest regions by traction_score (same logic as summary.js)
     let bestState = null;
@@ -2187,8 +2195,8 @@ function getCI(row, key) {
         null;
     }
 
-    const bestName  = bestState ? bestState.key : '—';
-    const weakName  = weakestState ? weakestState.key : '—';
+    const bestName = bestState ? bestState.key : '—';
+    const weakName = weakestState ? weakestState.key : '—';
 
     // Strongest industry by conversion pct (if available)
     let bestInd = null;
@@ -2198,17 +2206,31 @@ function getCI(row, key) {
       )[0];
     }
 
-    // 3 KPI lines
-    line1El.textContent = `🎯 ${touched} leads touched this cycle`;
+    const inEventMode =
+      typeof isEventMode === 'function' && isEventMode();
+
+    // 3 KPI lines (different copy in Event Mode)
+    if (inEventMode) {
+      line1El.textContent = `🎯 AFP Event engagement: ${touched} leads touched`;
+    } else {
+      line1El.textContent = `🎯 ${touched} leads touched this cycle`;
+    }
+
     line2El.textContent = `📈 ${upgrades} upgrades | 📉 ${downgrades} downgrades`;
     line3El.textContent = `🔥 Strongest region: ${bestName} | Weakest: ${weakName}`;
 
     // Short narrative (3–4 sentences max)
     const parts = [];
 
-    parts.push(
-      `You contacted ${touched} lead${touched === 1 ? '' : 's'} across ${touches} total touches in this window.`
-    );
+    if (inEventMode) {
+      parts.push(
+        `Across AFP Event accounts, you contacted ${touched} lead${touched === 1 ? '' : 's'} over ${touches} total touches in this window.`
+      );
+    } else {
+      parts.push(
+        `You contacted ${touched} lead${touched === 1 ? '' : 's'} across ${touches} total touches in this window.`
+      );
+    }
 
     if (upgrades || downgrades) {
       parts.push(
@@ -2229,8 +2251,11 @@ function getCI(row, key) {
     }
 
     const narrative = parts.join(' ');
-    textEl.textContent = narrative || 'No activity in this window yet — once you log touches, AI-style insights will appear here.';
+    textEl.textContent =
+      narrative ||
+      'No activity in this window yet — once you log touches, AI-style insights will appear here.';
   }
+
   
     // 🏆 Converted-only Trophy Panel
   function renderPresentationTrophyPanel(summaryJson) {
@@ -2379,7 +2404,13 @@ function getCI(row, key) {
       // If no date is selected, just leave the default text
       if (!from) return;
 
-      const url = `${base}/summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+      // Build /summary URL
+      let url = `${base}/summary?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+
+      // If Tag = "AFP Event", tell backend to scope summary to AFP Event leads only
+      if (typeof isEventMode === 'function' && isEventMode()) {
+        url += `&tag=${encodeURIComponent('AFP Event')}`;
+      }
 
       const res = await fetch(url);
       if (!res.ok) {
@@ -2409,6 +2440,7 @@ function getCI(row, key) {
 
 
 
+
   // ---------- Open / close handlers ----------
 
   async function openPresentationMode() {
@@ -2419,43 +2451,49 @@ function getCI(row, key) {
     window.DS = window.DS || {};
     window.DS.presentationLeads = leads;
 
-
     const total        = leads.length;
     const addedInRange = total; // later we can refine to “new in range”
 
-    // Update headline
-const elTotal = document.getElementById('pipeline_total');
-const elRange = document.getElementById('pipeline_range');
+    // ---- Title + Date Range (AFP-aware) ----
+    const elRange = document.getElementById('pipeline_range');
 
-// Format the date range
-const from = document.getElementById('startDate')?.value;
-const to   = document.getElementById('endDate')?.value || from;
+    // Format the date range
+    const from = document.getElementById('startDate')?.value;
+    const to   = document.getElementById('endDate')?.value || from;
 
-function formatDate(d) {
-  if (!d) return '';
-  const obj = new Date(d + "T00:00:00");
-  return obj.toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric'
-  });
-}
-
-if (elRange) {
-  if (from) {
-    const fromTxt = formatDate(from);
-    const toTxt   = to ? formatDate(to) : fromTxt;
-    elRange.textContent = `${fromTxt} – ${toTxt}`;
-  } else {
-    elRange.textContent = '';
-  }
-}
-
- if (elTotal) {
-      elTotal.textContent = total;
+    function formatDate(d) {
+      if (!d) return '';
+      const obj = new Date(d + 'T00:00:00');
+      return obj.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric'
+      });
     }
 
+    const inEventMode =
+      typeof isEventMode === 'function' && isEventMode();
 
-    // Update funnel bands (counts + percentages)
+    if (elRange) {
+      if (from) {
+        const fromTxt = formatDate(from);
+        const toTxt   = to ? formatDate(to) : fromTxt;
+        const prefix  = inEventMode ? 'AFP Event • ' : '';
+        elRange.textContent = `${prefix}${fromTxt} – ${toTxt}`;
+      } else {
+        elRange.textContent = inEventMode
+          ? 'AFP Event (no date range selected)'
+          : '';
+      }
+    }
+
+    // Update title line with correct label + total
+    const titleEl = document.querySelector('.presentation-title');
+    if (titleEl) {
+      const headingLabel = inEventMode ? 'AFP Event Pipeline' : 'Current Pipeline';
+      titleEl.innerHTML = `${headingLabel} (<span id="pipeline_total">${total}</span> Prospects)`;
+    }
+
+    // ---- Funnel bands (counts + percentages) ----
     const elCold   = document.getElementById('funnel_cold');
     const elFollow = document.getElementById('funnel_followup');
     const elWarm   = document.getElementById('funnel_warm');
@@ -2493,13 +2531,14 @@ if (elRange) {
     const icpRows = buildIcpBreakdown(leads);
     renderIcpBreakdown(icpRows);
 
-    // 🧠 NEW: pull AI notes for each band
+    // 🧠 NEW: pull AI notes for each band (now AFP-aware via tag parameter)
     await loadPresentationBandNotesFromSummary();
 
     // Show overlay
     const overlay = document.getElementById('presentation-overlay');
     if (overlay) overlay.classList.remove('hidden');
   }
+
 
 
   function closePresentationMode() {

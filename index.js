@@ -222,6 +222,10 @@ app.get('/summary', async (req, res) => {
     const { from, to } = req.query;
     const pinnedOnly = qpBool(req.query.pinned_only, true);
     const countMode  = qpCountMode(req.query.count_mode);
+	
+	    // 🔹 NEW: Event Mode tag filter (e.g., "AFP Event")
+    const eventTagRaw = (req.query.tag || "").trim();
+    const eventTag = eventTagRaw.toLowerCase();
 
     // ----- Date window (inclusive from; "to" treated as same-day, but we query [from, to+1) ) -----
     const today = new Date();
@@ -290,12 +294,27 @@ app.get('/summary', async (req, res) => {
     });
 
     // Apply pinned filter for map-related metrics + lead list
-    let leadsFiltered = allLeadsWindow;
-    if (pinnedOnly) {
-      leadsFiltered = leadsFiltered.filter(
-        (l) => l.latitude != null && l.longitude != null
-      );
-    }
+let leadsFiltered = allLeadsWindow;
+
+// Optional: only pinned leads
+if (pinnedOnly) {
+  leadsFiltered = leadsFiltered.filter(
+    (l) => l.latitude != null && l.longitude != null
+  );
+}
+
+// NEW: Event Mode tag filtering
+if (eventTag) {
+  leadsFiltered = leadsFiltered.filter((l) => {
+    if (!l.tags) return false;
+
+    // tags stored as text[] → each tag is a string
+    return l.tags.some(
+      (t) => String(t).trim().toLowerCase() === eventTag
+    );
+  });
+}
+
 
     // Map for quick lookup by id
     const leadById = new Map();
@@ -746,6 +765,10 @@ app.get('/api/oneonone', async (req, res) => {
     const { from, to } = req.query;
 	const pinnedOnly = qpBool(req.query.pinned_only, true); // default true
 	const countMode = qpCountMode(req.query.count_mode);
+	// NEW: Event Mode tag filter (e.g. "AFP Event")
+    const eventTagRaw = (req.query.tag || "").trim();
+    const eventTag = eventTagRaw.toLowerCase();
+
 
 
 
