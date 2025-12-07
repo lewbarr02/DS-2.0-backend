@@ -1596,171 +1596,279 @@ function getCI(row, key) {
     return STATUS_RANK.unspecified;
   }
 
-  function renderListTable(rows) {
-    const thead = $('#leadThead');
-    const tbody = $('#leadTbody');
-    const count = $('#leadCount');
+ function renderListTable(rows) {
+  const thead = $('#leadThead');
+  const tbody = $('#leadTbody');
+  const count = $('#leadCount');
 
-    // Header with sort indicators
-    thead.innerHTML =
-      '<tr id="leadHeaderRow">' +
-      COLUMNS.map(c => {
-        const isActive = SORT.key === c.key;
-        const indicator = c.sortable
-          ? `<span class="sort-indicator" style="margin-left:6px; font-size:11px; opacity:${isActive?1:.35}">
-               ${isActive ? (SORT.dir === 'asc' ? '▲' : '▼') : '▲'}
-             </span>`
-          : '';
-        const cls = c.sortable ? 'sortable' : '';
-        return `<th data-key="${c.key}" class="${cls}">${c.label}${indicator}</th>`;
-      }).join('') +
-      '</tr>';
-
-    // Wire header clicks
-    $$('#leadThead th.sortable').forEach(th => {
-      th.onclick = () => {
-        const key = th.getAttribute('data-key');
-        if (SORT.key === key) {
-          SORT.dir = SORT.dir === 'asc' ? 'desc' : 'asc';
-        } else {
-          SORT.key = key;
-          SORT.dir = 'asc';
-        }
-        window.renderListView(); // re-render with new sort
-      };
-    });
-
-    // Rows
-    const html = rows.map(r => {
-      const t = (v) => (v == null || v === '') ? '' : String(v);
-      const website = getCI(r,'website');
-      const websiteUrl = website ? normalizeWebsiteUrl(website) : '';
-      const arr = getCI(r,'arr');
-      const ap  = getCI(r,'ap_spend');
-      const hasPin = getCI(r, 'pin') === '1';
-
-      // DB id (case-insensitive) so we can call DELETE /leads/:id
-      const id = getCI(r, 'id') || r.id || r.lead_id || '';
-
-      const deleteCell = id
-        ? `<button class="list-delete-btn"
-                    data-id="${id}"
-                    title="Delete this lead">🗑</button>`
+  // Header with sort indicators
+  thead.innerHTML =
+    '<tr id="leadHeaderRow">' +
+    COLUMNS.map(c => {
+      const isActive = SORT.key === c.key;
+      const indicator = c.sortable
+        ? `<span class="sort-indicator" style="margin-left:6px; font-size:11px; opacity:${isActive?1:.35}">
+             ${isActive ? (SORT.dir === 'asc' ? '▲' : '▼') : '▲'}
+           </span>`
         : '';
+      const cls = c.sortable ? 'sortable' : '';
+      return `<th data-key="${c.key}" class="${cls}">${c.label}${indicator}</th>`;
+    }).join('') +
+    '</tr>';
 
-      return `<tr data-id="${id}">
-        <td class="status-cell">${prettyStatus(getCI(r,'status'))}</td>
-        <td>${hasPin ? '✅' : '❌'}</td>
-        <td>${t(getCI(r,'company'))}</td>
-        <td>${t(getCI(r,'name'))}</td>
-        <td>${t(getCI(r,'city'))}</td>
-        <td>${t(getCI(r,'state'))}</td>
-        <td>${t(getCI(r,'industry'))}</td>
-        <td>${t(getCI(r,'forecast_month'))}</td>
-        <td>${t(getCI(r,'lead_type'))}</td>
-        <td>${arr ? ('$' + Number(arr).toLocaleString()) : ''}</td>
-        <td>${ap  ? ('$' + Number(ap).toLocaleString())  : ''}</td>
-        <td>${t(getCI(r,'tags'))}</td>
-        <td>${t(getCI(r,'cadence_name'))}</td>
-        <td>${websiteUrl
-              ? `<a class="website-link" href="${websiteUrl}" target="_blank" rel="noopener noreferrer">Visit</a>`
-              : ''}</td>
-        <td>${t(getCI(r,'notes'))}</td>
-       <td class="actions-cell">
-    ${hasPin
-    ? '' 
-    : `<button class="geo-btn" data-id="${id}" title="Geocode this lead">📍 Geocode</button>`}
-    ${deleteCell}
-   </td>
-</tr>`;
-    }).join('');
+  // Wire header clicks
+  $$('#leadThead th.sortable').forEach(th => {
+    th.onclick = () => {
+      const key = th.getAttribute('data-key');
+      if (SORT.key === key) {
+        SORT.dir = SORT.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        SORT.key = key;
+        SORT.dir = 'asc';
+      }
+      window.renderListView(); // re-render with new sort
+    };
+  });
 
-    tbody.innerHTML = html;
+  // Rows
+  const html = rows.map(r => {
+    const t = (v) => (v == null || v === '') ? '' : String(v);
+    const website = getCI(r,'website');
+    const websiteUrl = website ? normalizeWebsiteUrl(website) : '';
+    const arr = getCI(r,'arr');
+    const ap  = getCI(r,'ap_spend');
+    const hasPin = getCI(r, 'pin') === '1';
 
-    count.textContent = `${rows.length} lead${rows.length===1?'':'s'}`;
+    // DB id (case-insensitive) so we can call API routes
+    const id = getCI(r, 'id') || r.id || r.lead_id || '';
 
-    // Wire row delete buttons
-    $$('#leadTbody .list-delete-btn').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation(); // don’t trigger row-level events later
+    const deleteCell = id
+      ? `<button class="list-delete-btn"
+                  data-id="${id}"
+                  title="Delete this lead">🗑</button>`
+      : '';
 
-        const id = btn.dataset.id;
-        if (!id) return;
+    // Tags value as plain string for initial display
+    const rawTags = t(getCI(r,'tags'));
 
-        const ok = window.confirm(
-          'Delete this lead from Deli Sandwich?\n\nThis cannot be undone.'
-        );
-        if (!ok) return;
+    return `<tr data-id="${id}">
+      <td class="status-cell">${prettyStatus(getCI(r,'status'))}</td>
+      <td>${hasPin ? '✅' : '❌'}</td>
+      <td>${t(getCI(r,'company'))}</td>
+      <td>${t(getCI(r,'name'))}</td>
+      <td>${t(getCI(r,'city'))}</td>
+      <td>${t(getCI(r,'state'))}</td>
+      <td>${t(getCI(r,'industry'))}</td>
+      <td>${t(getCI(r,'forecast_month'))}</td>
+      <td>${t(getCI(r,'lead_type'))}</td>
+      <td>${arr ? ('$' + Number(arr).toLocaleString()) : ''}</td>
+      <td>${ap  ? ('$' + Number(ap).toLocaleString())  : ''}</td>
 
-        try {
-          const API_BASE = window.DELI_API_BASE || '';
-          const res = await fetch(`${API_BASE}/leads/${encodeURIComponent(id)}`, {
-            method: 'DELETE'
-          });
+      <!-- ⭐ TAGS CELL NOW EDITABLE -->
+      <td class="tags-cell" data-id="${id}">
+        <span class="tags-text">${rawTags}</span>
+        <button class="tags-edit-btn" title="Edit tags">✏️</button>
+      </td>
 
-          if (!res.ok) {
-            console.error('List delete failed', res.status);
-            alert('Delete failed – please try again.');
-            return;
-          }
+      <td>${t(getCI(r,'cadence_name'))}</td>
+      <td>${websiteUrl
+            ? `<a class="website-link" href="${websiteUrl}" target="_blank" rel="noopener noreferrer">Visit</a>`
+            : ''}</td>
+      <td>${t(getCI(r,'notes'))}</td>
+      <td class="actions-cell">
+        ${hasPin
+          ? '' 
+          : `<button class="geo-btn" data-id="${id}" title="Geocode this lead">📍 Geocode</button>`}
+        ${deleteCell}
+      </td>
+    </tr>`;
+  }).join('');
 
-          // Refresh shared state: map + filters + list
+  tbody.innerHTML = html;
+
+  count.textContent = `${rows.length} lead${rows.length===1?'':'s'}`;
+
+  // 🔥 DELETE button handlers
+  $$('#leadTbody .list-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation(); // don’t trigger row-level events later
+
+      const id = btn.dataset.id;
+      if (!id) return;
+
+      const ok = window.confirm(
+        'Delete this lead from Deli Sandwich?\n\nThis cannot be undone.'
+      );
+      if (!ok) return;
+
+      try {
+        const API_BASE = window.DELI_API_BASE || '';
+        const res = await fetch(`${API_BASE}/leads/${encodeURIComponent(id)}`, {
+          method: 'DELETE'
+        });
+
+        if (!res.ok) {
+          console.error('List delete failed', res.status);
+          alert('Delete failed – please try again.');
+          return;
+        }
+
+        // Refresh shared state: map + filters + list
+        if (typeof window.refreshLeads === 'function') {
+          await window.refreshLeads();
+        }
+        if (typeof window.renderListView === 'function') {
+          window.renderListView();
+        }
+      } catch (err) {
+        console.error('List delete error', err);
+        alert('Delete failed due to a network error.');
+      }
+    });
+  });
+
+  // 📍 GEOCODE button handlers
+  $$('#leadTbody .geo-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation(); // don’t trigger row-level events later
+
+      const id = btn.dataset.id;
+      if (!id) return;
+
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = '⏳ Geocoding…';
+
+      try {
+        const API_BASE = window.DELI_API_BASE || '';
+        const res = await fetch(`${API_BASE}/leads/${encodeURIComponent(id)}/geocode`, {
+          method: 'POST'
+        });
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.success) {
+          console.error('Row geocode failed', res.status, data);
+          alert('Geocode failed – please try again.');
+        } else {
+          // Refresh list/map so ✅ appears
           if (typeof window.refreshLeads === 'function') {
             await window.refreshLeads();
           }
           if (typeof window.renderListView === 'function') {
             window.renderListView();
           }
-        } catch (err) {
-          console.error('List delete error', err);
-          alert('Delete failed due to a network error.');
         }
-      });
+      } catch (err) {
+        console.error('Row geocode error', err);
+        alert('Geocode failed due to a network error.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
     });
+  });
 
-    // ⭐ Wire row-level geocode buttons
-    $$('#leadTbody .geo-btn').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation(); // don’t trigger row-level events later
+  // 🏷️ TAGS INLINE EDIT HANDLERS
+  $$('#leadTbody .tags-edit-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-        const id = btn.dataset.id;
-        if (!id) return;
+      const cell = btn.closest('.tags-cell');
+      if (!cell) return;
 
-        const originalText = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = '⏳ Geocoding…';
+      const id = cell.dataset.id;
+      const textEl = cell.querySelector('.tags-text');
+      const current = textEl ? textEl.textContent.trim() : '';
 
-        try {
-          const API_BASE = window.DELI_API_BASE || '';
-          const res = await fetch(`${API_BASE}/leads/${encodeURIComponent(id)}/geocode`, {
-            method: 'POST'
-          });
+      // Replace cell contents with input + Save/Cancel
+      cell.innerHTML = `
+        <input class="tags-input" type="text"
+               value="${current.replace(/"/g, '&quot;')}"
+               style="width: 70%; padding: 4px; font-size: 13px;" />
+        <button class="tags-save-btn" style="margin-left:4px; font-size:12px;">Save</button>
+        <button class="tags-cancel-btn" style="margin-left:4px; font-size:12px;">Cancel</button>
+      `;
 
-          const data = await res.json().catch(() => null);
-          if (!res.ok || !data?.success) {
-            console.error('Row geocode failed', res.status, data);
-            alert('Geocode failed – please try again.');
-          } else {
-            // Refresh list/map so ✅ appears
+      const input  = cell.querySelector('.tags-input');
+      const save   = cell.querySelector('.tags-save-btn');
+      const cancel = cell.querySelector('.tags-cancel-btn');
+
+      if (input) {
+        input.focus();
+        input.select();
+      }
+
+      const restoreView = (value) => {
+        cell.innerHTML = `
+          <span class="tags-text">${value}</span>
+          <button class="tags-edit-btn" title="Edit tags">✏️</button>
+        `;
+      };
+
+      // Cancel → revert to old value
+      if (cancel) {
+        cancel.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          restoreView(current);
+        });
+      }
+
+      // Save → call backend + refresh
+      if (save) {
+        save.addEventListener('click', async (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+
+          if (!input || !id) return;
+          const newTags = input.value.trim();
+
+          try {
+            const API_BASE = window.DELI_API_BASE || '';
+            const res = await fetch(`${API_BASE}/update-lead/${encodeURIComponent(id)}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tags: newTags })
+            });
+
+            if (!res.ok) {
+              console.error('Tags update failed', res.status);
+              alert('Could not save tags – please try again.');
+              return;
+            }
+
+            // Option 1: full refresh so map + filters stay correct
             if (typeof window.refreshLeads === 'function') {
               await window.refreshLeads();
             }
             if (typeof window.renderListView === 'function') {
               window.renderListView();
             }
+          } catch (err) {
+            console.error('Error updating tags', err);
+            alert('Error saving tags – network or server issue.');
           }
-        } catch (err) {
-          console.error('Row geocode error', err);
-          alert('Geocode failed due to a network error.');
-        } finally {
-          btn.disabled = false;
-          btn.textContent = originalText;
-        }
-      });
+        });
+      }
+
+      // Enter key = Save, Esc = Cancel
+      if (input) {
+        input.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter') {
+            ev.preventDefault();
+            save?.click();
+          } else if (ev.key === 'Escape') {
+            ev.preventDefault();
+            cancel?.click();
+          }
+        });
+      }
     });
-  }
+  });
+}
 
 
 

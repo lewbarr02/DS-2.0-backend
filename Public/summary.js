@@ -1025,40 +1025,13 @@ function renderStatusChanges(changes) {
     }
 
 	
-    // AI-style narrative
-    const bestInd = [...byInd].sort(
-      (a, b) => (b.conv_pct || 0) - (a.conv_pct || 0)
-    )[0];
+// ---- REAL AI SUMMARY (from backend) ----
+const aiEl = el("aiText");
+if (aiEl) {
+  const txt = data.ai_summary || "No AI summary available.";
+  aiEl.textContent = txt;
+}
 
-    const insights = [
-      `Lead engagement this window: contacted ${
-        act.leads_contacted_window ?? 0
-      } across ${act.total_touches ?? 0} touches.`,
-      `Avg Prospect ARR: ${money(
-        arr.avg_arr || arr.avg_deal || 0
-      )} • Avg AP Spend: ${money(spend.avg_ap_spend || 0)}.`,
-      `Status upgrades: ${upgrades}, downgrades: ${downgrades}.`,
-      bestInd
-        ? `Strongest industry: ${bestInd.key} (${bestInd.conv_pct}% conv).`
-        : null,
-      bestState
-        ? `Strongest region by traction: ${bestState.key}.`
-        : null,
-      weakestState
-        ? `Weakest region by traction: ${weakestState.key}.`
-        : null,
-      `Top channel: ${
-        chTop[0]?.channel ?? "—"
-      } (${(chTop[0]?.rate || 0).toFixed(1)}% conv).`,
-      `Hot untouched ≥7d: ${hu}.`,
-    ]
-      .filter(Boolean)
-      .join(" ");
-
-    const aiEl = el("aiText");
-    if (aiEl) {
-      aiEl.textContent = insights;
-    }
 
     // Reconcile panel
     renderReconcile(data);
