@@ -1094,8 +1094,179 @@ function normalizeBatchSize(raw) {
   return n;
 }
 
+// POST /api/daily-queue/generate
+// Body: { batch_size?: number, industries?: string[], tag?: string }
+app.post('/api/daily-queue/generate', async (req, res) => {
+  const rawSize = req.body?.batch_size;
+  const size = normalizeBatchSize(rawSize);
+
+  const industries = Array.isArray(req.body?.industries)
+    ? req.body.industries.filter(Boolean)
+    : [];
+
+  // Optional tag filter for Event Mode (e.g. "AFP Event", "IOFM 2025")
+  const tag = typeof req.body?.tag === 'string'
+    ? req.body.tag.trim()
+    : '';
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1) Build candidate WHERE clause
+    const params = [size];
+    const whereClauses = [
+      "COALESCE(l.is_retired, false) = false",
+      "LOWER(COALESCE(l.status, '')) NOT IN ('converted','no fit','no_fit')",
+    ];
+
+    if (industries.length) {
+      params.push(industries);
+      whereClauses.push(`l.industry = ANY($${params.length})`);
+    }
+
+    if (tag) {
+      params.push(`%${tag}%`);
+      whereClauses.push(`
+        COALESCE(l.tags::text, '') ILIKE $${params.length}
+      `);
+    }
+
+    const pickSql = `
+      WITH candidate AS (
+        SELECT
+          l.*,
+          CASE
+            WHEN LOWER(COALESCE(l.status, '')) = 'hot'         THEN 1
+            WHEN LOWER(COALESCE(l.status, '')) = 'warm'        THEN 2
+            WHEN LOWER(COALESCE(l.status, '')) = 'unspecified' THEN 3
+            WHEN LOWER(COALESCE(l.status, '')) = 'follow-up'   THEN 4
+            WHEN LOWER(COALESCE(l.status, '')) = 'research'    THEN 5
+            WHEN LOWER(COALESCE(l.status, '')) = 'cold'        THEN 6
+            ELSE 7
+          END AS status_rank,
+          CASE
+            WHEN l.next_touch_at IS NOT NULL AND l.next_touch_at <= NOW() THEN 0
+            WHEN l.last_touch_at IS NULL                                  THEN 1
+            WHEN l.last_touch_at <= NOW() - INTERVAL '4 days'             THEN 2
+            ELSE 3
+          END AS touch_rank
+        FROM leads l
+        WHERE
+          ${whereClauses.join('\n          AND ')}
+      )
+      SELECT *
+      FROM candidate
+      ORDER BY
+        status_rank ASC,
+        touch_rank ASC,
+        COALESCE(last_touch_at, '1970-01-01'::timestamptz) ASC,
+        created_at ASC
+      LIMIT $1;
+    `;
+
+    const { rows: picked } = await client.query(pickSql, params);
+
+    const requestedSize = size;
+    const actualSize = picked.length;
+
+    if (!picked.length) {
+      await client.query('ROLLBACK');
+      return res.json({
+        ok: true,
+        batch: null,
+        items: [],
+        message: tag ? 'no_candidates_for_tag' : 'no_candidates',
+      });
+    }
+
+    // 2) Create batch row (batch_date NOT NULL)
+    const batchSql = `
+      INSERT INTO daily_batches (batch_date, batch_size, is_completed)
+      VALUES (CURRENT_DATE, $1, false)
+      RETURNING *;
+    `;
+    const { rows: batchRows } = await client.query(batchSql, [requestedSize]);
+    const batch = batchRows[0];
+
+    // 3) Insert batch items and flatten for frontend
+    const items = [];
+    for (let i = 0; i < picked.length; i++) {
+      const lead = picked[i];
+
+      const itemSql = `
+        INSERT INTO daily_batch_items (batch_id, lead_id, position, is_completed, is_skipped)
+        VALUES ($1, $2, $3, false, false)
+        RETURNING *;
+      `;
+      const { rows: itemRows } = await client.query(itemSql, [
+        batch.id,
+        lead.id,
+        i + 1,
+      ]);
+      const item = itemRows[0];
+
+      items.push({
+        // Batch item metadata
+        item_id:      item.id,
+        batch_id:     item.batch_id,
+        lead_id:      item.lead_id,
+        position:     item.position,
+        is_completed: item.is_completed,
+        is_skipped:   item.is_skipped,
+
+        // Flattened lead fields for Daily Queue cards
+        id:       lead.id,
+        name:     lead.name,
+        company:  lead.company,
+        city:     lead.city,
+        state:    lead.state,
+        status:   lead.status,
+        industry: lead.industry,
+
+        forecast_month:   lead.forecast_month,
+        lead_type:        lead.lead_type,
+        arr:              lead.arr,
+        ap_spend:         lead.ap_spend,
+        last_touch_at:    lead.last_touch_at,
+        next_touch_at:    lead.next_touch_at,
+        next_action_at:   lead.next_action_at,
+        last_activity_at: lead.last_contacted_at || lead.last_touch_at || null,
+
+        // Full lead object if UI ever needs extras
+        lead,
+      });
+    }
+
+    await client.query('COMMIT');
+
+    return res.json({
+      ok: true,
+      batch: {
+        id: batch.id,
+        created_at: batch.created_at,
+        batch_size_requested: requestedSize,
+        batch_size_actual: actualSize,
+        is_completed: batch.is_completed,
+      },
+      items,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('POST /api/daily-queue/generate error:', err);
+    return res.status(500).json({
+      ok: false,
+      error: 'generate_failed',
+      message: err.message,
+    });
+  } finally {
+    client.release();
+  }
+});
+
+// GET /api/daily-queue/current
 app.get('/api/daily-queue/current', async (_req, res) => {
-  const client = await pool.connect();      // ✅ use client here
+  const client = await pool.connect();
   try {
     const batchSql = `
       SELECT id, created_at, batch_size, is_completed
@@ -1199,214 +1370,6 @@ app.get('/api/daily-queue/current', async (_req, res) => {
   }
 });
 
-
-// 🔧 FIX: include batch_date so NOT NULL constraint is satisfied
-const batchSql = `
-  INSERT INTO daily_batches (batch_date, batch_size, is_completed)
-  VALUES (CURRENT_DATE, $1, false)
-  RETURNING *;
-`;
-const { rows: batchRows } = await client.query(batchSql, [
-  requestedSize,
-]);
-const batch = batchRows[0];
-
-
-    const items = [];
-    for (let i = 0; i < picked.length; i++) {
-      const lead = picked[i];
-      const itemSql = `
-        INSERT INTO daily_batch_items (batch_id, lead_id, position, is_completed, is_skipped)
-        VALUES ($1, $2, $3, false, false)
-        RETURNING *;
-      `;
-      const { rows: itemRows } = await client.query(itemSql, [
-        batch.id,
-        lead.id,          // UUID
-        i + 1,            // position starts at 1
-      ]);
-      const item = itemRows[0];
-
-      items.push({
-        // Batch item metadata
-        item_id: item.id,
-        batch_id: item.batch_id,
-        lead_id: item.lead_id,
-        position: item.position,
-        is_completed: item.is_completed,
-        is_skipped: item.is_skipped,
-
-        // 🔽 Flattened lead fields for Daily Queue cards
-        id: lead.id,
-        name: lead.name,
-        company: lead.company,
-        city: lead.city,
-        state: lead.state,
-        status: lead.status,
-        industry: lead.industry,
-
-        // key revenue / planning fields
-        forecast_month: lead.forecast_month,
-        lead_type:      lead.lead_type,
-        arr:            lead.arr,
-        ap_spend:       lead.ap_spend,
-
-        // touch fields
-        last_touch_at:  lead.last_touch_at,
-        next_touch_at:  lead.next_touch_at,
-        next_action_at: lead.next_action_at,
-        last_activity_at: lead.last_contacted_at || lead.last_touch_at || null,
-
-        // full lead object preserved for future use
-        lead,
-      });
-    }
-
-    await client.query('COMMIT');
-
-    return res.json({
-      ok: true,
-      batch: {
-        id: batch.id,
-        created_at: batch.created_at,
-        batch_size_requested: requestedSize,
-        batch_size_actual: actualSize,
-        is_completed: batch.is_completed,
-      },
-      items,
-    });
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('POST /api/daily-queue/generate error:', err);
-    // keep the helpful debug message
-    return res.status(500).json({
-      ok: false,
-      error: 'generate_failed',
-      message: err.message,
-    });
-  } finally {
-    client.release();
-  }
-});
-
-
-
-
-// GET /api/daily-queue/current
-app.get('/api/daily-queue/current', async (_req, res) => {
-  const db = await pool.connect();
-  try {
-    const batchSql = `
-      SELECT id, created_at, batch_size, is_completed
-      FROM daily_batches
-      WHERE COALESCE(is_completed, false) = false
-      ORDER BY created_at DESC
-      LIMIT 1;
-    `;
-    const { rows: batchRows } = await client.query(batchSql);
-    if (!batchRows.length) {
-      return res.status(404).json({ ok: false, error: 'no_active_batch' });
-    }
-    const batch = batchRows[0];
-
-    const itemsSql = `
-      SELECT
-        dbi.id          AS item_id,
-        dbi.batch_id,
-        dbi.position,
-        dbi.is_completed,
-        dbi.completed_at,
-        dbi.is_skipped,
-        dbi.skipped_reason,
-        l.*
-      FROM daily_batch_items dbi
-      JOIN leads l ON l.id = dbi.lead_id
-      WHERE dbi.batch_id = $1
-      ORDER BY dbi.position ASC;
-    `;
-    const { rows } = await client.query(itemsSql, [batch.id]);
-
-    const total   = rows.length;
-    const done    = rows.filter(r => r.is_completed).length;
-    const skipped = rows.filter(r => r.is_skipped).length;
-
-    const items = rows.map(r => ({
-      // Batch item metadata
-      item_id:       r.item_id,
-      batch_id:      r.batch_id,
-      lead_id:       r.lead_id,
-      position:      r.position,
-      is_completed:  r.is_completed,
-      is_skipped:    r.is_skipped,
-      completed_at:  r.completed_at,
-      skipped_reason:r.skipped_reason,
-
-      // 🔽 Flattened lead fields for Daily Queue cards
-      id:            r.id,
-      name:          r.name,
-      company:       r.company,
-      city:          r.city,
-      state:         r.state,
-      status:        r.status,
-      industry:      r.industry,
-
-      // key revenue / planning fields
-      forecast_month:r.forecast_month,
-      lead_type:     r.lead_type,
-      arr:           r.arr,
-      ap_spend:      r.ap_spend,
-
-      // touch fields
-      last_touch_at: r.last_touch_at,
-      next_touch_at: r.next_touch_at,
-      next_action_at:r.next_action_at,
-      last_activity_at: r.last_contacted_at || r.last_touch_at || null,
-
-      // keep raw lead in case UI ever needs extras
-      lead: {
-        id:              r.id,
-        name:            r.name,
-        company:         r.company,
-        city:            r.city,
-        state:           r.state,
-        status:          r.status,
-        industry:        r.industry,
-        forecast_month:  r.forecast_month,
-        lead_type:       r.lead_type,
-        arr:             r.arr,
-        ap_spend:        r.ap_spend,
-        last_touch_at:   r.last_touch_at,
-        next_touch_at:   r.next_touch_at,
-        next_action_at:  r.next_action_at,
-        last_contacted_at: r.last_contacted_at,
-      }
-    }));
-
-    return res.json({
-      ok: true,
-      batch: {
-        id:          batch.id,
-        created_at:  batch.created_at,
-        batch_size:  batch.batch_size,
-        is_completed:batch.is_completed,
-        progress: {
-          total,
-          done,
-          skipped,
-          remaining: Math.max(total - done - skipped, 0),
-        },
-      },
-      items,
-    });
-  } catch (err) {
-    console.error('GET /api/daily-queue/current error:', err);
-    return res.status(500).json({ ok: false, error: 'current_failed' });
-  } finally {
-    client.release();
-  }
-});
-
-
 // POST /api/daily-queue/item/:id/done
 // Body: { new_status?, action_type?, notes?, next_touch_choice?, next_touch_at? }
 app.post('/api/daily-queue/item/:id/done', async (req, res) => {
@@ -1419,8 +1382,7 @@ app.post('/api/daily-queue/item/:id/done', async (req, res) => {
     next_touch_at,
   } = req.body || {};
 
-  const client = await pool.connect();     // ✅ use client
-
+  const client = await pool.connect();
   let activityPayload = null;
 
   try {
@@ -1548,6 +1510,7 @@ app.post('/api/daily-queue/item/:id/done', async (req, res) => {
 
     await client.query('COMMIT');
 
+    // Log activity row (non-fatal if it fails)
     if (activityPayload) {
       const pieces = [];
 
@@ -1617,10 +1580,6 @@ app.post('/api/daily-queue/item/:id/done', async (req, res) => {
   }
 });
 
-
-
-
-
 // POST /api/daily-queue/item/:id/skip
 // Body: { reason? }
 app.post('/api/daily-queue/item/:id/skip', async (req, res) => {
@@ -1655,7 +1614,6 @@ app.post('/api/daily-queue/item/:id/skip', async (req, res) => {
     `;
     await client.query(updateItemSql, [itemId, reason || null]);
 
-    // Check if batch is now fully done/skipped
     const progressSql = `
       SELECT
         COUNT(*) AS total,
@@ -1682,6 +1640,7 @@ app.post('/api/daily-queue/item/:id/skip', async (req, res) => {
     client.release();
   }
 });
+
 
 
 // =========================
