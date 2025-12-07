@@ -2014,10 +2014,43 @@ app.put('/update-lead/:id', async (req, res) => {
   // Helpers
   const strOrNull = (v) =>
     v === '' || v == null ? null : String(v);
+
+  // Parse things like "25000000", "25M", "10k", "1.2B"
+  function parseShortMoney(raw) {
+    if (raw === null || raw === undefined || raw === '') return null;
+
+    let s = String(raw).trim();
+    if (!s) return null;
+
+    // strip $ and commas
+    s = s.replace(/[\$,]/g, '').toLowerCase();
+
+    const match = s.match(/^([\d.,]+)(k|m{1,2}|b)?$/);
+    if (!match) {
+      const n = Number(s.replace(/,/g, ''));
+      return Number.isFinite(n) ? n : null;
+    }
+
+    let num = parseFloat(match[1].replace(/,/g, ''));
+    if (!Number.isFinite(num)) return null;
+
+    const suffix = match[2];
+    if (suffix === 'k') {
+      num *= 1_000;
+    } else if (suffix === 'm' || suffix === 'mm') {
+      num *= 1_000_000;
+    } else if (suffix === 'b') {
+      num *= 1_000_000_000;
+    }
+
+    return num;
+  }
+
   const numOrNull = (v) => {
     const n = parseShortMoney(v);
     return n == null ? null : n;
   };
+
 
   // Normalize status (frontend may send 'follow-up', etc.)
   let status = strOrNull(req.body.status);
@@ -2192,6 +2225,52 @@ app.delete('/leads/:id', async (req, res) => {
       .json({ error: 'Failed to delete lead', detail: err.message });
   }
 });
+
+// --- UPDATE ONLY TAGS FOR A LEAD ---
+// PUT /leads/:id/tags
+app.put('/leads/:id/tags', async (req, res) => {
+  const id = req.params.id;
+  const { tags } = req.body;
+
+  if (!id) {
+    return res.status(400).json({ error: "Lead ID is required" });
+  }
+
+  try {
+    const result = await pool.query(
+      `
+      UPDATE leads
+      SET tags = $1,
+          updated_at = NOW()
+      WHERE id = $2
+      RETURNING id, tags;
+      `,
+      [
+        // tags should be stored as an array (text[])
+        Array.isArray(tags)
+          ? tags.map((t) => t.trim()).filter(Boolean)
+          : String(tags || "")
+              .split(",")
+              .map((t) => t.trim())
+              .filter(Boolean),
+        id
+      ]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Lead not found" });
+    }
+
+    return res.json({
+      success: true,
+      lead: result.rows[0]
+    });
+  } catch (err) {
+    console.error("Error updating tags:", err);
+    return res.status(500).json({ error: "Failed to update tags" });
+  }
+});
+
 
 // --- BULK DELETE ALL LEADS ---
 // POST /leads/bulk-delete – dangerous: wipes ALL leads
