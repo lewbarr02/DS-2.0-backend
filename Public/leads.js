@@ -133,6 +133,13 @@ window.refreshLeads = async function refreshLeads() {
     return 'unspecified';
   }
   
+  // 🔑 Normalize lead IDs to consistent string keys
+function leadKey(val) {
+  if (val === undefined || val === null) return '';
+  return String(val);
+}
+
+  
     // Expose for other scripts (Presentation Mode, etc.)
   DS.statusKey = statusKey;
 
@@ -362,52 +369,57 @@ function unwrapData(payload){
     DS.state.markerById.clear();
   }
 
-  function renderMarkers() {
-    const map = window.DS.map || ensureMap();
-    if (!map) return;
+function renderMarkers() {
+  const map = window.DS.map || ensureMap();
+  if (!map) return;
 
-    clearLayers();
+  clearLayers();
 
-    const useCluster = !!els.clusterToggle()?.checked && !!DS.state.cluster;
-    if (useCluster && !map.hasLayer(DS.state.cluster)) {
-      map.addLayer(DS.state.cluster);
-    }
-    if (!useCluster && map.hasLayer(DS.state.cluster)) {
-      map.removeLayer(DS.state.cluster);
-    }
-
-    const bounds = [];
-    for (const row of DS.state.filtered) {
-      const coords = normalizeCoords(row);
-      if (!coords) continue;
-      const [lat, lng] = coords;
-
-      // Create marker WITHOUT binding the legacy popup
-      const m = L.marker([lat, lng], { icon: iconForStatus(row.status || row.Status) });
-
-      // ✅ Step 2 — Marker click opens the new preview popup
-      m.on("click", (e) => {
-        DS_CURRENT_LEAD = row;          // remember which lead
-        DS_CURRENT_LEAD._marker = m;    // back-reference for updating color later
-        openLeadPopup("preview", e.latlng);
-      });
-
-      DS.state.markers.push(m);
-      const leadId = row.id || row.uuid;
-      if (leadId) DS.state.markerById.set(leadId, m);
-
-      if (useCluster) {
-        DS.state.cluster.addLayer(m);
-      } else {
-        DS.state.markersLayer.addLayer(m);
-      }
-      bounds.push([lat, lng]);
-    }
-
-    if (bounds.length) {
-      map.fitBounds(bounds, { padding: [20, 20] });
-    }
+  const useCluster = !!els.clusterToggle()?.checked && !!DS.state.cluster;
+  if (useCluster && !map.hasLayer(DS.state.cluster)) {
+    map.addLayer(DS.state.cluster);
   }
+  if (!useCluster && map.hasLayer(DS.state.cluster)) {
+    map.removeLayer(DS.state.cluster);
+  }
+
+  const bounds = [];
+  for (const row of DS.state.filtered) {
+    const coords = normalizeCoords(row);
+    if (!coords) continue;
+    const [lat, lng] = coords;
+
+    // Create marker WITHOUT binding the legacy popup
+    const m = L.marker([lat, lng], { icon: iconForStatus(row.status || row.Status) });
+
+    // Marker click opens the new preview popup
+    m.on("click", (e) => {
+      DS_CURRENT_LEAD = row;          // remember which lead
+      DS_CURRENT_LEAD._marker = m;    // back-reference for updating color later
+      openLeadPopup("preview", e.latlng);
+    });
+
+    DS.state.markers.push(m);
+
+    // 🔑 Normalize the id we use as a key
+    const leadId = leadKey(row.id || row.uuid || row.lead_id);
+    if (leadId) {
+      DS.state.markerById.set(leadId, m);
+    }
+
+    if (useCluster) {
+      DS.state.cluster.addLayer(m);
+    } else {
+      DS.state.markersLayer.addLayer(m);
+    }
+    bounds.push([lat, lng]);
+  }
+
+  if (bounds.length) {
+    map.fitBounds(bounds, { padding: [20, 20] });
+  }
+}
+
 
   function updateStats() {
     const allRows = DS.state.rawRows || [];
@@ -1056,19 +1068,30 @@ function attachPopupEventDelegates() {
       Object.assign(DS_CURRENT_LEAD, payload, freshLead);
 
       // Update marker UI and position if needed
-      const marker = DS_CURRENT_LEAD._marker || DS.state.markerById.get(DS_CURRENT_LEAD.id);
+      const markerKey = leadKey(
+        DS_CURRENT_LEAD.id || DS_CURRENT_LEAD.uuid || DS_CURRENT_LEAD.lead_id
+      );
+      const marker =
+        DS_CURRENT_LEAD._marker || DS.state.markerById.get(markerKey);
+
       if (marker) {
         marker.setIcon(iconForStatus(DS_CURRENT_LEAD.status));
-        if (Number.isFinite(DS_CURRENT_LEAD.latitude) && Number.isFinite(DS_CURRENT_LEAD.longitude)) {
+        if (
+          Number.isFinite(DS_CURRENT_LEAD.latitude) &&
+          Number.isFinite(DS_CURRENT_LEAD.longitude)
+        ) {
           marker.setLatLng([DS_CURRENT_LEAD.latitude, DS_CURRENT_LEAD.longitude]);
         }
       }
 
       // Replace the row in rawRows
-      const idx = DS.state.rawRows.findIndex(r => (r.id || r.uuid) === DS_CURRENT_LEAD.id);
+      const idx = DS.state.rawRows.findIndex(r =>
+        leadKey(r.id || r.uuid || r.lead_id) === markerKey
+      );
       if (idx >= 0) {
         DS.state.rawRows[idx] = { ...DS.state.rawRows[idx], ...DS_CURRENT_LEAD };
       }
+
 
       // Swap back to preview
       const latlng = dsPopup.getLatLng();
@@ -1095,7 +1118,8 @@ function attachPopupEventDelegates() {
 // Jump-to-map helper used by List View row-click
 // ======================================================
 window.focusLeadOnMap = function focusLeadOnMap(id) {
-  if (!id) return;
+  const key = leadKey(id);
+  if (!key) return;
 
   const map  = window.DS.map;
   const byId = DS.state.markerById;
@@ -1105,7 +1129,9 @@ window.focusLeadOnMap = function focusLeadOnMap(id) {
   if (mapBtn) mapBtn.click();
 
   if (!map) return;
-  const marker = byId.get(id);
+
+  // Look up marker by normalized id
+  const marker = byId.get(key);
 
   if (!marker || !marker.getLatLng) {
     console.warn("No marker found for lead:", id);
@@ -1115,7 +1141,9 @@ window.focusLeadOnMap = function focusLeadOnMap(id) {
   const latlng = marker.getLatLng();
 
   // Set "current lead" so preview popup knows what to render
-  const lead = DS.state.rawRows.find(r => (r.id || r.uuid) === id);
+  const lead = DS.state.rawRows.find(r =>
+    leadKey(r.id || r.uuid || r.lead_id) === key
+  );
   if (lead) {
     DS_CURRENT_LEAD = lead;
     lead._marker = marker;
@@ -1130,6 +1158,7 @@ window.focusLeadOnMap = function focusLeadOnMap(id) {
     console.error("focusLeadOnMap error:", err);
   }
 };
+
 
 
 
