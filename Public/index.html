@@ -1103,7 +1103,24 @@ html, body {
     <!-- LIST VIEW -->
     <div id="listView" aria-label="Lead List">
 <div id="listToolbar">
-  <input id="listSearch" type="search" placeholder="Search name, company, city, state, tags…" aria-label="Search"/>
+  <!-- Global search -->
+  <input
+    id="listSearch"
+    type="search"
+    placeholder="Search name, company, city, state, tags…"
+    aria-label="Search"
+  />
+
+  <!-- ⭐ NEW: Tag-only filter (List view) -->
+  <input
+    id="listTagFilter"
+    type="search"
+    placeholder="Filter by tag…"
+    aria-label="Filter by tag"
+    style="margin-left:8px; min-width:160px; padding:6px 10px; font-size:14px; border:1px solid #ddd; border-radius:6px;"
+  />
+
+  <!-- Status chips -->
   <button class="chip" data-status="Converted">🏆 Converted</button>
   <button class="chip" data-status="Hot">🔥 Hot</button>
   <button class="chip" data-status="Warm">🌞 Warm</button>
@@ -1119,7 +1136,7 @@ html, body {
     ⬅ Back to Presentation
   </button>
 
-  <!-- ⭐ NEW: Geocode All Missing button -->
+  <!-- ⭐ Geocode All Missing button -->
   <button id="geocodeAllMissingBtn" class="chip" style="margin-left:4px;">
     📡 Geocode All Missing
   </button>
@@ -1131,6 +1148,7 @@ html, body {
     </details>
   </div>
 </div>
+
 
 
 
@@ -1879,65 +1897,95 @@ function getCI(row, key) {
     return Array.isArray(rows) ? rows : [];
   }
 
-  // Apply List toolbar filters (search + chips), then sort
-  function computeListFilteredAndSorted() {
-    const q = ($('#listSearch')?.value || '').trim().toLowerCase();
-    const activeStatuses = $$('#listToolbar .chip.active[data-status]').map(el => el.dataset.status.toLowerCase());
+// Apply List toolbar filters (search + chips), then sort
+function computeListFilteredAndSorted() {
+  const q = ($('#listSearch')?.value || '').trim().toLowerCase();
 
-    let rows = getFilteredRows();
+  // ⭐ NEW: tag-only filter for List view
+  const tagQ = ($('#listTagFilter')?.value || '').trim().toLowerCase();
 
-    if (activeStatuses.length) {
-      rows = rows.filter(r => {
-        const s = String(getCI(r,'status')).toLowerCase();
-        return activeStatuses.some(a => s.includes(a) || a === s);
-      });
-    }
+  const activeStatuses = $$('#listToolbar .chip.active[data-status]')
+    .map(el => el.dataset.status.toLowerCase());
 
-    if (q) {
-      rows = rows.filter(r => {
-        const hay = [
-          getCI(r,'name'), getCI(r,'company'), getCI(r,'city'), getCI(r,'state'),
-          getCI(r,'tags'), getCI(r,'industry'), getCI(r,'notes'), getCI(r,'cadence_name'),
-          getCI(r,'lead_type'), getCI(r,'website')
-        ].join(' ').toLowerCase();
-        return hay.includes(q);
-      });
-    }
+  let rows = getFilteredRows();
 
-    // ---- SORTING ----
-    const { key, dir } = SORT;
-    const asc = dir === 'asc' ? 1 : -1;
-
-    rows = rows.slice().sort((a,b) => {
-      // status uses custom rank
-      if (key === 'status') {
-        return asc * (statusRankVal(getCI(a,'status')) - statusRankVal(getCI(b,'status')));
-      }
-
-      const col = COLUMNS.find(c => c.key === key);
-      const avRaw = getCI(a, key);
-      const bvRaw = getCI(b, key);
-
-      // Nulls last
-      const aNull = (avRaw === null || avRaw === undefined || avRaw === '');
-      const bNull = (bvRaw === null || bvRaw === undefined || bvRaw === '');
-      if (aNull && !bNull) return  1;
-      if (!aNull && bNull) return -1;
-      if (aNull && bNull)  return  0;
-
-      if (col && col.numeric) {
-        const av = Number(avRaw);
-        const bv = Number(bvRaw);
-        return asc * ((av > bv) - (av < bv));
-      }
-
-      const av = String(avRaw).toLowerCase();
-      const bv = String(bvRaw).toLowerCase();
-      return asc * av.localeCompare(bv, undefined, { numeric: true, sensitivity: 'base' });
+  // Status chip filter
+  if (activeStatuses.length) {
+    rows = rows.filter(r => {
+      const s = String(getCI(r, 'status')).toLowerCase();
+      return activeStatuses.some(a => s.includes(a) || a === s);
     });
-
-    return rows;
   }
+
+  // Global search (name, company, city, state, tags, etc.)
+  if (q) {
+    rows = rows.filter(r => {
+      const hay = [
+        getCI(r, 'name'),
+        getCI(r, 'company'),
+        getCI(r, 'city'),
+        getCI(r, 'state'),
+        getCI(r, 'tags'),
+        getCI(r, 'industry'),
+        getCI(r, 'notes'),
+        getCI(r, 'cadence_name'),
+        getCI(r, 'lead_type'),
+        getCI(r, 'website')
+      ].join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }
+
+  // ⭐ Tag-only filter: matches JUST on tags column
+  if (tagQ) {
+    rows = rows.filter(r => {
+      const tags = String(getCI(r, 'tags') || '').toLowerCase();
+      return tags.includes(tagQ);
+    });
+  }
+
+  // ---- SORTING ----
+  const { key, dir } = SORT;
+  const asc = dir === 'asc' ? 1 : -1;
+
+  rows = rows.slice().sort((a, b) => {
+    // Status uses custom rank
+    if (key === 'status') {
+      return (
+        asc *
+        (statusRankVal(getCI(a, 'status')) -
+          statusRankVal(getCI(b, 'status')))
+      );
+    }
+
+    const col = COLUMNS.find(c => c.key === key);
+    const avRaw = getCI(a, key);
+    const bvRaw = getCI(b, key);
+
+    // Nulls last
+    const aNull = avRaw === null || avRaw === undefined || avRaw === '';
+    const bNull = bvRaw === null || bvRaw === undefined || bvRaw === '';
+    if (aNull && !bNull) return 1;
+    if (!aNull && bNull) return -1;
+    if (aNull && bNull) return 0;
+
+    if (col && col.numeric) {
+      const av = Number(avRaw);
+      const bv = Number(bvRaw);
+      return asc * ((av > bv) - (av < bv));
+    }
+
+    const av = String(avRaw).toLowerCase();
+    const bv = String(bvRaw).toLowerCase();
+    return asc * av.localeCompare(bv, undefined, {
+      numeric: true,
+      sensitivity: 'base'
+    });
+  });
+
+  return rows;
+}
+
 
   // Public render fn
   window.renderListView = function renderListView() {
@@ -1945,25 +1993,40 @@ function getCI(row, key) {
   };
 
   // Wire List toolbar controls
-  function wireListControls() {
-    $('#listSearch')?.addEventListener('input', () => window.renderListView());
-    $$('#listToolbar .chip[data-status]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        btn.classList.toggle('active');
-        window.renderListView();
-      });
-    });
-    $('#listReset')?.addEventListener('click', () => {
-      $$('#listToolbar .chip.active').forEach(b => b.classList.remove('active'));
-      const s = $('#listSearch'); if (s) s.value = '';
+function wireListControls() {
+  // Global search
+  $('#listSearch')?.addEventListener('input', () => window.renderListView());
+
+  // ⭐ NEW: Tag-only filter search
+  $('#listTagFilter')?.addEventListener('input', () => window.renderListView());
+
+  // Status chips
+  $$('#listToolbar .chip[data-status]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.classList.toggle('active');
       window.renderListView();
     });
+  });
 
-    // React to main dashboard filter changes (from leads.js)
-    ['tagFilter','typeFilter','cadenceFilter','stateFilter','industryFilter','startDate','endDate']
-      .map(id => document.getElementById(id))
-      .forEach(el => el && el.addEventListener('change', () => window.renderListView()));
-  }
+  // Reset: clears statuses, global search, and tag filter
+  $('#listReset')?.addEventListener('click', () => {
+    $$('#listToolbar .chip.active').forEach(b => b.classList.remove('active'));
+
+    const s = $('#listSearch');
+    if (s) s.value = '';
+
+    const t = $('#listTagFilter');
+    if (t) t.value = '';
+
+    window.renderListView();
+  });
+
+  // React to main dashboard filter changes (map filters)
+  ['tagFilter','typeFilter','cadenceFilter','stateFilter','industryFilter','startDate','endDate']
+    .map(id => document.getElementById(id))
+    .forEach(el => el && el.addEventListener('change', () => window.renderListView()));
+}
+
 
   // Render on List tab click + wire Back to Presentation
   document.addEventListener('DOMContentLoaded', () => {
