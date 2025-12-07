@@ -1091,6 +1091,45 @@ function attachPopupEventDelegates() {
 }
 
 
+// ======================================================
+// Jump-to-map helper used by List View row-click
+// ======================================================
+window.focusLeadOnMap = function focusLeadOnMap(id) {
+  if (!id) return;
+
+  const map  = window.DS.map;
+  const byId = DS.state.markerById;
+
+  // Switch to Map view tab
+  const mapBtn = document.getElementById('btnMapView');
+  if (mapBtn) mapBtn.click();
+
+  if (!map) return;
+  const marker = byId.get(id);
+
+  if (!marker || !marker.getLatLng) {
+    console.warn("No marker found for lead:", id);
+    return;
+  }
+
+  const latlng = marker.getLatLng();
+
+  // Set "current lead" so preview popup knows what to render
+  const lead = DS.state.rawRows.find(r => (r.id || r.uuid) === id);
+  if (lead) {
+    DS_CURRENT_LEAD = lead;
+    lead._marker = marker;
+  }
+
+  // Pan + open popup
+  try {
+    map.setView(latlng, map.getZoom() || 6, { animate: true });
+    // openLeadPopup() requires latlng (Leaflet LatLng)
+    openLeadPopup("preview", latlng);
+  } catch (err) {
+    console.error("focusLeadOnMap error:", err);
+  }
+};
 
 
 

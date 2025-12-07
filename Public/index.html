@@ -1886,6 +1886,24 @@ function getCI(row, key) {
       }
     });
   });
+  
+    // 🗺️ Row click → jump to Map + open that lead’s pin
+  $$('#leadTbody tr').forEach(row => {
+    row.addEventListener('click', () => {
+      const id = row.getAttribute('data-id');
+      if (!id) return;
+
+      // Buttons (delete, geocode, tag-edit) already stopPropagation,
+      // so normal row clicks trigger this cleanly.
+      if (typeof window.focusLeadOnMap === 'function') {
+        window.focusLeadOnMap(id);
+      } else {
+        // Fallback: at least switch to Map View
+        const mapBtn = document.getElementById('btnMapView');
+        if (mapBtn) mapBtn.click();
+      }
+    });
+  });
 }
 
 
