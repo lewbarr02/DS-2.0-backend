@@ -1512,7 +1512,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const dashTgl  = document.getElementById('dashboardToggle');
   const logo     = document.getElementById('logo');
 
-  // Central view controller
   function setView(mode) {
     const isMap = mode === 'map';
 
@@ -1524,52 +1523,56 @@ document.addEventListener('DOMContentLoaded', () => {
       listView.classList.toggle('show', !isMap);
     }
 
-    // Tab button active states
-    btnMap?.classList.toggle('active', isMap);
-    btnList?.classList.toggle('active', !isMap);
+    // Tab button highlight
+    if (btnMap) btnMap.classList.toggle('active', isMap);
+    if (btnList) btnList.classList.toggle('active', !isMap);
 
-    // Logo only visible in Map view
+    // Logo only on Map view
     if (logo) {
       logo.style.display = isMap ? '' : 'none';
     }
 
-    // Dashboard: only in Map view, visible by default
+    // Dashboard only on Map view, visible by default
     if (dash) {
       dash.classList.remove('hidden');
       dash.style.display = isMap ? 'flex' : 'none';
     }
 
-    // Sync Hide Controls button label
+    // Sync Hide Controls label
     if (dashTgl) {
-      const hidden = !isMap;
+      const hidden = !isMap || (dash && dash.style.display === 'none');
       dashTgl.textContent = hidden ? 'Show Controls' : 'Hide Controls';
       dashTgl.setAttribute('aria-pressed', (!hidden).toString());
     }
   }
 
-  // Wire Map/List buttons
+  // Map/List buttons
   btnMap?.addEventListener('click', () => setView('map'));
   btnList?.addEventListener('click', () => setView('list'));
 
-  // Initial state: Map view with dashboard visible
+  // Start in Map view
   setView('map');
 
-  // Hide Controls: only affects the dashboard when in Map view
+  // Hide Controls only affects dashboard in Map view
   dashTgl?.addEventListener('click', () => {
     if (!dash || !mapView) return;
 
     const inMapView = mapView.style.display !== 'none';
-    if (!inMapView) return; // no-op in List view
+    if (!inMapView) return; // ignore clicks in List view
 
-    const currentlyHidden = dash.style.display === 'none';
+    const currentlyHidden =
+      dash.style.display === 'none' || dash.classList.contains('hidden');
     const nowHidden = !currentlyHidden;
 
     dash.style.display = nowHidden ? 'none' : 'flex';
+    dash.classList.toggle('hidden', nowHidden);
+
     dashTgl.textContent = nowHidden ? 'Show Controls' : 'Hide Controls';
     dashTgl.setAttribute('aria-pressed', (!nowHidden).toString());
   });
 });
 </script>
+
 
 
   // Map/List switcher
