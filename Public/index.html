@@ -1504,15 +1504,6 @@ if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
 <!-- ✅ ADD THIS BLOCK RIGHT BELOW THE TWO LINES ABOVE -->
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-  const mapView   = document.getElementById('mapView');
-  const listView  = document.getElementById('listView');
-  const dash      = document.getElementById('dashboard');
-  const btnMap    = document.getElementById('btnMapView');
-  const btnList   = document.getElementById('btnListView');
-  const dashTgl   = document.getElementById('dashboardToggle');
-  const logo      = document.getElementById('logo');   // 👈 NEW
-<script>
-document.addEventListener('DOMContentLoaded', () => {
   const mapView  = document.getElementById('mapView');
   const listView = document.getElementById('listView');
   const dash     = document.getElementById('dashboard');
@@ -1521,6 +1512,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const dashTgl  = document.getElementById('dashboardToggle');
   const logo     = document.getElementById('logo');
 
+  // Central view controller
   function setView(mode) {
     const isMap = mode === 'map';
 
@@ -1532,38 +1524,42 @@ document.addEventListener('DOMContentLoaded', () => {
       listView.classList.toggle('show', !isMap);
     }
 
-    // Tab states
+    // Tab button active states
     btnMap?.classList.toggle('active', isMap);
     btnList?.classList.toggle('active', !isMap);
 
-    // Logo only in Map view
+    // Logo only visible in Map view
     if (logo) {
       logo.style.display = isMap ? '' : 'none';
     }
 
-    // Dashboard only in Map view (always shown when you switch back)
+    // Dashboard: only in Map view, visible by default
     if (dash) {
+      dash.classList.remove('hidden');
       dash.style.display = isMap ? 'flex' : 'none';
     }
 
-    // Reset Hide Controls button label/state based on dash visibility
+    // Sync Hide Controls button label
     if (dashTgl) {
-      const hidden = dash && dash.style.display === 'none';
+      const hidden = !isMap;
       dashTgl.textContent = hidden ? 'Show Controls' : 'Hide Controls';
       dashTgl.setAttribute('aria-pressed', (!hidden).toString());
     }
   }
 
-  // Tab clicks
+  // Wire Map/List buttons
   btnMap?.addEventListener('click', () => setView('map'));
   btnList?.addEventListener('click', () => setView('list'));
 
-  // Initial state: Map view with controls visible
+  // Initial state: Map view with dashboard visible
   setView('map');
 
-  // Hide Controls only affects the dashboard, not the whole screen
+  // Hide Controls: only affects the dashboard when in Map view
   dashTgl?.addEventListener('click', () => {
-    if (!dash) return;
+    if (!dash || !mapView) return;
+
+    const inMapView = mapView.style.display !== 'none';
+    if (!inMapView) return; // no-op in List view
 
     const currentlyHidden = dash.style.display === 'none';
     const nowHidden = !currentlyHidden;
@@ -1574,6 +1570,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 </script>
+
 
   // Map/List switcher
   function showMap() {
