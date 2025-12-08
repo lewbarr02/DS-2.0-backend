@@ -133,7 +133,15 @@ html, body {
       }
 
       /* Logo (existing) */
-      #logo { position: absolute; top: -122px; left: 10px; height: 400px; z-index: 2000; }
+     #logo {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  height: 140px;
+  z-index: 2000;
+  pointer-events: none;  /* prevents interfering with clicks */
+}
+
 
 /* Overlay container – dark mode */
 .presentation-overlay {
