@@ -21,36 +21,39 @@ html, body {
   font-family: 'Nunito Sans', sans-serif;
 }
 
-/* --- MAP AREA (final, full-bleed) --- */
-#mapView {               /* wrapper becomes neutral */
-  position: static;
+/* --- MAP AREA (full-bleed) --- */
+#mapView {
+  position: absolute;
+  inset: 0;        /* top:0; right:0; bottom:0; left:0 */
 }
 
-#map {                   /* the map itself owns the viewport */
-  position: fixed;
-  inset: 0;              /* top:0; right:0; bottom:0; left:0 */
-  height: 100vh;
-  width: 100vw;
+#map {
+  width: 100%;
+  height: 100%;
 }
 
-#mapView.hidden { display: none; }
+#mapView.hidden {
+  display: none;
+}
+
 
       /* --- DASHBOARD (existing) --- */
-      #dashboard {
-        position: absolute;
-        top: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(255, 255, 255, 0.95);
-        padding: 12px 18px;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-        z-index: 1001;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        align-items: center;
-      }
+#dashboard {
+  position: absolute;
+  top: 140px;                 /* sit below the logo */
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 255, 255, 0.95);
+  padding: 12px 18px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  z-index: 2500;              /* above the logo (2000) */
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
       #dashboard.hidden { display: none; }
       #dashboard label { font-weight: bold; margin-right: 5px; }
       #dashboard select, #dashboard input[type="date"] { padding: 4px 8px; font-size: 14px; }
@@ -1574,33 +1577,6 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 
-
-  // Map/List switcher
-  function showMap() {
-    mapView.style.display = 'block';
-    listView.classList.remove('show');
-    btnMap.classList.add('active');
-    btnList.classList.remove('active');
-    if (logo) logo.style.display = '';                 // 👈 NEW (show logo)
-  }
-  function showList() {
-    mapView.style.display = 'none';
-    listView.classList.add('show');
-    btnList.classList.add('active');
-    btnMap.classList.remove('active');
-    if (logo) logo.style.display = 'none';             // 👈 NEW (hide logo)
-  }
-  btnMap?.addEventListener('click', showMap);
-  btnList?.addEventListener('click', showList);
-
-  // Hide Controls toggle
-  dashTgl?.addEventListener('click', () => {
-    const isHidden = dash.classList.toggle('hidden');
-    dashTgl.textContent = isHidden ? 'Show Controls' : 'Hide Controls';
-    dashTgl.setAttribute('aria-pressed', (!isHidden).toString());
-  });
-});
-</script>
 
     <!-- 🧾 Add Lead Modal (updated with Last Touched) -->
     <div class="modal hidden" id="leadModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: none; justify-content: center; align-items: center;">
