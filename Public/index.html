@@ -21,15 +21,19 @@ html, body {
   font-family: 'Nunito Sans', sans-serif;
 }
 
-/* --- MAP AREA (full-bleed) --- */
+/* --- MAP AREA (full-bleed, hard override) --- */
 #mapView {
   position: absolute;
-  inset: 0;        /* full screen container */
+  inset: 0;        /* top:0; right:0; bottom:0; left:0 */
 }
 
+/* Force Leaflet map to occupy the full viewport,
+   even if it previously set an inline height/width. */
 #map {
-  width: 100%;
-  height: 100%;    /* fill the container */
+  position: fixed;
+  inset: 0;
+  width: 100vw !important;
+  height: 100vh !important;
 }
 
 #mapView.hidden {
