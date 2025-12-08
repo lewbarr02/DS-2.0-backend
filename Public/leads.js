@@ -1,5 +1,23 @@
 /* Deli Sandwich – Functional Map (filters + clustering + stats) */
 
+function showToast(message) {
+  const toast = document.getElementById("toast");
+  if (!toast) return;
+
+  toast.textContent = message;
+  toast.classList.remove("hidden");
+  
+  // Trigger transition
+  setTimeout(() => toast.classList.add("show"), 10);
+
+  // Auto-hide after 3 seconds
+  setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => toast.classList.add("hidden"), 250);
+  }, 3000);
+}
+
+
 (() => {
 // ---------- API BASE ----------
 const API_BASE = window.DELI_API_BASE || '';
@@ -745,12 +763,14 @@ function normalizeWebsite(url) {
         </div>
 
 <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.5rem">
-  <button class="ds-btn-edit"
+  <button type="button"
+          class="ds-btn-edit"
           style="padding:.4rem .7rem;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:#f8f8f8">
     Edit
   </button>
 
-  <button class="ds-btn-close"
+  <button type="button"
+          class="ds-btn-close"
           style="padding:.4rem .7rem;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:white">
     Close
   </button>
@@ -1017,7 +1037,7 @@ function attachPopupEventDelegates() {
 
 
 
-  // Save submit
+  // Save submit (handles both NEW + EXISTING leads)
   document.addEventListener("submit", async (e) => {
     const form = e.target;
     if (!form.classList?.contains("ds-edit-form")) return;
@@ -1041,7 +1061,17 @@ function attachPopupEventDelegates() {
       notes: fd.get("notes") || null
     };
 
-    const id = DS_CURRENT_LEAD.id;
+    // Figure out if this is a NEW lead (no id) or an existing one
+    const currentId = DS_CURRENT_LEAD && DS_CURRENT_LEAD.id
+      ? DS_CURRENT_LEAD.id
+      : (fd.get("id") || null);
+
+    const isNew = !currentId;
+    const url = isNew
+      ? `${API_BASE}/leads`
+      : `${API_BASE}/update-lead/${encodeURIComponent(currentId)}`;
+    const method = isNew ? "POST" : "PUT";
+
     const saveBtn = form.querySelector(".ds-btn-save");
 
     try {
@@ -1051,23 +1081,40 @@ function attachPopupEventDelegates() {
         saveBtn.textContent = "Saving…";
       }
 
-      const res = await fetch(`${API_BASE}/update-lead/${encodeURIComponent(id)}`, {
-        method: "PUT",
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        const text = await res.text().catch(()=>"");
+        const text = await res.text().catch(() => "");
         throw new Error(`Save failed (${res.status}) ${text}`);
       }
 
-      // Response can be the updated row; merge into memory
-      const updated = await res.json().catch(()=> ({}));
-      const freshLead = updated.lead || updated || {};
-      Object.assign(DS_CURRENT_LEAD, payload, freshLead);
+      // Response might be { lead } (PUT) or the row itself (POST)
+      const body = await res.json().catch(() => ({}));
+      const freshLead = body.lead || body || {};
 
-      // Update marker UI and position if needed
+      // Merge server result + payload into DS_CURRENT_LEAD
+      DS_CURRENT_LEAD = { ...(DS_CURRENT_LEAD || {}), ...payload, ...freshLead };
+
+      // If this is a brand NEW lead, just refresh everything & close popup
+      if (isNew) {
+        if (window.refreshLeads) {
+          await window.refreshLeads();
+        }
+        if (window.map && dsPopup) {
+          window.map.closePopup(dsPopup);
+        }
+		
+		showToast("Lead created successfully!");   // ⭐ ADD THIS LINE
+		
+        return;
+      }
+
+      // Existing lead update path below ⬇️
+
       const markerKey = leadKey(
         DS_CURRENT_LEAD.id || DS_CURRENT_LEAD.uuid || DS_CURRENT_LEAD.lead_id
       );
@@ -1080,20 +1127,25 @@ function attachPopupEventDelegates() {
           Number.isFinite(DS_CURRENT_LEAD.latitude) &&
           Number.isFinite(DS_CURRENT_LEAD.longitude)
         ) {
-          marker.setLatLng([DS_CURRENT_LEAD.latitude, DS_CURRENT_LEAD.longitude]);
+          marker.setLatLng([
+            DS_CURRENT_LEAD.latitude,
+            DS_CURRENT_LEAD.longitude,
+          ]);
         }
       }
 
       // Replace the row in rawRows
-      const idx = DS.state.rawRows.findIndex(r =>
-        leadKey(r.id || r.uuid || r.lead_id) === markerKey
+      const idx = DS.state.rawRows.findIndex(
+        (r) => leadKey(r.id || r.uuid || r.lead_id) === markerKey
       );
       if (idx >= 0) {
-        DS.state.rawRows[idx] = { ...DS.state.rawRows[idx], ...DS_CURRENT_LEAD };
+        DS.state.rawRows[idx] = {
+          ...DS.state.rawRows[idx],
+          ...DS_CURRENT_LEAD,
+        };
       }
 
-
-      // Swap back to preview
+      // Swap back to preview for existing leads
       const latlng = dsPopup.getLatLng();
       openLeadPopup("preview", latlng);
 
@@ -1111,6 +1163,7 @@ function attachPopupEventDelegates() {
       }
     }
   });
+
 }
 
 
@@ -1162,32 +1215,58 @@ window.focusLeadOnMap = function focusLeadOnMap(id) {
 
 
 
-  // ---------- BOOT ----------
-  async function boot() {
-    const map = ensureMap();
-    if (!map) return;
+// ---------- BOOT ----------
+async function boot() {
+  const map = ensureMap();
+  if (!map) return;
 
-    // Make map globally accessible to the popup helper
-    window.map = map;
-    attachPopupEventDelegates();   // new preview/edit system
+  // Make map globally accessible to the popup helper
+  window.map = map;
+  attachPopupEventDelegates();   // new preview/edit system
 
-    // Fetch + render using centralized loader (full /summary preferred)
-    let payload;
-    try {
-      payload = await loadMapData();
-    } catch (err) {
-      console.error('Failed to load leads:', err);
-      return;
-    }
-
+  // Fetch + render (uses same helper as refreshLeads)
+  const payload = await loadMapData();
   DS.state.rawRows = unwrapData(payload);
   populateFilterOptions();
   wireDashboard();
+
+  // ⭐ Wire "+ Add Lead" button
+  const addBtn = document.getElementById("addLeadBtn");
+  if (addBtn) {
+    addBtn.addEventListener("click", () => {
+      // Blank lead template for new entry
+      DS_CURRENT_LEAD = {
+        id: null,
+        name: "",
+        email: "",
+        company: "",
+        website: "",
+        city: "",
+        state: "",
+        status: "unspecified",
+        industry: "",
+        forecast_month: "",
+        lead_type: "",
+        arr: null,
+        ap_spend: null,
+        tags: [],
+        notes: "",
+        latitude: null,
+        longitude: null,
+      };
+
+      // Open edit popup at map center
+      const center = window.map.getCenter();
+      openLeadPopup("edit", center);
+    });
+  }
+
+  // Render everything
   computeFiltered();
   renderMarkers();
   updateStats();
 
-  // 🔁 Initial List View render once data + filters are ready
+  // Keep List View in sync if helper exists
   if (typeof window.renderListView === 'function') {
     window.renderListView();
   }

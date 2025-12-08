@@ -74,6 +74,19 @@ html, body {
         cursor: pointer;
         font-size: 14px;
       }
+	  
+	        #dashboard .dashboard-actions-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        flex-basis: 100%;      /* forces this row to its own line */
+      }
+
+      #dashboard .dashboard-lead-actions {
+        justify-content: flex-end;  /* pushes Add Lead to the right on its row */
+      }
+
 
       /* --- MAP LEGEND & STATS (existing) --- */
       #legend {
@@ -751,6 +764,62 @@ html, body {
         color: #111827;
         font-size: 12px;
       }
+	  
+	  .toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: #28a745; /* green */
+  color: white;
+  padding: 12px 18px;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.25);
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: all 0.25s ease;
+  z-index: 99999;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast.hidden {
+  display: none;
+}
+
+/* ✅ Green success toast */
+#toast {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  padding: 8px 14px;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #16a34a; /* green */
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 9999;
+}
+
+#toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+#toast.hidden {
+  display: none;
+}
+
+	  
     </style>
   </head>
   <body>
@@ -807,21 +876,44 @@ html, body {
         <label for="endDate">To:</label>
         <input id="endDate" type="date"/>
       </div>
-      <div>
+      <!-- Main action row -->
+      <div class="dashboard-actions-row">
         <button id="launchPresentation">Launch Presentation Mode</button>
         <button id="exportDailyList">Daily List</button>
         <button id="resetFilters">Reset Filters</button>
-      </div>
-<div>
-  <button id="openSummaryBtn" onclick="location.href='summary.html?range=today'">📊 Open Today’s Summary</button>
-  <button id="startMyDayBtn">🚀 Start My Day (20)</button>
-  <button id="startMyDayEventBtn">🎯 Start My Day (Event Mode)</button>
 
-  <!-- ⭐ NEW: Direct AFP Event Mode button -->
-  <button id="startMyDayAFPBtn">🏟 AFP Event Mode</button>
+<div
+  style="
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    align-items:center;
+    margin-top:8px;
+  "
+>
+  <button id="openSummaryBtn" onclick="location.href='summary.html?range=today'">
+    📊 Open Today’s Summary
+  </button>
 
-  <button id="addLeadBtn">➕ Add Lead</button>
+  <button id="startMyDayBtn">
+    🚀 Start My Day (20)
+  </button>
+
+  <button id="startMyDayEventBtn">
+    🎯 Start My Day (Event Mode)
+  </button>
+
+  <!-- ⭐ Direct AFP Event Mode button -->
+  <button id="startMyDayAFPBtn">
+    🏟 AFP Event Mode
+  </button>
+
+  <button id="addLeadBtn">
+    ➕ Add Lead
+  </button>
 </div>
+
+
 
 
       <!-- 📤 CSV Upload -->
@@ -2866,6 +2958,11 @@ async function loadPresentationBandNotesFromSummary() {
   window.openPresentationMode = openPresentationMode;
 })();
 </script>
+
+
+<!-- ✅ Global toast container -->
+<div id="toast" class="hidden"></div>
+
 
 </body>
 </html>

@@ -1950,6 +1950,175 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
 });
 
 
+// --- CREATE A NEW LEAD ---
+// POST /leads – create a single new lead and return it
+app.post('/leads', async (req, res) => {
+  // Helpers (same logic as /update-lead)
+  const strOrNull = (v) =>
+    v === '' || v == null ? null : String(v);
+
+  // Parse things like "25000000", "25M", "10k", "1.2B"
+  function parseShortMoney(raw) {
+    if (raw === null || raw === undefined || raw === '') return null;
+
+    let s = String(raw).trim();
+    if (!s) return null;
+
+    // strip $ and commas
+    s = s.replace(/[\$,]/g, '').toLowerCase();
+
+    const match = s.match(/^([\d.,]+)(k|m{1,2}|b)?$/);
+    if (!match) {
+      const n = Number(s.replace(/,/g, ''));
+      return Number.isFinite(n) ? n : null;
+    }
+
+    let num = parseFloat(match[1].replace(/,/g, ''));
+    if (!Number.isFinite(num)) return null;
+
+    const suffix = match[2];
+    if (suffix === 'k') {
+      num *= 1_000;
+    } else if (suffix === 'm' || suffix === 'mm') {
+      num *= 1_000_000;
+    } else if (suffix === 'b') {
+      num *= 1_000_000_000;
+    }
+
+    return num;
+  }
+
+  const numOrNull = (v) => {
+    const n = parseShortMoney(v);
+    return n == null ? null : n;
+  };
+
+  // ---- Basic validation: need at least name + company ----
+  const name    = strOrNull(req.body.name);
+  const company = strOrNull(req.body.company);
+
+  if (!name || !company) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing required fields: name and company are required to create a lead.'
+    });
+  }
+
+  // Normalize status using shared helper (same shape as DB)
+  const normalizedStatus = normalizeStatus(req.body.status);
+
+  // Tags → text[]
+  let tags = null;
+  if (typeof req.body.tags === 'string') {
+    const parts = req.body.tags
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    tags = parts.length ? parts : null;
+  } else if (Array.isArray(req.body.tags)) {
+    const parts = req.body.tags
+      .map((s) => String(s).trim())
+      .filter(Boolean);
+    tags = parts.length ? parts : null;
+  }
+
+  const payload = {
+    name,
+    email: strOrNull(req.body.email),
+    company,
+    website: strOrNull(req.body.website),
+    city: strOrNull(req.body.city),
+    state: strOrNull(req.body.state?.toUpperCase?.() || req.body.state),
+    status: normalizedStatus,
+    industry: strOrNull(req.body.industry),
+    forecast_month: strOrNull(req.body.forecast_month),
+    lead_type: strOrNull(req.body.lead_type),
+    arr: numOrNull(req.body.arr),
+    ap_spend: numOrNull(req.body.ap_spend),
+    notes: strOrNull(req.body.notes),
+    latitude: numOrNull(req.body.latitude),
+    longitude: numOrNull(req.body.longitude),
+    tags
+  };
+
+  const sql = `
+    INSERT INTO leads (
+      name,
+      email,
+      company,
+      website,
+      city,
+      state,
+      status,
+      industry,
+      forecast_month,
+      lead_type,
+      arr,
+      ap_spend,
+      tags,
+      notes,
+      latitude,
+      longitude,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+      $11, $12, $13, $14, $15, $16, NOW(), NOW()
+    )
+    RETURNING *;
+  `;
+
+  const params = [
+    payload.name,        // $1
+    payload.email,       // $2
+    payload.company,     // $3
+    payload.website,     // $4
+    payload.city,        // $5
+    payload.state,       // $6
+    payload.status,      // $7
+    payload.industry,    // $8
+    payload.forecast_month, // $9
+    payload.lead_type,   // $10
+    payload.arr,         // $11
+    payload.ap_spend,    // $12
+    payload.tags,        // $13
+    payload.notes,       // $14
+    payload.latitude,    // $15
+    payload.longitude,   // $16
+  ];
+
+  try {
+    const { rows } = await pool.query(sql, params);
+    if (!rows.length) {
+      return res.status(500).json({
+        success: false,
+        error: 'Insert failed with no returned row'
+      });
+    }
+
+    const lead = rows[0];
+
+    // Clean status for frontend (replace underscores with dashes)
+    if (typeof lead.status === 'string') {
+      lead.status = lead.status.replace(/_/g, '-');
+    }
+
+    return res.status(201).json({
+      success: true,
+      lead
+    });
+  } catch (err) {
+    console.error('POST /leads error:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to create lead',
+      details: err.message
+    });
+  }
+});
+
+
 
 
 // --- UPDATE A LEAD (Safe UPSERT; now logs status history) ---
