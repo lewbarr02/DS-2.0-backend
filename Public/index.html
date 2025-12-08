@@ -1503,6 +1503,69 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnList   = document.getElementById('btnListView');
   const dashTgl   = document.getElementById('dashboardToggle');
   const logo      = document.getElementById('logo');   // 👈 NEW
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const mapView  = document.getElementById('mapView');
+  const listView = document.getElementById('listView');
+  const dash     = document.getElementById('dashboard');
+  const btnMap   = document.getElementById('btnMapView');
+  const btnList  = document.getElementById('btnListView');
+  const dashTgl  = document.getElementById('dashboardToggle');
+  const logo     = document.getElementById('logo');
+
+  function setView(mode) {
+    const isMap = mode === 'map';
+
+    // Map vs List visibility
+    if (mapView) {
+      mapView.style.display = isMap ? 'block' : 'none';
+    }
+    if (listView) {
+      listView.classList.toggle('show', !isMap);
+    }
+
+    // Tab states
+    btnMap?.classList.toggle('active', isMap);
+    btnList?.classList.toggle('active', !isMap);
+
+    // Logo only in Map view
+    if (logo) {
+      logo.style.display = isMap ? '' : 'none';
+    }
+
+    // Dashboard only in Map view (always shown when you switch back)
+    if (dash) {
+      dash.style.display = isMap ? 'flex' : 'none';
+    }
+
+    // Reset Hide Controls button label/state based on dash visibility
+    if (dashTgl) {
+      const hidden = dash && dash.style.display === 'none';
+      dashTgl.textContent = hidden ? 'Show Controls' : 'Hide Controls';
+      dashTgl.setAttribute('aria-pressed', (!hidden).toString());
+    }
+  }
+
+  // Tab clicks
+  btnMap?.addEventListener('click', () => setView('map'));
+  btnList?.addEventListener('click', () => setView('list'));
+
+  // Initial state: Map view with controls visible
+  setView('map');
+
+  // Hide Controls only affects the dashboard, not the whole screen
+  dashTgl?.addEventListener('click', () => {
+    if (!dash) return;
+
+    const currentlyHidden = dash.style.display === 'none';
+    const nowHidden = !currentlyHidden;
+
+    dash.style.display = nowHidden ? 'none' : 'flex';
+    dashTgl.textContent = nowHidden ? 'Show Controls' : 'Hide Controls';
+    dashTgl.setAttribute('aria-pressed', (!nowHidden).toString());
+  });
+});
+</script>
 
   // Map/List switcher
   function showMap() {
