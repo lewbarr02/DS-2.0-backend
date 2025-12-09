@@ -1644,6 +1644,27 @@ function getCI(row, key) {
     apply(DS.state.rawRows);
     apply(DS.state.filtered);
   }
+  
+    // Remove a single lead from DS.state (raw + filtered) without resetting filters
+  function deleteLeadFromState(id) {
+    const DS = window.DS || {};
+    if (!DS.state) return;
+
+    const remove = (rows) => {
+      if (!Array.isArray(rows)) return;
+      const idx = rows.findIndex((r) => {
+        const rid = r.id || r.ID || r.lead_id;
+        return rid != null && String(rid) === String(id);
+      });
+      if (idx !== -1) {
+        rows.splice(idx, 1);
+      }
+    };
+
+    remove(DS.state.rawRows);
+    remove(DS.state.filtered);
+  }
+
 
 
   function prettyStatus(s) {
@@ -1793,9 +1814,10 @@ function getCI(row, key) {
             return;
           }
 
-          if (typeof window.refreshLeads === 'function') {
-            await window.refreshLeads();
-          }
+          // ✅ Remove this lead from in-memory state so filters stay put
+          deleteLeadFromState(id);
+
+          // Re-render the List View with the same filters + chips
           if (typeof window.renderListView === 'function') {
             window.renderListView();
           }
@@ -1803,6 +1825,7 @@ function getCI(row, key) {
           console.error('List delete error', err);
           alert('Delete failed due to a network error.');
         }
+
       });
     });
 
