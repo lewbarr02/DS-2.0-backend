@@ -1830,9 +1830,20 @@ function getCI(row, key) {
             console.error('Row geocode failed', res.status, data);
             alert('Geocode failed – please try again.');
           } else {
-            if (typeof window.refreshLeads === 'function') {
-              await window.refreshLeads();
+            // ✅ Try to grab new lat/lng from the response, if provided
+            const updated = (data.lead || data.updated || data.row || data) || {};
+            const lat = updated.latitude ?? updated.lat ?? null;
+            const lng = updated.longitude ?? updated.lng ?? updated.lon ?? null;
+
+            // ✅ Patch this lead in memory so filters stay put
+            if (lat != null && lng != null) {
+              patchLeadInState(id, {
+                latitude: lat,
+                longitude: lng
+              });
             }
+
+            // Re-render the List View with current filters
             if (typeof window.renderListView === 'function') {
               window.renderListView();
             }
@@ -1846,6 +1857,7 @@ function getCI(row, key) {
         }
       });
     });
+
 
     // 🏷️ TAGS INLINE EDIT HANDLERS (unchanged)
     $$('#leadTbody .tags-edit-btn').forEach(btn => {
