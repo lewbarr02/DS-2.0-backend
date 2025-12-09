@@ -1624,6 +1624,27 @@ function getCI(row, key) {
     return hit ? row[hit] ?? '' : '';
 }
 
+  // Patch a single lead in DS.state without blowing away filters
+  function patchLeadInState(id, partial) {
+    const DS = window.DS || {};
+    if (!DS.state) return;
+
+    const apply = (rows) => {
+      if (!Array.isArray(rows)) return;
+      rows.forEach((r) => {
+        const rid = r.id || r.ID || r.lead_id;
+        if (rid != null && String(rid) === String(id)) {
+          Object.keys(partial).forEach((k) => {
+            r[k] = partial[k];
+          });
+        }
+      });
+    };
+
+    apply(DS.state.rawRows);
+    apply(DS.state.filtered);
+  }
+
 
   function prettyStatus(s) {
     if (!s) return '⚪ Unspecified';
@@ -1893,12 +1914,13 @@ function getCI(row, key) {
                 return;
               }
 
-              if (typeof window.refreshLeads === 'function') {
-                await window.refreshLeads();
-              }
+              // ✅ Patch this lead in memory so filters stay put
+              patchLeadInState(id, { tags: newTags });
+
               if (typeof window.renderListView === 'function') {
                 window.renderListView();
               }
+
             } catch (err) {
               console.error('Error updating tags', err);
               alert('Error saving tags – network or server issue.');
@@ -1981,15 +2003,13 @@ function getCI(row, key) {
         const stateSel  = stateCell.querySelector('.row-edit-state');
         const indSel    = industryCell.querySelector('.row-edit-industry');
 
-        const resetRow = async () => {
+        const resetRow = () => {
           delete row.dataset.editing;
-          if (typeof window.refreshLeads === 'function') {
-            await window.refreshLeads();
-          }
           if (typeof window.renderListView === 'function') {
             window.renderListView();
           }
         };
+
 
         if (cancelBtn) {
           cancelBtn.addEventListener('click', async (ev) => {
@@ -2023,6 +2043,12 @@ function getCI(row, key) {
                 alert('Could not save changes – please try again.');
                 return;
               }
+			  
+			   // ✅ Patch this lead in memory so dashboard + list filters stay as-is
+              patchLeadInState(id, {
+                state: newState || null,
+                industry: newIndustry || null
+              });
 
               await resetRow();
             } catch (err) {
