@@ -1528,7 +1528,7 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
 <script>
 /* ---------- List View wiring + sorting ---------- */
-(function () {
+
   // Helpers
   const $  = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -2339,7 +2339,7 @@ function wireListControls() {
       });
     }
   });
-})();   // ✅ properly close the IIFE
+
 
 
 </script>
