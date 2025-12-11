@@ -2271,51 +2271,64 @@ function computeListFilteredAndSorted() {
   };
 
   // Wire List toolbar controls
-function wireListControls() {
-  // Global search
-  $('#listSearch')?.addEventListener('input', () => window.renderListView());
+  function wireListControls() {
+    // Global search
+    $('#listSearch')?.addEventListener('input', () => window.renderListView());
 
-  // ⭐ NEW: Tag-only filter search
-  $('#listTagFilter')?.addEventListener('input', () => window.renderListView());
+    // Tag-only filter search
+    $('#listTagFilter')?.addEventListener('input', () => window.renderListView());
 
-  // Status chips
-  $$('#listToolbar .chip[data-status]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      btn.classList.toggle('active');
+    // Status chips
+    $$('#listToolbar .chip[data-status]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        btn.classList.toggle('active');
+        window.renderListView();
+      });
+    });
+
+    // Reset: clears statuses, global search, and tag filter
+    $('#listReset')?.addEventListener('click', () => {
+      $$('#listToolbar .chip.active').forEach(b => b.classList.remove('active'));
+
+      const s = $('#listSearch');
+      if (s) s.value = '';
+
+      const t = $('#listTagFilter');
+      if (t) t.value = '';
+
       window.renderListView();
     });
-  });
 
-  // Reset: clears statuses, global search, and tag filter
-  $('#listReset')?.addEventListener('click', () => {
-    $$('#listToolbar .chip.active').forEach(b => b.classList.remove('active'));
-
-    const s = $('#listSearch');
-    if (s) s.value = '';
-
-    const t = $('#listTagFilter');
-    if (t) t.value = '';
-
-    window.renderListView();
-  });
-
-  // React to main dashboard filter changes (map filters)
-  ['tagFilter','typeFilter','cadenceFilter','stateFilter','industryFilter','startDate','endDate']
-    .map(id => document.getElementById(id))
-    .forEach(el => el && el.addEventListener('change', () => window.renderListView()));
-}
-
+    // React to main dashboard filter changes (map filters)
+    [
+      'tagFilter',
+      'typeFilter',
+      'cadenceFilter',
+      'stateFilter',
+      'industryFilter',
+      'startDate',
+      'endDate'
+    ]
+      .map(id => document.getElementById(id))
+      .forEach(el => {
+        if (!el) return;
+        el.addEventListener('change', () => window.renderListView());
+      });
+  }
 
   // Render on List tab click + wire Back to Presentation
   document.addEventListener('DOMContentLoaded', () => {
     wireListControls();
 
     // When user clicks "List" tab, render the list
-    document.getElementById('btnListView')?.addEventListener('click', () => {
-      setTimeout(() => window.renderListView(), 0);
-    });
+    const btnList = document.getElementById('btnListView');
+    if (btnList) {
+      btnList.addEventListener('click', () => {
+        setTimeout(() => window.renderListView(), 0);
+      });
+    }
 
-    // ⭐ NEW: Back to Presentation button
+    // Back to Presentation button
     const backBtn = document.getElementById('backToPresentation');
     if (backBtn) {
       backBtn.addEventListener('click', () => {
@@ -2323,7 +2336,6 @@ function wireListControls() {
         const mapView = document.getElementById('mapView');
         const listView = document.getElementById('listView');
         const btnMap  = document.getElementById('btnMapView');
-        const btnList = document.getElementById('btnListView');
 
         if (mapView && listView && btnMap && btnList) {
           mapView.style.display = 'block';
@@ -2339,6 +2351,9 @@ function wireListControls() {
       });
     }
   });
+
+})();   // ✅ properly close the IIFE
+
 
 
 
