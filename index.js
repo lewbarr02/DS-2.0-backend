@@ -2033,7 +2033,7 @@ app.put('/update-lead/:id', async (req, res) => {
     company: strOrNull(req.body.company),
     website: strOrNull(req.body.website),
     city: strOrNull(req.body.city),
-    state: strOrNull(req.body.state?.toUpperCase?.() || req.body.state),
+    state: strOrNull(req.body.state),
     status,
     industry: strOrNull(req.body.industry),
     forecast_month: strOrNull(req.body.forecast_month),

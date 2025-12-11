@@ -139,6 +139,24 @@ function leadKey(val) {
   return String(val);
 }
 
+// Normalize state names / codes into a single, clean label
+function normalizeStateLabel(raw) {
+  if (!raw) return '';
+  const s = String(raw).trim();
+  if (!s) return '';
+
+  const lower = s.toLowerCase();
+
+  // Special-case DC
+  if (lower === 'dc' || lower === 'd.c.' || lower === 'district of columbia') {
+    return 'District of Columbia';
+  }
+
+  // Simple title-case fallback: "florida" → "Florida", "new york" → "New York"
+  return lower.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+
   
     // Expose for other scripts (Presentation Mode, etc.)
   DS.statusKey = statusKey;
@@ -497,27 +515,29 @@ function renderMarkers() {
   function populateFilterOptions() {
     const rows = DS.state.rawRows || [];
 
-    const uniqueFrom = (key) =>
-      Array.from(
+    const uniqueFrom = (key, opts = {}) => {
+      const { normalize } = opts;
+      return Array.from(
         new Set(
           rows
             .map((r) => {
               const hit = Object.keys(r).find(
                 (k) => k.toLowerCase() === key.toLowerCase()
               );
-              return hit ? (r[hit] || '') : '';
+              if (!hit) return '';
+              const raw = r[hit] || '';
+              return normalize ? normalize(raw) : raw;
             })
             .filter(Boolean)
         )
       ).sort((a, b) => ('' + a).localeCompare('' + b));
+    };
 
     const setOpts = (el, values) => {
       if (!el) return;
       el.innerHTML =
         '<option value="All">All</option>' +
-        values
-          .map((v) => `<option value="${v}">${v}</option>`)
-          .join('');
+        values.map((v) => `<option value="${v}">${v}</option>`).join('');
     };
 
     // -------- TAG OPTIONS (normalize crazy JSON-ish values) --------
@@ -539,20 +559,31 @@ function renderMarkers() {
 
     // -------- TYPE OPTIONS --------
     const types = Array.from(
-      new Set([...uniqueFrom('type'), ...uniqueFrom('lead_type')])
+      new Set([
+        ...uniqueFrom('type'),
+        ...uniqueFrom('lead_type'),
+      ])
     )
       .filter(Boolean)
       .sort((a, b) => ('' + a).localeCompare('' + b));
     setOpts(els.typeFilter(), types);
 
     // -------- CADENCE / STATE / INDUSTRY OPTIONS --------
+    const cadenceValues = uniqueFrom('cadence_name');
     setOpts(
       els.cadenceFilter(),
-      uniqueFrom('cadence_name') || uniqueFrom('cadence')
+      cadenceValues.length ? cadenceValues : uniqueFrom('cadence')
     );
-    setOpts(els.stateFilter(), uniqueFrom('state'));
+
+    // 🔁 State uses normalized labels so we don’t get FLORIDA + Florida, etc.
+    setOpts(
+      els.stateFilter(),
+      uniqueFrom('state', { normalize: normalizeStateLabel })
+    );
+
     setOpts(els.industryFilter(), uniqueFrom('industry'));
   }
+
 
 
 
@@ -1025,12 +1056,15 @@ function attachPopupEventDelegates() {
     if (DS_SAVE_IN_FLIGHT) return;
 
     const fd = new FormData(form);
+	const rawState = (fd.get("state") || "").trim();
+    const normalizedState = normalizeStateLabel(rawState);
+	
     const payload = {
       name: fd.get("name")?.trim() || null,
       company: fd.get("company")?.trim() || null,
       website: (fd.get("website") || "").trim() || null,
       city: fd.get("city")?.trim() || null,
-      state: fd.get("state")?.trim().toUpperCase() || null,
+      state: normalizedState || null,
       status: statusKey((fd.get("status") || "unspecified").trim()),
       industry: (fd.get("industry") || "").trim() || null,
       forecast_month: (fd.get("forecast_month") || "").trim() || null,

@@ -1576,7 +1576,24 @@ document.addEventListener('DOMContentLoaded', () => {
     converted: 0, hot: 1, warm: 2, 'follow-up': 3, cold: 4, research: 5, unspecified: 6
   };
   
-    // Build dropdown option lists from current data
+  // Normalize state labels so we don't end up with "ALABAMA" + "Alabama"
+  function normalizeStateLabel(raw) {
+    if (!raw) return '';
+    const s = String(raw).trim();
+    if (!s) return '';
+
+    const lower = s.toLowerCase();
+
+    // Special-case DC
+    if (lower === 'dc' || lower === 'd.c.' || lower === 'district of columbia') {
+      return 'District of Columbia';
+    }
+
+    // Title-case each word (alabama -> Alabama, new york -> New York)
+    return lower.replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  // Build dropdown option lists from current data
   function buildStateOptions() {
     const DS = window.DS || {};
     const rows = (DS.state && (DS.state.rawRows || DS.state.filtered)) || [];
@@ -1585,29 +1602,17 @@ document.addEventListener('DOMContentLoaded', () => {
     rows.forEach((r) => {
       const raw = r.state || r.State || r['State/Province'] || '';
       if (!raw) return;
-      const v = String(raw).trim().toUpperCase();
-      if (v) set.add(v);
+
+      const label = normalizeStateLabel(raw);
+      if (label) set.add(label);
     });
 
-    return Array.from(set).sort();
-  }
-
-  function buildIndustryOptions() {
-    const DS = window.DS || {};
-    const rows = (DS.state && (DS.state.rawRows || DS.state.filtered)) || [];
-    const set = new Set();
-
-    rows.forEach((r) => {
-      const raw = r.industry || r.Industry || r.vertical || r.Vertical || '';
-      if (!raw) return;
-      const v = String(raw).trim();
-      if (v) set.add(v);
-    });
-
+    // Sort alphabetically, case-insensitive
     return Array.from(set).sort((a, b) =>
       a.toLowerCase().localeCompare(b.toLowerCase())
     );
   }
+
 
 
 function getCI(row, key) {
@@ -2059,8 +2064,10 @@ function getCI(row, key) {
             ev.preventDefault();
             ev.stopPropagation();
 
-            const newState    = stateSel ? stateSel.value.trim() : '';
-            const newIndustry = indSel ? indSel.value.trim() : '';
+        const newStateRaw = stateSel ? stateSel.value.trim() : '';
+        const newState    = normalizeStateLabel(newStateRaw);
+        const newIndustry = indSel ? indSel.value.trim() : '';
+
 
             try {
               const API_BASE = window.DELI_API_BASE || '';
