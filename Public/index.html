@@ -2166,10 +2166,11 @@ function getCI(row, key) {
     });
   });
 
-
+}  // close renderListView's renderListTable
 
   // Base rows from leads.js
   function getFilteredRows() {
+
     const DS = window.DS || {};
     const rows = (DS.state && (DS.state.filtered || DS.state.rawRows)) || [];
     return Array.isArray(rows) ? rows : [];
