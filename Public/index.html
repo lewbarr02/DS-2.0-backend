@@ -2670,15 +2670,15 @@ function wireListControls() {
     // Short narrative (3–4 sentences max)
     const parts = [];
 
-    if (inEventMode) {
-      parts.push(
-        `Across AFP Event accounts, you contacted ${touched} lead${touched === 1 ? '' : 's'} over ${touches} total touches in this window.`
-      );
-    } else {
-      parts.push(
-        `You contacted ${touched} lead${touched === 1 ? '' : 's'} across ${touches} total touches in this window.`
-      );
-    }
+if (inEventMode) {
+  parts.push(
+    `Across AFP Event accounts, you contacted ${touched} lead${touched === 1 ? '' : 's'} over ${touches} total touches in this window.`
+  );
+} else {
+  parts.push(
+    `You contacted ${touched} lead${touched === 1 ? '' : 's'} across ${touches} total touches in this window.`
+  );
+}
 
     if (upgrades || downgrades) {
       parts.push(
