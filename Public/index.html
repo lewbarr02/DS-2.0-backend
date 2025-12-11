@@ -2020,6 +2020,7 @@ function getCI(row, key) {
       });
     });
 
+
   // 📝 ROW EDIT (State + Industry dropdowns)
   $$('#leadTbody .row-edit-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -2036,7 +2037,6 @@ function getCI(row, key) {
       const cells = row.querySelectorAll('td');
       if (cells.length < 16) return;
 
-      // 📝 ROW EDIT (State + Industry dropdowns)
       const stateCell    = cells[5]; // State column
       const industryCell = cells[6]; // Industry column
       const actionsCell  = cells[15];
@@ -2066,8 +2066,10 @@ function getCI(row, key) {
         })
       ].join('');
 
-      stateCell.innerHTML = `<select class="inline-edit-state">${stateOptionsHtml}</select>`;
-      industryCell.innerHTML = `<select class="inline-edit-industry">${industryOptionsHtml}</select>`;
+      stateCell.innerHTML =
+        `<select class="inline-edit-state">${stateOptionsHtml}</select>`;
+      industryCell.innerHTML =
+        `<select class="inline-edit-industry">${industryOptionsHtml}</select>`;
 
       const originalActionsHtml = actionsCell.innerHTML;
       actionsCell.innerHTML = `
@@ -2101,24 +2103,38 @@ function getCI(row, key) {
         const newIndustry = indSel.value;
 
         try {
-          const res = await fetch(`/update-lead/${id}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              state: newState || null,
-              industry: newIndustry || null
-            })
-          });
+          const API_BASE = window.DELI_API_BASE || '';
+          const res = await fetch(
+            `${API_BASE}/update-lead/${encodeURIComponent(id)}`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                state: newState || null,
+                industry: newIndustry || null
+              })
+            }
+          );
 
-          const data = await res.json();
-          if (!res.ok || !data.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || (data && data.ok === false)) {
             console.error('Inline update failed:', data);
             alert('Save failed. Please try again.');
             return;
           }
 
+          // ✅ Update UI on success
           stateCell.textContent    = newState || '';
           industryCell.textContent = newIndustry || '';
+
+          // ✅ Patch in-memory DS.state so filters stay put
+          if (typeof patchLeadInState === 'function') {
+            patchLeadInState(id, {
+              state: newState || null,
+              industry: newIndustry || null
+            });
+          }
+
         } catch (err) {
           console.error('Inline update error:', err);
           alert('Save failed (network error).');
@@ -2130,23 +2146,24 @@ function getCI(row, key) {
     });
   });
 
+  // 🗺️ Row click → jump to Map + open that lead’s pin
+  $$('#leadTbody tr').forEach(row => {
+    row.addEventListener('click', () => {
+      // Don’t navigate when inline editing is active
+      if (row.dataset.editing === '1') return;
 
-    // 🗺️ Row click → jump to Map + open that lead’s pin
-    $$('#leadTbody tr').forEach(row => {
-      row.addEventListener('click', () => {
-        if (row.dataset.editing === '1') return; // don’t navigate while editing
-        const id = row.getAttribute('data-id');
-        if (!id) return;
+      const id = row.getAttribute('data-id');
+      if (!id) return;
 
-        if (typeof window.focusLeadOnMap === 'function') {
-          window.focusLeadOnMap(id);
-        } else {
-          const mapBtn = document.getElementById('btnMapView');
-          if (mapBtn) mapBtn.click();
-        }
-      });
+      // Ask map code to focus this lead, or at least switch to map view
+      if (typeof window.focusLeadOnMap === 'function') {
+        window.focusLeadOnMap(id);
+      } else {
+        const mapBtn = document.getElementById('btnMapView');
+        if (mapBtn) mapBtn.click();
+      }
     });
-  }
+  });
 
 
 
