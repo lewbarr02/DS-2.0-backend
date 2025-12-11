@@ -1573,8 +1573,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   const STATUS_RANK = {
-    converted: 0, hot: 1, warm: 2, 'follow-up': 3, cold: 4, research: 5, unspecified: 6
+    converted: 0,
+    hot: 1,
+    warm: 2,
+    'follow-up': 3,
+    cold: 4,
+    research: 5,
+    unspecified: 6
   };
+
+  // 🔁 Global caches for List View row editor
+  window.LIST_STATE_OPTIONS = [];
+  window.LIST_INDUSTRY_OPTIONS = [];
+
+  // NEW: build Industry options from current dataset
+  function buildIndustryOptions() {
+    const DS = window.DS || {};
+    const rows = (DS.state && (DS.state.rawRows || DS.state.filtered)) || [];
+    const set = new Set();
+
+    rows.forEach((r) => {
+      const raw =
+        r.industry ||
+        r.Industry ||
+        r.vertical ||
+        r.Vertical ||
+        '';
+      const s = String(raw || '').trim();
+      if (!s) return;
+      set.add(s);
+    });
+
+    return Array.from(set).sort((a, b) =>
+      a.toLowerCase().localeCompare(b.toLowerCase())
+    );
+  }
   
   // Normalize state labels so we don't end up with "ALABAMA" + "Alabama"
   function normalizeStateLabel(raw) {
@@ -1731,6 +1764,11 @@ function getCI(row, key) {
 
     const stateOptions    = buildStateOptions();
     const industryOptions = buildIndustryOptions();
+
+    // update global caches for the inline row editor
+    window.LIST_STATE_OPTIONS    = stateOptions;
+    window.LIST_INDUSTRY_OPTIONS = industryOptions;
+
 
     // Rows
     const html = rows.map(r => {
@@ -1982,125 +2020,116 @@ function getCI(row, key) {
       });
     });
 
-    // 📝 ROW EDIT (State + Industry dropdowns)
-    $$('#leadTbody .row-edit-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+  // 📝 ROW EDIT (State + Industry dropdowns)
+  $$('#leadTbody .row-edit-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-        const row = btn.closest('tr');
-        if (!row) return;
-        if (row.dataset.editing === '1') return; // already editing
+      const row = btn.closest('tr');
+      if (!row) return;
+      if (row.dataset.editing === '1') return; // already editing
 
-        const id = row.getAttribute('data-id') || btn.dataset.id;
-        if (!id) return;
+      const id = row.getAttribute('data-id') || btn.dataset.id;
+      if (!id) return;
 
-        const cells = row.querySelectorAll('td');
-        if (cells.length < 16) return;
+      const cells = row.querySelectorAll('td');
+      if (cells.length < 16) return;
 
-        const stateCell    = cells[5];
-        const industryCell = cells[6];
-        const actionsCell  = cells[15];
+      // 📝 ROW EDIT (State + Industry dropdowns)
+      const stateCell    = cells[5]; // State column
+      const industryCell = cells[6]; // Industry column
+      const actionsCell  = cells[15];
 
-        const currentState    = stateCell.textContent.trim();
-        const currentIndustry = industryCell.textContent.trim();
+      const currentState    = stateCell.textContent.trim();
+      const currentIndustry = industryCell.textContent.trim();
 
-        row.dataset.editing = '1';
+      row.dataset.editing = '1';
 
-        const stateOptionsHtml = [
-          '<option value="">--</option>',
-          ...stateOptions.map(s =>
-            `<option value="${s}" ${s === currentState ? 'selected' : ''}>${s}</option>`
-          )
-        ].join('');
+      // Pull from cached options populated in renderListTable
+      const stateOptions    = window.LIST_STATE_OPTIONS    || [];
+      const industryOptions = window.LIST_INDUSTRY_OPTIONS || [];
 
-        const industryOptionsHtml = [
-          '<option value="">--</option>',
-          ...industryOptions.map(s =>
-            `<option value="${s}" ${s === currentIndustry ? 'selected' : ''}>${s}</option>`
-          )
-        ].join('');
+      const stateOptionsHtml = [
+        '<option value="">--</option>',
+        ...stateOptions.map(opt => {
+          const selected = opt === currentState ? ' selected' : '';
+          return `<option value="${opt}"${selected}>${opt}</option>`;
+        })
+      ].join('');
 
-        stateCell.innerHTML = `
-          <select class="row-edit-state" style="width:100%; padding:4px; font-size:13px;">
-            ${stateOptionsHtml}
-          </select>
-        `;
+      const industryOptionsHtml = [
+        '<option value="">--</option>',
+        ...industryOptions.map(opt => {
+          const selected = opt === currentIndustry ? ' selected' : '';
+          return `<option value="${opt}"${selected}>${opt}</option>`;
+        })
+      ].join('');
 
-        industryCell.innerHTML = `
-          <select class="row-edit-industry" style="width:100%; padding:4px; font-size:13px;">
-            ${industryOptionsHtml}
-          </select>
-        `;
+      stateCell.innerHTML = `<select class="inline-edit-state">${stateOptionsHtml}</select>`;
+      industryCell.innerHTML = `<select class="inline-edit-industry">${industryOptionsHtml}</select>`;
 
-        actionsCell.innerHTML = `
-          <button class="row-save-btn" title="Save changes">💾 Save</button>
-          <button class="row-cancel-btn" title="Cancel">✖ Cancel</button>
-        `;
+      const originalActionsHtml = actionsCell.innerHTML;
+      actionsCell.innerHTML = `
+        <button class="btn-small btn-save-inline">Save</button>
+        <button class="btn-small btn-cancel-inline">Cancel</button>
+      `;
 
-        const saveBtn   = actionsCell.querySelector('.row-save-btn');
-        const cancelBtn = actionsCell.querySelector('.row-cancel-btn');
-        const stateSel  = stateCell.querySelector('.row-edit-state');
-        const indSel    = industryCell.querySelector('.row-edit-industry');
+      const saveBtn   = actionsCell.querySelector('.btn-save-inline');
+      const cancelBtn = actionsCell.querySelector('.btn-cancel-inline');
+      const stateSel  = stateCell.querySelector('.inline-edit-state');
+      const indSel    = industryCell.querySelector('.inline-edit-industry');
 
-        const resetRow = () => {
-          delete row.dataset.editing;
-          if (typeof window.renderListView === 'function') {
-            window.renderListView();
+      const restoreRow = () => {
+        row.dataset.editing = '';
+        stateCell.textContent    = currentState;
+        industryCell.textContent = currentIndustry;
+        actionsCell.innerHTML    = originalActionsHtml;
+      };
+
+      cancelBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        restoreRow();
+      });
+
+      saveBtn.addEventListener('click', async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+
+        const newState    = stateSel.value;
+        const newIndustry = indSel.value;
+
+        try {
+          const res = await fetch(`/update-lead/${id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              state: newState || null,
+              industry: newIndustry || null
+            })
+          });
+
+          const data = await res.json();
+          if (!res.ok || !data.ok) {
+            console.error('Inline update failed:', data);
+            alert('Save failed. Please try again.');
+            return;
           }
-        };
 
-
-        if (cancelBtn) {
-          cancelBtn.addEventListener('click', async (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
-            await resetRow();
-          });
-        }
-
-        if (saveBtn) {
-          saveBtn.addEventListener('click', async (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
-
-        const newStateRaw = stateSel ? stateSel.value.trim() : '';
-        const newState    = normalizeStateLabel(newStateRaw);
-        const newIndustry = indSel ? indSel.value.trim() : '';
-
-
-            try {
-              const API_BASE = window.DELI_API_BASE || '';
-              const res = await fetch(`${API_BASE}/update-lead/${encodeURIComponent(id)}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  state: newState || null,
-                  industry: newIndustry || null
-                })
-              });
-
-              if (!res.ok) {
-                console.error('Row update (state/industry) failed', res.status);
-                alert('Could not save changes – please try again.');
-                return;
-              }
-			  
-			   // ✅ Patch this lead in memory so dashboard + list filters stay as-is
-              patchLeadInState(id, {
-                state: newState || null,
-                industry: newIndustry || null
-              });
-
-              await resetRow();
-            } catch (err) {
-              console.error('Error updating state/industry', err);
-              alert('Error saving changes – network or server issue.');
-            }
-          });
+          stateCell.textContent    = newState || '';
+          industryCell.textContent = newIndustry || '';
+        } catch (err) {
+          console.error('Inline update error:', err);
+          alert('Save failed (network error).');
+        } finally {
+          row.dataset.editing = '';
+          actionsCell.innerHTML = originalActionsHtml;
         }
       });
     });
+  });
+
 
     // 🗺️ Row click → jump to Map + open that lead’s pin
     $$('#leadTbody tr').forEach(row => {
