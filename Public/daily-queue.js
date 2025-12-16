@@ -288,6 +288,17 @@ function normalizeWebsite(url) {
     const isDone = computeIsDone(item);
     const statusLabel = item.status || item.lead_status || 'Unspecified';
     const statusClass = mapStatusClass(statusLabel);
+	
+	const websiteRaw =
+  item.website ||
+  item.Website ||
+  (item.lead && (item.lead.website || item.lead.Website)) ||
+  item.company_website ||
+  item.companyWebsite ||
+  item.website_url ||
+  item.url ||
+  '';
+
 
     const card = document.createElement('div');
     card.className = 'dq-queue-card' + (isDone ? ' dq-queue-card--done' : '');
@@ -317,15 +328,15 @@ function normalizeWebsite(url) {
   <div class="dq-meta-line">
     <span>
       🌐 ${
-        item.website || item.Website
-          ? `<a href="${normalizeWebsite(item.website || item.Website)}"
-               class="dq-website-link"
-               target="_blank"
-               rel="noopener noreferrer">
-               ${escapeHtml(item.website || item.Website)}
-             </a>`
-          : '—'
-      }
+  websiteRaw
+    ? `<a href="${normalizeWebsite(websiteRaw)}"
+         class="dq-website-link"
+         target="_blank"
+         rel="noopener noreferrer">
+         ${escapeHtml(websiteRaw)}
+       </a>`
+    : '—'
+}
     </span>
   </div>
 
