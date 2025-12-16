@@ -1223,6 +1223,7 @@ app.post('/api/daily-queue/generate', async (req, res) => {
         state:    lead.state,
         status:   lead.status,
         industry: lead.industry,
+		website: lead.website || null, // ✅ NEW
 
         forecast_month:   lead.forecast_month,
         lead_type:        lead.lead_type,
@@ -1327,6 +1328,9 @@ app.get('/api/daily-queue/current', async (_req, res) => {
       next_touch_at:  r.next_touch_at,
       next_action_at: r.next_action_at,
       last_activity_at: r.last_contacted_at || r.last_touch_at || null,
+	  
+	   website: r.website || null, // ✅ NEW (top-level)
+	  
       lead: {
         id:              r.id,
         name:            r.name,
@@ -1343,6 +1347,9 @@ app.get('/api/daily-queue/current', async (_req, res) => {
         next_touch_at:   r.next_touch_at,
         next_action_at:  r.next_action_at,
         last_contacted_at: r.last_contacted_at,
+		
+		 website: r.website || null, // ✅ NEW (top-level)
+		
       }
     }));
 
