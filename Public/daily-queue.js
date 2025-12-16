@@ -66,6 +66,17 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
   }
+  
+function normalizeWebsite(url) {
+  if (!url) return '';
+  let cleaned = String(url).trim();
+  cleaned = cleaned.replace(/^\/+/, '');
+  if (!/^https?:\/\//i.test(cleaned)) {
+    cleaned = 'https://' + cleaned;
+  }
+  return cleaned;
+}
+
 
   function formatDate(value) {
     if (!value) return '—';
@@ -297,16 +308,34 @@ document.addEventListener('DOMContentLoaded', () => {
         </span>
       </div>
 
-      <div class="dq-card-body">
-        <div class="dq-meta-line">
-          <span>📍 ${escapeHtml(formatLocation(item))}</span>
-          <span>🏷️ ${escapeHtml(item.industry || item.Industry || 'No industry')}</span>
-        </div>
-        <div class="dq-meta-line">
-          <span>Last touch: ${escapeHtml(formatLastTouch(item))}</span>
-          <span>Next touch: ${escapeHtml(formatNextTouch(item))}</span>
-        </div>
-      </div>
+<div class="dq-card-body">
+  <div class="dq-meta-line">
+    <span>📍 ${escapeHtml(formatLocation(item))}</span>
+    <span>🏷️ ${escapeHtml(item.industry || item.Industry || 'No industry')}</span>
+  </div>
+
+  <div class="dq-meta-line">
+    <span>
+      🌐 ${
+        item.website || item.Website
+          ? `<a href="${normalizeWebsite(item.website || item.Website)}"
+               class="dq-website-link"
+               target="_blank"
+               rel="noopener noreferrer">
+               ${escapeHtml(item.website || item.Website)}
+             </a>`
+          : '—'
+      }
+    </span>
+  </div>
+
+  <div class="dq-meta-line">
+    <span>Last touch: ${escapeHtml(formatLastTouch(item))}</span>
+    <span>Next touch: ${escapeHtml(formatNextTouch(item))}</span>
+  </div>
+</div>
+	  
+	  
 
       <!-- ⭐ HORIZONTAL OPTION B CONTROLS -->
       <div class="dq-card-controls">
