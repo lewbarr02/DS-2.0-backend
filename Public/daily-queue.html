@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Deli Sandwich — Daily Queue</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f3f4f6;
+      --card: #ffffff;
+      --border: #e5e7eb;
+      --ink: #111827;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-soft: #dbeafe;
+      --pill-bg: #f9fafb;
+      --pill-border: #e5e7eb;
+      --shadow-card: 0 12px 30px rgba(15, 23, 42, 0.12);
+      --radius-lg: 16px;
+      --radius-pill: 999px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Nunito Sans', sans-serif;
+      background: radial-gradient(circle at top, #e5edff 0, #f3f4f6 55%, #e5e7eb 100%);
+      color: var(--ink);
+    }
+
+    /* --- App chrome / nav --- */
+    .app-shell {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header.app-header {
+      padding: 16px 24px 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+      backdrop-filter: blur(12px);
+      background: linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(241, 245, 249, 0.92));
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .app-title {
+      font-weight: 800;
+      letter-spacing: .02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .app-title span.logo-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #f97316;
+      box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.25);
+    }
+
+    .mode-tabs {
+      display: inline-flex;
+      padding: 2px;
+      border-radius: 999px;
+      background: #e5e7eb;
+      box-shadow: 0 2px 6px rgba(148, 163, 184, 0.45) inset;
+      gap: 4px;
+    }
+
+    .mode-tab {
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #4b5563;
+      text-decoration: none;
+      border: 1px solid transparent;
+      transition: all 0.12s ease-out;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .mode-tab:hover {
+      background: #e5e7eb;
+      color: #111827;
+    }
+
+    .mode-tab.active {
+      background: #ffffff;
+      color: #111827;
+      border-color: #d1d5db;
+      box-shadow: 0 1px 4px rgba(15, 23, 42, 0.2);
+    }
+
+    main {
+      padding: 18px 24px 32px;
+      max-width: 1040px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* --- Daily Queue header --- */
+    .dq-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+
+    .dq-header-left h1 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: .01em;
+    }
+
+    .dq-header-left .sub {
+      margin-top: 4px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .dq-meta-row {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 11px;
+    }
+
+    .dq-meta-pill {
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--pill-border);
+      background: var(--pill-bg);
+      padding: 4px 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+    }
+
+    .dq-header-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    .dq-meta {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .dq-meta strong {
+      color: var(--ink);
+    }
+
+    .btn-new-batch {
+      border-radius: var(--radius-pill);
+      border: 1px solid #d1d5db;
+      background: #ffffff;
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 2px 4px rgba(15, 23, 42, 0.1);
+    }
+
+    .btn-new-batch:hover {
+      background: #f9fafb;
+    }
+
+    .btn-new-batch span.badge {
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #4f46e5;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+
+    .dq-loading-pill {
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--pill-border);
+      background: var(--pill-bg);
+      color: var(--muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Progress bar */
+    .dq-progress-row {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+	
+	    /* Daily goal mini-bars (Calls / Emails / Social) */
+    .dq-goal-row {
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 11px;
+      width: 260px;
+    }
+
+    .dq-goal {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dq-goal-label {
+      min-width: 60px;
+      color: var(--muted);
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .dq-goal-track {
+      flex: 1;
+      height: 4px;
+      border-radius: 999px;
+      background: #e5e7eb;
+      overflow: hidden;
+      box-shadow: inset 0 1px 2px rgba(148, 163, 184, 0.6);
+    }
+
+    .dq-goal-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #10b981, #22c55e);
+      box-shadow: 0 0 6px rgba(16, 185, 129, 0.7);
+      transition: width 0.15s ease-out;
+    }
+
+    .dq-goal-count {
+      min-width: 52px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+
+    .dq-progress-label {
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .dq-progress-track {
+      flex: 1;
+      height: 6px;
+      background: #e5e7eb;
+      border-radius: 999px;
+      overflow: hidden;
+      box-shadow: inset 0 1px 2px rgba(148, 163, 184, 0.6);
+      margin: 0 10px;
+    }
+
+    .dq-progress-fill {
+      height: 100%;
+      width: 0%; /* updated by JS */
+      background: linear-gradient(90deg, #2563eb, #4f46e5);
+      border-radius: 999px;
+      box-shadow: 0 0 10px rgba(37, 99, 235, 0.6);
+    }
+
+    /* --- Queue list --- */
+    .dq-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-top: 24px;
+
+      /* 🔹 Make cards wide + centered, like the old mock */
+      max-width: 960px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+
+    .dq-empty-state {
+      background: #f9fafb;
+      border-radius: var(--radius-lg);
+      border: 1px dashed var(--border);
+      padding: 14px 16px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .dq-empty-state strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+	
+	    .dq-empty-state {
+      background: #f9fafb;
+      border-radius: var(--radius-lg);
+      border: 1px dashed var(--border);
+      padding: 14px 16px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .dq-empty-state strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .dq-finished-state {
+      margin-top: 8px;
+      background: #ecfdf5;
+      border-radius: var(--radius-lg);
+      border: 1px solid #6ee7b7;
+      padding: 14px 16px;
+      font-size: 13px;
+      color: #065f46;
+      display: none; /* shown by JS */
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .dq-finished-state strong {
+      font-weight: 700;
+    }
+
+
+    /* New dynamic card styles (for JS-rendered queue cards) */
+    .dq-queue-card {
+      background: var(--card);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-card);
+      padding: 18px 20px 16px; /* more breathing room */
+      font-size: 13px;         /* nudge base font up a bit */
+      min-height: 180px;       /* keep cards feeling “tall” */
+
+      /* 🔹 For collapse animation */
+      max-height: 500px;
+      overflow: hidden;
+      transition: max-height 0.22s ease-out,
+                  opacity 0.22s ease-out,
+                  transform 0.22s ease-out;
+    }
+
+    .dq-queue-card + .dq-queue-card {
+      margin-top: 4px;
+    }
+
+    .dq-queue-card.dq-queue-card--done {
+      opacity: 0.75;
+      background: #f3f4f6;
+    }
+
+    /* 🔹 Temporary state while collapsing out of the active queue */
+    .dq-queue-card--collapsing {
+      max-height: 0;
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+
+
+    .dq-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .dq-card-main {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .dq-company {
+      font-weight: 700;
+      font-size: 16px; /* bigger company name */
+    }
+
+
+    .dq-contact {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .dq-status-pill {
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--pill-border);
+      background: var(--pill-bg);
+      padding: 4px 10px;
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: default;
+      color: var(--muted);
+    }
+
+    .dq-status-hot {
+      background: rgba(239, 68, 68, 0.08);
+      border-color: #ef4444;
+      color: #ef4444;
+    }
+
+    .dq-status-warm {
+      background: rgba(249, 115, 22, 0.08);
+      border-color: #f97316;
+      color: #f97316;
+    }
+
+    .dq-status-cold {
+      background: rgba(59, 130, 246, 0.08);
+      border-color: #3b82f6;
+      color: #3b82f6;
+    }
+
+    .dq-status-followup {
+      background: rgba(234, 179, 8, 0.08);
+      border-color: #eab308;
+      color: #eab308;
+    }
+
+    .dq-status-converted {
+      background: rgba(22, 163, 74, 0.08);
+      border-color: #16a34a;
+      color: #16a34a;
+    }
+
+    .dq-status-unspecified,
+    .dq-status-research {
+      background: rgba(156, 163, 175, 0.1);
+      border-color: #9ca3af;
+      color: #6b7280;
+    }
+
+        .dq-card-body {
+      font-size: 13px;          /* slightly larger text */
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;                 /* more vertical spacing */
+      margin-top: 6px;
+    }
+
+
+    .dq-meta-line {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .dq-meta-line span {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .dq-card-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .dq-card-btn {
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid transparent;
+      background: #e5e7eb;
+      color: #374151;
+      cursor: pointer;
+    }
+
+    .dq-card-btn-primary {
+      background: #2563eb;
+      border-color: #1d4ed8;
+      color: #f9fafb;
+    }
+
+    .dq-card-btn:hover {
+      filter: brightness(0.97);
+    }
+
+@media (max-width: 720px) {
+  header.app-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .dq-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dq-header-right {
+    align-items: flex-start;
+  }
+
+  .mode-tabs {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+/* --- AP Snapshot (Midpoint row) --- */
+.dq-ap-snap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.55);
+}
+
+.dq-ap-snap-left {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dq-ap-snap-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
+  letter-spacing: .01em;
+}
+
+.dq-ap-snap-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.dq-ap-snap-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  color: #374151;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.dq-ap-snap-badge.not-found {
+  background: rgba(156, 163, 175, 0.12);
+  border-color: rgba(156, 163, 175, 0.4);
+  color: #6b7280;
+}
+
+.dq-ap-snap-btn {
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 800;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dq-ap-snap-btn:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+
+/* --- Active card highlight (always apply, not mobile-only) --- */
+.dq-queue-card--active {
+  box-shadow: 0 0 0 2px rgba(46, 104, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+/* --- Horizontal controls bar (Option B) --- */
+.dq-card-controls {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dq-controls-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  flex: 1;
+}
+
+.dq-control-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.dq-control-label {
+  font-weight: 500;
+}
+
+.dq-control-group select,
+.dq-control-group input[type="date"] {
+  font-size: 12px;
+  padding: 4px 6px;
+}
+
+.dq-control-next-touch input[type="date"] {
+  min-width: 120px;
+}
+
+.dq-control-notes {
+  flex: 1 1 220px;
+}
+
+.dq-control-notes input {
+  width: 100%;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.dq-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .dq-card-controls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dq-card-actions {
+    align-self: flex-end;
+  }
+}
+
+.dq-website-link {
+  color: #2563eb;
+  text-decoration: underline;
+  font-weight: 600;
+}
+
+.dq-website-link:hover {
+  color: #1d4ed8;
+}
+
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="app-title">
+        <span class="logo-dot"></span>
+        Deli Sandwich
+      </div>
+      <nav class="mode-tabs">
+        <a href="index.html" class="mode-tab">Map</a>
+        <a href="index.html#list" class="mode-tab">List</a>
+        <a href="daily-queue.html" class="mode-tab active">Daily Queue</a>
+        <a href="summary.html" class="mode-tab">Summary</a>
+        <a href="summary.html?mode=oneonone" class="mode-tab">1-on-1</a>
+      </nav>
+    </header>
+
+    <main>
+      <!-- Header / progress strip -->
+      <section class="dq-header">
+        <div class="dq-header-left">
+          <h1>Daily Queue</h1>
+          <div class="sub">Today’s smart lead list.</div>
+
+          <div class="dq-meta-row">
+            <span class="dq-meta-pill">
+              📅 Today • <span id="dq-today-date">--/--</span>
+            </span>
+          </div>
+
+          <div class="dq-progress-row">
+            <span class="dq-progress-label" id="dq-progress-label">0% complete</span>
+            <div class="dq-progress-track">
+              <div class="dq-progress-fill" id="dq-progress-bar"></div>
+            </div>
+            <span>
+              <span id="dq-done">0</span> / <span id="dq-total">0</span> completed • <span id="dq-remaining">0</span> remaining
+            </span>
+          </div>
+        </div>
+        <div class="dq-header-right">
+          <div class="dq-meta">
+            Daily goals: <strong>50 calls</strong> · <strong>30 emails</strong> · <strong>10 social</strong>
+          </div>
+
+          <!-- 🔹 Daily goal mini-bars -->
+          <div class="dq-goal-row">
+            <div class="dq-goal">
+              <span class="dq-goal-label">📞 Calls</span>
+              <div class="dq-goal-track">
+                <div id="dq-goal-calls-bar" class="dq-goal-fill"></div>
+              </div>
+              <span class="dq-goal-count" id="dq-goal-calls-count">0/50</span>
+            </div>
+            <div class="dq-goal">
+              <span class="dq-goal-label">✉️ Emails</span>
+              <div class="dq-goal-track">
+                <div id="dq-goal-emails-bar" class="dq-goal-fill"></div>
+              </div>
+              <span class="dq-goal-count" id="dq-goal-emails-count">0/30</span>
+            </div>
+            <div class="dq-goal">
+              <span class="dq-goal-label">🌐 Social</span>
+              <div class="dq-goal-track">
+                <div id="dq-goal-social-bar" class="dq-goal-fill"></div>
+              </div>
+              <span class="dq-goal-count" id="dq-goal-social-count">0/10</span>
+            </div>
+          </div>
+
+          <div id="dq-loading-pill" class="dq-loading-pill" style="display:none;">
+            ⏳ Loading…
+          </div>
+          <button id="new-batch-btn" class="btn-new-batch">
+            <span>New Batch</span>
+            <span class="badge">20 leads</span>
+          </button>
+        </div>
+
+
+      <!-- Queue list (dynamic) -->
+      <section class="dq-list">
+        <div id="dq-empty-state" class="dq-empty-state">
+          <strong>No active batch yet.</strong>
+          Click <em>“New Batch”</em> to generate a fresh list of 20 leads based on your rules.
+        </div>
+
+        <div id="dq-finished-state" class="dq-finished-state">
+          <span>🎉</span>
+          <div>
+            <strong>You’re finished with this batch.</strong>
+            <div>Review your completed cards below, or click <em>“New Batch”</em> to start another 20.</div>
+          </div>
+        </div>
+
+        <div id="dq-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Load Daily Queue logic -->
+  <script src="daily-queue.js"></script>
+</body>
+</html>

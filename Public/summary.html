@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Deli Sandwich — Summary</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#0b1220; --card:#111a2b; --muted:#8aa0c6; --ink:#eaf2ff; --accent:#59a5ff; }
+    *{box-sizing:border-box} body{margin:0;font-family:'Nunito Sans',sans-serif;background:var(--bg);color:var(--ink)}
+    header{padding:20px 24px;border-bottom:1px solid #1e2b46;background:linear-gradient(180deg,#0b1220 0%,#0d1526 100%)}
+    header h1{margin:0;font-weight:800;letter-spacing:.3px}
+    header .sub{color:var(--muted);margin-top:6px;font-size:14px}
+    main{padding:20px;max-width:1200px;margin:0 auto}
+    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
+    .card{background:var(--card);border:1px solid #1e2b46;border-radius:14px;padding:16px}
+    .span-4{grid-column:span 4} .span-6{grid-column:span 6} .span-8{grid-column:span 8} .span-12{grid-column:span 12}
+    .kpi{display:flex;align-items:baseline;gap:12px}
+    .kpi .val{font-size:28px;font-weight:800}
+    .kpi .lbl{color:var(--muted)}
+    table{width:100%;border-collapse:collapse;font-size:14px}
+    th,td{padding:8px 10px;border-bottom:1px solid #233456}
+    th{color:#b7c7e6;text-align:left}
+    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:#122447;border:1px solid #2a3e66;color:#cfe0ff;font-size:12px}
+    .row{display:flex;align-items:center;justify-content:space-between;margin:6px 0}
+    .muted{color:var(--muted)}
+    .good{color:#56e39f} .warn{color:#ffd166} .bad{color:#ff6b6b}
+    .section-title{font-size:16px;font-weight:800;margin:0 0 8px}
+    .ai{white-space:pre-wrap;line-height:1.5}
+    .controls{display:flex;gap:10px;align-items:center;margin-top:10px}
+    input,select,button{border-radius:8px;border:1px solid #2a3e66;background:#0f192c;color:#dfe9ff;padding:6px 10px}
+    button{cursor:pointer}
+    a.back{color:#9ec3ff;text-decoration:none}
+	.preset{border:1px solid #2a3e66;background:#0f192c;color:#dfe9ff;padding:6px 10px;border-radius:8px}
+.preset.active{background:#1b2a48;border-color:#59a5ff}
+.pill {
+  display:inline-block;
+  padding:4px 10px;
+  border-radius:999px;
+  border:1px solid #2a3e66;
+  font-size:13px;
+  background:rgba(255,255,255,0.03);
+  box-shadow:0 0 6px rgba(89,165,255,0.25);
+  margin:2px;
+}
+
+.trend {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.trend-up {
+  color: #56e39f;
+}
+
+.trend-down {
+  color: #ff6b6b;
+}
+
+.trend-flat {
+  color: #8aa0c6;
+}
+
+
+/* bars */
+.barlist{display:flex;flex-direction:column;gap:8px}
+.barrow{display:flex;align-items:center;gap:10px}
+.barlabel{min-width:160px;color:#cfe0ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bartrack{flex:1;height:10px;background:#0f192c;border:1px solid #2a3e66;border-radius:999px;overflow:hidden}
+.barfill{height:100%;background:linear-gradient(90deg,#59a5ff,#7cc0ff);box-shadow:0 0 8px rgba(89,165,255,.35) inset}
+.barvalue{width:80px;text-align:right;color:#b7c7e6;font-variant-numeric:tabular-nums}
+/* Forecasting Panel (leveled up) */
+.forecasting-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 6px;                 /* header aligns with 1-on-1 */
+}
+
+.forecasting-card .section-title {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+/* KPI strip at top */
+.forecast-kpi-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.forecast-kpi {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid #2a3e66;
+  background: rgba(15, 25, 44, 0.9);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.35);
+}
+
+.forecast-kpi-value {
+  font-size: 16px;
+  font-weight: 800;
+  color: #eaf2ff;
+}
+
+.forecast-kpi-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* detail rows */
+.forecast-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 2px 0;
+  padding: 2px 0;
+  font-size: 13px;
+}
+
+.forecast-label {
+  color: var(--muted);
+  font-size: 13px;
+  min-width: 130px;
+}
+
+.forecast-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* Quota bar (animated) */
+.forecast-quota-bar {
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: #0f192c;
+  border: 1px solid #2a3e66;
+  overflow: hidden;
+  margin-top: 2px;
+  margin-bottom: 6px;
+}
+
+.forecast-quota-fill {
+  height: 100%;
+  width: 0%; /* start at 0, JS animates to target */
+  border-radius: 999px;
+  background: linear-gradient(90deg, #59a5ff, #7cc0ff);
+  box-shadow: 0 0 6px rgba(89, 165, 255, 0.25) inset;
+  transition: width 0.5s ease-out;
+}
+
+/* Pacing indicator */
+.forecast-pacing {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.pacing-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  display: inline-block;
+  margin-top: 1px;
+  box-shadow: 0 0 4px rgba(0,0,0,0.6);
+}
+
+/* label color to match pacing */
+.pacing-good {
+  color: #16a34a;
+}
+
+.pacing-warn {
+  color: #eab308;
+}
+
+.pacing-bad {
+  color: #dc2626;
+}
+
+.pacing-green { background: #16a34a; }
+.pacing-yellow { background: #eab308; }
+.pacing-red { background: #dc2626; }
+
+/* Region Strength Badges */
+.region-badges {
+  display: flex;
+  gap: 12px;
+  margin: 10px 0;
+}
+
+.region-pill {
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid #2a3e66;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 170px;
+}
+
+.region-pill .region-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.region-pill .region-value {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.strong-region {
+  box-shadow: 0 0 10px rgba(80,255,80,0.25);
+}
+
+.weak-region {
+  box-shadow: 0 0 10px rgba(255,80,80,0.25);
+}
+
+/* ICP Vertical Breakdown panel */
+.vertical-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.vertical-kpi {
+  flex: 1 1 150px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #2a3e66;
+  background: rgba(15,25,44,0.95);
+  box-shadow: 0 0 8px rgba(0,0,0,0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vertical-label {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.vertical-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.vertical-meta {
+  font-size: 12px;
+  color: #b7c7e6;
+}
+
+
+
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Finexio Analytics Summary</h1>
+	<div id="reconcileChip" class="text-sm mt-1 mb-2" style="color:#9aa3b2;">
+  Total: <span id="rec_total">—</span> •
+  Pinned: <span id="rec_pinned">—</span> •
+  <a id="rec_unplaced" href="#" style="color:#ff6b6b;text-decoration:underline;">
+    Unplaced: <span id="rec_missing">—</span>
+  </a>
+</div>
+
+    <div class="sub">
+      Force-Multiplier Dashboard • <span id="dateRangeText"></span>
+      <span class="controls">
+        <label>From <input type="date" id="from"></label>
+        <label>To <input type="date" id="to"></label>
+        <button id="applyRange">Apply</button>
+
+        <!-- ▼▼▼ NEW: Presets strip ▼▼▼ -->
+        <span id="presets" style="display:flex;gap:6px;align-items:center;">
+          <button class="preset" data-range="today">Today</button>
+          <button class="preset" data-range="yesterday">Yesterday</button>
+          <button class="preset" data-range="this_week">This Week</button>
+          <button class="preset" data-range="last_7">Last 7</button>
+          <button class="preset" data-range="mtd">MTD</button>
+          <button class="preset" data-range="qtd">QTD</button>
+          <button class="preset" data-range="last_30">Last 30</button>
+          <button class="preset" data-range="custom">Custom</button>
+        </span>
+		<!-- ▼▼▼ Count Mode toggle ▼▼▼ -->
+<span id="countToggle" class="controls" style="gap:6px;">
+  <button id="modeLeads" class="preset" data-count="leads" title="Count individual leads">Leads</button>
+  <button id="modeAccounts" class="preset" data-count="accounts" title="Count unique companies">Accounts</button>
+</span>
+<!-- ▲▲▲ Count Mode toggle ▲▲▲ -->
+
+        <!-- ▲▲▲ NEW: Presets strip ▲▲▲ -->
+
+        <a class="back" href="index.html">← Back to Map</a>
+
+      </span>
+    </div>
+  </header>
+
+  <main>
+    <div class="grid">
+	      <!-- Finexio KPI Strip -->
+      <section class="card span-12">
+        <div class="row" style="justify-content:flex-start; gap:16px; flex-wrap:wrap;">
+          <div class="kpi">
+            <span class="val" id="kpi_avg_arr">$0</span>
+            <span class="lbl">Avg ARR (touched)</span>
+          </div>
+
+          <div class="kpi">
+            <span class="val" id="kpi_avg_ap">$0</span>
+            <span class="lbl">Avg AP Spend (touched)</span>
+          </div>
+
+          <div class="kpi">
+            <span class="val" id="kpi_strong_region">—</span>
+            <span class="lbl">Strongest Region</span>
+          </div>
+
+          <div class="kpi">
+            <span class="val" id="kpi_weak_region">—</span>
+            <span class="lbl">Weakest Region</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Activity Pulse -->
+      <section class="card span-6">
+        <h3 class="section-title">Activity Pulse</h3>
+<div class="row">
+  <div class="kpi">
+    <span class="val" id="kpi_contacted">—</span>
+    <span class="lbl" id="kpi_contacted_lbl">Leads contacted</span>
+    <span class="trend" id="kpi_contacted_trend">—</span>
+  </div>
+  <span class="pill" id="kpi_touches">Total touches: —</span>
+</div>
+
+        <div class="row"><div class="kpi"><span class="val" id="kpi_followup">—%</span><span class="lbl">Follow-ups on time</span></div><span class="pill" id="kpi_overdue">Overdue follow-ups: —</span></div>
+        <div class="row" style="margin-top:8px;">
+          <div class="lbl">Top Channels by Conversion</div>
+        </div>
+        <table id="tbl_channels">
+          <thead><tr><th>Channel</th><th>Converted</th><th>Total</th><th>Conv %</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+
+      <!-- Pipeline Momentum -->
+      <section class="card span-6">
+        <h3 class="section-title">Pipeline Momentum</h3>
+<div class="row">
+  <div class="kpi">
+    <span class="val" id="kpi_up">—</span>
+    <span class="lbl">Upgrades</span>
+    <span class="trend" id="kpi_up_trend">—</span>
+  </div>
+  <div class="kpi">
+    <span class="val" id="kpi_down">—</span>
+    <span class="lbl">Downgrades</span>
+    <span class="trend" id="kpi_down_trend">—</span>
+  </div>
+  <div class="kpi">
+    <span class="val" id="kpi_hot_untouched">—</span>
+    <span class="lbl">Hot untouched ≥7d</span>
+  </div>
+</div>
+
+        <div class="muted" style="margin-top:6px;">*Up/Downgrades approximated from current status + recent status change date.</div>
+      </section>
+
+<!-- Touch Breakdown (Calls / Emails / Social) -->
+<section class="card span-12">
+  <h3 class="section-title">Touch Breakdown</h3>
+  <p class="muted" style="margin:4px 0 10px;">
+    Mix of calls, emails, and social touches in this window, compared to the previous window.
+  </p>
+
+  <div class="row" style="margin-top:0; justify-content:flex-start; gap:32px;">
+    <div class="kpi">
+      <span class="val" id="kpi_calls">0</span>
+      <span class="lbl">Calls</span>
+      <span class="trend" id="kpi_calls_trend">—</span>
+    </div>
+
+    <div class="kpi">
+      <span class="val" id="kpi_emails">0</span>
+      <span class="lbl">Emails</span>
+      <span class="trend" id="kpi_emails_trend">—</span>
+    </div>
+
+    <div class="kpi">
+      <span class="val" id="kpi_social">0</span>
+      <span class="lbl">Social</span>
+      <span class="trend" id="kpi_social_trend">—</span>
+    </div>
+  </div>
+</section>
+
+
+
+<!-- Next Touch Panel -->
+<section class="card span-12">
+  <h3 class="section-title">Next Touch Panel</h3>
+  <p class="muted" style="margin-top:4px;margin-bottom:10px;">
+    Visibility into all upcoming touch commitments and overdue actions.
+  </p>
+
+  <div class="row" style="justify-content:flex-start; gap:32px;">
+
+    <div class="kpi">
+      <span class="val" id="nt_due_today">—</span>
+      <span class="lbl">Due Today</span>
+    </div>
+
+    <div class="kpi">
+      <span class="val" id="nt_due_tomorrow">—</span>
+      <span class="lbl">Due Tomorrow</span>
+    </div>
+
+    <div class="kpi">
+      <span class="val" id="nt_overdue">—</span>
+      <span class="lbl">Overdue</span>
+    </div>
+
+    <div class="kpi">
+      <span class="val" id="nt_no_action">—</span>
+      <span class="lbl">No Next Action</span>
+    </div>
+
+  </div>
+</section>
+
+
+
+
+      <!-- Status Changes (Upgrades & Downgrades) -->
+      <section class="card span-12">
+
+        <h3 class="section-title">Status Changes (Upgrades & Downgrades)</h3>
+        <p class="muted" style="margin-top:4px;margin-bottom:8px;">
+          Most recent status changes within the selected date range.
+        </p>
+<table id="tbl_status_changes">
+  <thead>
+    <tr>
+      <th>When</th>
+      <th>Company</th>
+      <th>Old Status</th>
+      <th>New Status</th>
+      <th>Trend</th>
+      <th>State</th>
+      <th>AP Spend</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+      </section>
+	  
+	        <!-- AI Notes by Status Band -->
+      <section class="card span-12">
+        <h3 class="section-title">Status Band AI Notes</h3>
+        <p class="muted" style="margin-top:4px;margin-bottom:10px;">
+          Quick AI-generated notes on what stands out about each band in this window.
+        </p>
+
+        <div class="grid">
+          <div class="span-4">
+            <div class="lbl muted">🔥 Hot Leads</div>
+            <div class="ai muted" id="ai_note_hot">Loading…</div>
+          </div>
+
+          <div class="span-4">
+            <div class="lbl muted">🌞 Warm Leads</div>
+            <div class="ai muted" id="ai_note_warm">Loading…</div>
+          </div>
+
+          <div class="span-4">
+            <div class="lbl muted">⏳ Follow-Up</div>
+            <div class="ai muted" id="ai_note_followup">Loading…</div>
+          </div>
+
+          <div class="span-4">
+            <div class="lbl muted">🧊 Cold Leads</div>
+            <div class="ai muted" id="ai_note_cold">Loading…</div>
+          </div>
+
+          <div class="span-4">
+            <div class="lbl muted">🔍 Research</div>
+            <div class="ai muted" id="ai_note_research">Loading…</div>
+          </div>
+
+          <div class="span-4">
+            <div class="lbl muted">🏆 Converted</div>
+            <div class="ai muted" id="ai_note_converted">Loading…</div>
+          </div>
+        </div>
+      </section>
+
+
+
+      <!-- Performance Heatmap -->
+      <section class="card span-8">
+        <h3 class="section-title">Performance Heatmap</h3>
+        <div class="grid">
+          <div class="span-4">
+            <div class="lbl muted" style="margin-bottom:6px;">By Industry (conv %)</div>
+            <table id="tbl_industry"><thead><tr><th>Industry</th><th>Conv %</th><th>Leads</th></tr></thead><tbody></tbody></table>
+          </div>
+          <div class="span-4">
+            <div class="lbl muted" style="margin-bottom:6px;">By State (ARR in Hot/Warm)</div>
+            <table id="tbl_state"><thead><tr><th>State</th><th>ARR</th></tr></thead><tbody></tbody></table>
+          </div>
+          <div class="span-4">
+            <div class="lbl muted" style="margin-bottom:6px;">By Tag (frequency)</div>
+            <table id="tbl_tag"><thead><tr><th>Tag</th><th>Count</th></tr></thead><tbody></tbody></table>
+          </div>
+        </div>
+      </section>
+
+
+	  
+	  <!-- BDR Forecasting Panel -->
+<!-- BDR Forecasting Panel -->
+<section class="card span-4 forecasting-card">
+  <h3 class="section-title">BDR Forecasting</h3>
+
+  <!-- Mini KPI strip -->
+  <div class="forecast-kpi-row">
+    <div class="forecast-kpi">
+      <div class="forecast-kpi-value" id="kpi_forecast_quota">70%</div>
+      <div class="forecast-kpi-label">of monthly quota</div>
+    </div>
+    <div class="forecast-kpi">
+      <div class="forecast-kpi-value" id="kpi_forecast_meetings">12</div>
+      <div class="forecast-kpi-label">forecasted meetings</div>
+    </div>
+    <div class="forecast-kpi">
+      <div class="forecast-kpi-value" id="kpi_forecast_coverage">2.8×</div>
+      <div class="forecast-kpi-label">pipeline coverage</div>
+    </div>
+  </div>
+
+  <!-- Detail rows -->
+  <div class="forecast-row">
+    <span class="forecast-label">Quota Progress</span>
+    <span class="forecast-value" id="forecast-quota-percent">70%</span>
+  </div>
+
+  <div class="forecast-quota-bar">
+    <div class="forecast-quota-fill" id="forecast-quota-fill"></div>
+  </div>
+
+  <div class="forecast-row">
+    <span class="forecast-label">Meetings Forecast</span>
+    <span class="forecast-value" id="forecast-meetings">12</span>
+  </div>
+
+  <div class="forecast-row">
+    <span class="forecast-label">Pipeline Coverage</span>
+    <span class="forecast-value" id="forecast-coverage">2.8×</span>
+  </div>
+
+  <div class="forecast-row">
+    <span class="forecast-label">Conversion Rate</span>
+    <span class="forecast-value" id="forecast-conversion">23%</span>
+  </div>
+
+  <div class="forecast-row">
+    <span class="forecast-label">Daily Run Rate Required</span>
+    <span class="forecast-value" id="forecast-runrate">0.33/day</span>
+  </div>
+
+  <div class="forecast-row">
+    <span class="forecast-label">Pacing</span>
+    <span class="forecast-pacing">
+      <span class="pacing-dot pacing-green" id="forecast-pacing-dot"></span>
+      <span class="forecast-value" id="forecast-pacing-label">On Track</span>
+    </span>
+  </div>
+</section>
+
+
+	  
+<!-- 1-on-1 Summary -->
+<section class="card span-6">
+  <h3 class="section-title">1-on-1 Summary</h3>
+
+  <div class="row">
+    <div class="kpi">
+      <span class="val" id="o11_accounts">—</span>
+      <span class="lbl">Accounts added</span>
+    </div>
+    <div class="kpi">
+      <span class="val" id="o11_apspend">$0</span>
+      <span class="lbl">Total AP Spend</span>
+    </div>
+  </div>
+
+  <!-- Strongest / Weakest Region badges -->
+  <div class="row region-badges">
+    <div class="region-pill strong-region">
+      <span class="region-label">🏆 Strongest Region</span>
+      <span class="region-value" id="o11_region_strong">—</span>
+    </div>
+    <div class="region-pill weak-region">
+      <span class="region-label">🧊 Weakest Region</span>
+      <span class="region-value" id="o11_region_weak">—</span>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="lbl muted">Customer vs Channel Partners</div>
+  </div>
+  <div id="o11_type_mix" class="row" style="flex-wrap:wrap;gap:8px;"></div>
+
+  <!-- Stage Breakdown -->
+  <div class="row">
+    <div class="lbl muted">Stage Breakdown</div>
+  </div>
+  <div id="o11_status_list" class="barlist"></div>
+
+  <!-- Industry Mix (Top 5) -->
+  <div class="row">
+    <div class="lbl muted">Industry Mix (Top 5)</div>
+  </div>
+  <div id="o11_industry_list" class="barlist"></div>
+</section>
+
+<!-- High-Value Prospects -->
+<section class="card span-6">
+  <h3 class="section-title">High-Value Prospects</h3>
+  <table id="tbl_highvalue">
+    <thead>
+      <tr>
+        <th>Company</th>
+        <th>AP Spend</th>
+        <th>Status</th>
+        <th>Last Touch</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</section>
+
+      <!-- At-Risk / Dormant Leads -->
+      <section class="card span-12">
+        <h3 class="section-title">At-Risk / Dormant Leads</h3>
+        <p class="muted" style="margin-top:4px;margin-bottom:8px;">
+          Accounts you&apos;ve touched before, but haven&apos;t contacted recently.
+        </p>
+
+        <table class="simple-table">
+          <thead>
+            <tr>
+              <th>Company</th>
+              <th>AP Spend</th>
+              <th>Last Touch</th>
+              <th>Status</th>
+              <th>State</th>
+              <th>Risk</th>
+            </tr>
+          </thead>
+          <tbody id="at_risk_body">
+            <tr><td colspan="6">—</td></tr>
+          </tbody>
+        </table>
+      </section>
+	  
+	        <!-- Regional Traction Breakdown -->
+      <section class="card span-12">
+        <h3 class="section-title">Regional Traction Breakdown</h3>
+        <p class="muted" style="margin-top:4px;margin-bottom:8px;">
+          How your key regions are performing based on AP Spend touched and conversion traction.
+        </p>
+
+        <table id="tbl_region_traction">
+          <thead>
+            <tr>
+              <th>Region</th>
+              <th>AP Spend Touched</th>
+              <th>ARR (Hot/Warm)</th>
+              <th>Traction Score</th>
+              <th>Tier</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="5">—</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+
+
+
+      <!-- ICP Industry Breakdown Panel -->
+      <section class="card span-12">
+        <h3 class="section-title">ICP Vertical Breakdown</h3>
+        <p class="muted" style="margin-top:4px;margin-bottom:8px;">
+          How your core Finexio verticals are converting in this window.
+        </p>
+
+<div class="vertical-row">
+
+  <div class="vertical-kpi">
+    <div class="vertical-label">Education</div>
+    <div class="vertical-value" id="ind_education_conv">—</div>
+    <div class="vertical-meta" id="ind_education_leads">No data</div>
+  </div>
+
+  <div class="vertical-kpi">
+    <div class="vertical-label">Healthcare</div>
+    <div class="vertical-value" id="ind_healthcare_conv">—</div>
+    <div class="vertical-meta" id="ind_healthcare_leads">No data</div>
+  </div>
+
+  <div class="vertical-kpi">
+    <div class="vertical-label">Government</div>
+    <div class="vertical-value" id="ind_government_conv">—</div>
+    <div class="vertical-meta" id="ind_government_leads">No data</div>
+  </div>
+
+  <div class="vertical-kpi">
+    <div class="vertical-label">Hospitality</div>
+    <div class="vertical-value" id="ind_hospitality_conv">—</div>
+    <div class="vertical-meta" id="ind_hospitality_leads">No data</div>
+  </div>
+
+  <div class="vertical-kpi">
+    <div class="vertical-label">Construction</div>
+    <div class="vertical-value" id="ind_construction_conv">—</div>
+    <div class="vertical-meta" id="ind_construction_leads">No data</div>
+  </div>
+
+  <div class="vertical-kpi">
+    <div class="vertical-label">Manufacturing</div>
+    <div class="vertical-value" id="ind_manufacturing_conv">—</div>
+    <div class="vertical-meta" id="ind_manufacturing_leads">No data</div>
+  </div>
+
+  <div class="vertical-kpi">
+    <div class="vertical-label">Other</div>
+    <div class="vertical-value" id="ind_other_conv">—</div>
+    <div class="vertical-meta" id="ind_other_leads">No data</div>
+  </div>
+
+</div>
+
+
+</section>
+
+      <!-- AI Narrative -->
+      <section class="card span-12">
+        <h3 class="section-title">BDR Efficiency (AI-Generated)</h3>
+        <div id="aiText" class="ai muted">Loading…</div>
+      </section>
+    </div>
+  </main>
+
+  <script src="summary.js" defer></script>
+</body>
+</html>
+

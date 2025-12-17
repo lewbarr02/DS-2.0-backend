@@ -1,0 +1,3144 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Deli Sandwich</title>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <link href="images/favicon.png" rel="icon" type="image/png"/>
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600&display=swap" rel="stylesheet"/>
+    <link href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" rel="stylesheet"/>
+    <link href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" rel="stylesheet"/>
+    <link href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" rel="stylesheet"/>
+    <style>
+/* --- BASE RESET --- */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;                /* prevents the white strip */
+  font-family: 'Nunito Sans', sans-serif;
+}
+
+/* --- MAP AREA (final, full-bleed) --- */
+#mapView {               /* wrapper becomes neutral */
+  position: static;
+}
+
+#map {                   /* the map itself owns the viewport */
+  position: fixed;
+  inset: 0;              /* top:0; right:0; bottom:0; left:0 */
+  height: 100vh;
+  width: 100vw;
+}
+
+#mapView.hidden { display: none; }
+
+      /* --- DASHBOARD (existing) --- */
+      #dashboard {
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(255, 255, 255, 0.95);
+        padding: 12px 18px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+        z-index: 1001;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+      #dashboard.hidden { display: none; }
+      #dashboard label { font-weight: bold; margin-right: 5px; }
+      #dashboard select, #dashboard input[type="date"] { padding: 4px 8px; font-size: 14px; }
+      #dashboard .status-checkbox { margin-right: 10px; }
+      #dashboard button {
+        padding: 6px 12px; font-size: 14px; background: #444; color: white;
+        border: none; border-radius: 6px; cursor: pointer;
+      }
+
+      /* Dashboard toggle (existing) */
+      #dashboardToggle {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        z-index: 1101;
+        background: #444;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 12px;
+        cursor: pointer;
+        font-size: 14px;
+      }
+
+      /* --- MAP LEGEND & STATS (existing) --- */
+      #legend {
+        position: absolute; bottom: 20px; right: 20px;
+        background: white; padding: 10px 14px; border-radius: 8px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.3); z-index: 1000; font-size: 14px;
+      }
+      .legend-item { display: flex; align-items: center; margin-bottom: 5px; }
+      .legend-color { width: 16px; height: 24px; margin-right: 8px; background-size: contain; background-repeat: no-repeat; background-position: center; }
+
+      #statsSummary {
+        position: absolute; bottom: 50px; left: 10px; background: white; padding: 10px;
+        border-radius: 8px; box-shadow: 0 0 8px rgba(0,0,0,0.2); font-size: 14px; z-index: 1000;
+      }
+	  
+	  #statsSummary .status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#statsSummary .status-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  font-size: 13px;
+}
+
+#statsSummary .status-chip span.icon {
+  font-size: 16px;
+}
+
+#statsSummary .status-chip strong {
+  margin-left: auto;
+}
+
+	  
+      #pinCount {
+        position: absolute; bottom: 10px; left: 10px; background: white; padding: 6px 10px;
+        border-radius: 6px; box-shadow: 0 0 6px rgba(0,0,0,0.2); font-size: 14px; z-index: 1000;
+      }
+
+      /* Logo (existing) */
+      #logo { position: absolute; top: -122px; left: 10px; height: 400px; z-index: 2000; }
+
+/* Overlay container – dark mode */
+.presentation-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: flex-start;      /* top-align instead of dead-center */
+  justify-content: center;
+  padding: 24px 0;              /* vertical padding only */
+  box-sizing: border-box;
+
+  /* let the overlay scroll on smaller screens */
+  overflow-y: auto;
+
+  /* full-screen dark glass */
+  background: rgba(2, 6, 23, 0.92);
+}
+
+
+.presentation-overlay.hidden {
+  display: none;
+}
+
+/* Inner card – full dark */
+.presentation-inner {
+  position: relative;
+  width: 100%;
+  max-width: 1100px;
+  margin: 24px auto;            /* centers horizontally, adds breathing room */
+  background: #020617;
+  border-radius: 22px;
+  box-shadow:
+    0 40px 120px rgba(15, 23, 42, 0.9),
+    0 0 0 1px rgba(30, 64, 175, 0.35);
+  padding: 32px 40px 36px;
+  box-sizing: border-box;
+}
+
+
+/* Close button */
+.presentation-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  color: #9ca3af;
+  padding: 4px;
+  border-radius: 999px;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.presentation-close:hover {
+  background: rgba(148, 163, 184, 0.18);
+  color: #e5e7eb;
+  transform: scale(1.05);
+}
+
+/* Titles – light on dark */
+.presentation-title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+  text-align: center;
+  color: #e5e7eb;
+}
+
+.presentation-subtitle {
+  margin: 6px 0 0;
+  text-align: center;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  color: #94a3b8;
+}
+
+/* Mini AI Summary block (top of Presentation Mode) – dark card */
+.presentation-ai {
+  margin-top: 18px;
+  padding: 10px 14px 12px;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(56, 189, 248, 0.18), transparent 55%),
+    #020617;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  text-align: center;
+}
+
+.presentation-ai-kpis {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.presentation-ai-kpis span {
+  display: block;
+}
+
+.presentation-ai-narrative {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+/* Layout: funnel + legend */
+.presentation-layout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 56px;
+  margin-top: 32px;
+}
+
+/* Left: Funnel */
+.pipeline-funnel {
+  flex: 0 0 360px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Funnel bands (keep same gradients, on dark background now) */
+.funnel-band {
+  position: relative;
+  height: 70px;
+  width: 100%;
+  max-width: 360px;
+  clip-path: polygon(0 0, 100% 0, 90% 100%, 10% 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.5);
+}
+
+.funnel-band::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 10% 0%, rgba(255, 255, 255, 0.45), transparent 55%);
+  mix-blend-mode: screen;
+  opacity: 0.85;
+}
+
+.funnel-band-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+
+/* gradients unchanged */
+.funnel-cold {
+  background: linear-gradient(135deg, #0052cc, #1d4ed8);
+  width: 100%;
+}
+.funnel-followup {
+  background: linear-gradient(135deg, #facc15, #f59e0b);
+  width: 88%;
+}
+.funnel-warm {
+  background: linear-gradient(135deg, #fb923c, #f97316);
+  width: 76%;
+}
+.funnel-hot {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  width: 64%;
+}
+.funnel-converted {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  width: 52%;
+}
+
+.funnel-count {
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.7);
+}
+
+.funnel-percent {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.9);
+  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.7);
+}
+
+/* Right: Legend – dark cards */
+.pipeline-legend {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.legend-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #020617;
+  border: 1px solid rgba(30, 64, 175, 0.5);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.8);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.legend-row:hover {
+  background: #02081f;
+  border-color: rgba(59, 130, 246, 0.85);
+  transform: translateY(-1px);
+}
+
+.legend-emoji {
+  font-size: 22px;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.legend-text {
+  flex: 1;
+}
+
+.legend-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e5e7eb;
+  margin-bottom: 4px;
+}
+
+.legend-notes-line {
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.6);
+  margin-bottom: 4px;
+}
+
+.legend-subtitle {
+  font-size: 12px;
+  color: #cbd5f5;
+}
+
+/* ---- Presentation Mode: Converted Trophy Panel ---- */
+
+.presentation-trophy-panel {
+  margin-top: 22px;
+  padding: 16px 18px 14px;
+  border-radius: 18px;
+  background: #020617;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  box-shadow:
+    0 20px 40px rgba(15, 23, 42, 0.7),
+    0 0 0 1px rgba(15, 23, 42, 0.9);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trophy-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.trophy-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trophy-emoji {
+  font-size: 22px;
+}
+
+.trophy-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #e5e7eb;
+}
+
+.trophy-subtitle {
+  font-size: 12px;
+  color: #a5b4fc;
+}
+
+.trophy-kpi {
+  text-align: right;
+}
+
+.trophy-kpi-label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #64748b;
+}
+
+.trophy-kpi-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #22c55e;
+}
+
+.trophy-section {
+  border-top: 1px dashed rgba(148, 163, 184, 0.5);
+  padding-top: 8px;
+  margin-top: 6px;
+}
+
+.trophy-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e5e7eb;
+  margin-bottom: 4px;
+}
+
+.trophy-win-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trophy-win {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.trophy-win-company {
+  font-weight: 600;
+  color: #f9fafb;
+}
+
+.trophy-win-location {
+  color: #9ca3af;
+}
+
+.trophy-win-empty {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.trophy-insight-text {
+  font-size: 12px;
+  color: #cbd5f5;
+}
+
+/* ---- Presentation Mode: ICP Vertical Breakdown ---- */
+
+.presentation-icp-panel {
+  margin-top: 28px;
+  padding: 18px 20px 16px;
+  border-radius: 18px;
+  background: #020617;
+  box-shadow:
+    inset 0 0 0 1px rgba(15, 23, 42, 0.9),
+    0 32px 60px rgba(15, 23, 42, 0.9);
+}
+
+.icp-header {
+  margin-bottom: 14px;
+}
+
+.icp-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #e5e7eb;
+}
+
+.icp-subtitle {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.icp-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.icp-tile {
+  flex: 1 1 calc(14.5% - 8px);
+  min-width: 120px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  background:
+    radial-gradient(circle at 0% 0%, rgba(148, 163, 184, 0.22), transparent 55%),
+    #020617;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.7);
+}
+
+.icp-name {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #c7d2fe;
+  margin-bottom: 6px;
+}
+
+.icp-percent {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 2px;
+}
+
+.icp-count {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+/* Responsive: stack tiles nicely on small screens */
+@media (max-width: 960px) {
+  .icp-tile {
+    flex: 1 1 calc(33.33% - 8px);
+  }
+
+  .presentation-inner {
+    padding: 24px 18px 26px;
+  }
+
+  .presentation-layout {
+    flex-direction: column;
+    gap: 24px;
+    align-items: stretch;
+  }
+
+  .pipeline-funnel {
+    flex: 0 0 auto;
+    max-width: 320px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .icp-tile {
+    flex: 1 1 calc(50% - 8px);
+  }
+
+  .presentation-title {
+    font-size: 22px;
+  }
+
+  .presentation-subtitle {
+    font-size: 12px;
+  }
+
+  .legend-row {
+    padding: 8px 10px;
+  }
+}
+
+
+
+
+
+      /* --- VIEW SWITCHER --- */
+      #viewSwitcher {
+        position: absolute;
+        top: 20px;
+        right: 120px; /* keep clear of #dashboardToggle */
+        z-index: 1101;
+        display: flex;
+        background: rgba(255,255,255,0.95);
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        overflow: hidden;
+      }
+      #viewSwitcher button {
+        border: none; padding: 6px 12px; font-size: 14px; cursor: pointer; background: transparent;
+      }
+      #viewSwitcher button.active { background: #222; color: #fff; }
+
+      /* --- LIST VIEW --- */
+      #listView {
+        position: absolute; inset: 0; display: none; background: #f7f8fb;
+      }
+      #listView.show { display: block; }
+      #listToolbar {
+        position: sticky; top: 0; z-index: 5;
+        display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+        background: #fff; padding: 10px 12px; border-bottom: 1px solid #e7e7e7;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+      }
+      #listToolbar input[type="search"] {
+        padding: 6px 10px; font-size: 14px; min-width: 240px; border: 1px solid #ddd; border-radius: 6px;
+      }
+      .chip {
+        padding: 6px 10px; border-radius: 16px; border: 1px solid #ddd; background: #fff; cursor: pointer; font-size: 12px;
+      }
+      .chip.active { background: #222; color: #fff; border-color: #222; }
+      #columnsMenu details { user-select: none; }
+      #columnsMenu summary {
+        list-style: none; cursor: pointer; padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; background: #fff; font-size: 12px;
+      }
+      #columnsMenu summary::-webkit-details-marker { display: none; }
+      #columnsMenu .panel { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 8px; margin-top: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+      #columnsMenu .panel label { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; }
+
+      #leadTableWrap { height: calc(100% - 64px); overflow: auto; }
+      table { width: 100%; border-collapse: collapse; font-size: 14px; background: #fff; }
+      thead th {
+        position: sticky; top: 0; background: #fff; z-index: 1; text-align: left; padding: 10px; border-bottom: 1px solid #eee; cursor: default;
+      }
+      thead th.sortable { cursor: pointer; }
+      tbody td { padding: 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+      tr:hover { background: #fafafa; }
+      .actions-cell button {
+        margin-right: 6px; border: 1px solid #ddd; background: #fff; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 12px;
+      }
+      .status-cell { white-space: nowrap; font-weight: 600; }
+      .website-link { color: #0b6bcb; text-decoration: none; }
+
+      /* Modal (existing) */
+      .modal.hidden { display: none; }
+
+      /* --- Account 360° slide panel (new) --- */
+      .slide-panel {
+        position: fixed;
+        right: 0; top: 0;
+        width: 400px; height: 100%;
+        background: white;
+        border-left: 2px solid #ccc;
+        overflow-y: auto;
+        padding: 1rem;
+        z-index: 3000; /* above logo (2000) and overlays */
+      }
+      .slide-panel.hidden { display: none; }
+      .slide-panel .close-btn {
+        position: absolute;
+        right: 1rem; top: 1rem;
+        cursor: pointer;
+      }
+	  /* --- POPUP FORM POLISH --- */
+.leaflet-popup-content {
+  margin: 10px 12px;
+}
+
+.leaflet-popup-content input[type="text"],
+.leaflet-popup-content input[type="number"],
+.leaflet-popup-content select,
+.leaflet-popup-content textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.leaflet-popup-content label {
+  display: block;
+  margin-top: 6px;
+}
+
+.leaflet-popup-content .actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+      /* --- DAILY QUEUE PANEL --- */
+      #dailyQueuePanel {
+        position: absolute;
+        top: 80px;
+        right: 20px;
+        width: 320px;
+        max-height: 60vh;
+        background: #ffffff;
+        border-radius: 10px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+        padding: 10px 12px;
+        font-size: 13px;
+        z-index: 2001;
+        display: none;              /* hidden until we generate */
+      }
+      #dailyQueuePanel header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+      }
+      #dailyQueuePanel h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+      #dailyQueuePanel button.close {
+        border: none;
+        background: transparent;
+        font-size: 16px;
+        cursor: pointer;
+        line-height: 1;
+      }
+      #dailyQueueList {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      #dailyQueueList li {
+        padding: 6px 0;
+        border-bottom: 1px solid #eee;
+      }
+      #dailyQueueList li:last-child {
+        border-bottom: none;
+      }
+      #dailyQueueList .line1 {
+        font-weight: 600;
+      }
+      #dailyQueueList .line2 {
+        color: #6b7280;
+        font-size: 12px;
+      }
+      #dailyQueueList .line3 {
+        color: #111827;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <img alt="Deli Sandwich Logo" id="logo" src="images/Deli_Sandwich_Logo_Large.png"/>
+
+    <!-- Existing dashboard toggle -->
+    <button id="dashboardToggle" title="Toggle Dashboard (Shift+D)" aria-pressed="true">Hide Controls</button>
+
+    <!-- NEW: Map / List switcher -->
+    <div id="viewSwitcher" role="tablist" aria-label="View Switcher">
+      <button id="btnMapView" class="active" role="tab" aria-selected="true">Map</button>
+      <button id="btnListView" role="tab" aria-selected="false">List</button>
+    </div>
+
+    <!-- Existing dashboard -->
+    <div id="dashboard">
+      <div>
+        <label for="tagFilter">Tags:</label>
+        <select id="tagFilter"><option value="All">All</option></select>
+      </div>
+      <div>
+        <label for="typeFilter">Type:</label>
+        <select id="typeFilter"><option value="All">All</option></select>
+      </div>
+      <div>
+        <label for="cadenceFilter">Cadence:</label>
+        <select id="cadenceFilter"><option value="All">All</option></select>
+      </div>
+      <div>
+        <label for="stateFilter">State:</label>
+        <select id="stateFilter"><option value="All">All</option></select>
+      </div>
+	  <div>
+    <label for="industryFilter">Industry:</label>
+    <select id="industryFilter"><option value="All">All</option></select>
+</div>
+      <div>
+        <label for="clusterToggle">Cluster Pins:</label>
+        <input checked id="clusterToggle" type="checkbox"/>
+      </div>
+      <div>
+        <label>Status:</label>
+        <label class="status-checkbox"><input checked type="checkbox" value="Hot"/> Hot</label>
+        <label class="status-checkbox"><input checked type="checkbox" value="Warm"/> Warm</label>
+        <label class="status-checkbox"><input checked type="checkbox" value="Cold"/> Cold</label>
+        <label class="status-checkbox"><input checked type="checkbox" value="Follow-Up"/> Follow-Up</label>
+        <label class="status-checkbox"><input checked type="checkbox" value="Converted"/> Converted</label>
+        <label class="status-checkbox"><input checked type="checkbox" value="Research"/> Research</label>
+        <label class="status-checkbox"><input checked type="checkbox" value="Unspecified"/> Unspecified</label>
+      </div>
+      <div>
+        <label for="startDate">From:</label>
+        <input id="startDate" type="date"/>
+        <label for="endDate">To:</label>
+        <input id="endDate" type="date"/>
+      </div>
+      <div>
+        <button id="launchPresentation">Launch Presentation Mode</button>
+        <button id="exportDailyList">Daily List</button>
+        <button id="resetFilters">Reset Filters</button>
+      </div>
+<div>
+  <button id="openSummaryBtn" onclick="location.href='summary.html?range=today'">📊 Open Today’s Summary</button>
+  <button id="startMyDayBtn">🚀 Start My Day (20)</button>
+  <button id="startMyDayEventBtn">🎯 Start My Day (Event Mode)</button>
+
+  <!-- ⭐ NEW: Direct AFP Event Mode button -->
+  <button id="startMyDayAFPBtn">🏟 AFP Event Mode</button>
+
+  <button id="addLeadBtn">➕ Add Lead</button>
+</div>
+
+
+      <!-- 📤 CSV Upload -->
+      <!-- 📤 CSV Upload -->
+      <div id="csvUploadBar" style="margin-top:8px;">
+
+        <!-- NEW: defaults for CSV imports -->
+        <div style="
+          display:flex;
+          flex-wrap:wrap;
+          gap:8px;
+          align-items:flex-end;
+          margin-bottom:6px;
+        ">
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <label for="csvDefaultSource"
+                   style="font-size:11px; color:#6b7280;">
+              Source (optional)
+            </label>
+            <input
+              id="csvDefaultSource"
+              type="text"
+              placeholder="e.g. Conference"
+              style="font-size:12px; padding:4px 6px;
+                     border-radius:6px; border:1px solid #d1d5db;"
+            />
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <label for="csvDefaultTag"
+                   style="font-size:11px; color:#6b7280;">
+              Tag for all rows (optional)
+            </label>
+            <input
+              id="csvDefaultTag"
+              type="text"
+              placeholder="e.g. AFP Event"
+              style="font-size:12px; padding:4px 6px;
+                     border-radius:6px; border:1px solid #d1d5db;"
+            />
+          </div>
+        </div>
+
+        <button
+          id="uploadCsvBtn"
+          style="padding:6px 10px;border-radius:8px;border:1px solid #ccc;cursor:pointer;">
+          📤 Upload CSV
+        </button>
+        <input id="csvInput" type="file" accept=".csv" style="display:none;" />
+        <span id="uploadStatus" style="display:none;margin-left:8px;font-size:14px;"></span>
+
+        <!-- 🛡 Safe mode: deletes only currently filtered leads -->
+        <button
+          id="deleteFilteredLeadsBtn"
+          style="margin-left:12px;padding:6px 10px;border-radius:8px;
+                 border:1px solid #fca5a5;background:#fee2e2;color:#b91c1c;
+                 cursor:pointer;">
+          🗑️ Delete Filtered Leads (Safe)
+        </button>
+      </div>
+
+
+
+	  
+    </div>
+
+    <!-- MAP VIEW (wrapped) -->
+    <div id="mapView">
+      <div id="map"></div>
+
+         <!-- Presentation Mode Funnel Overlay -->
+      <div id="presentation-overlay" class="presentation-overlay hidden">
+        <div class="presentation-inner">
+          <button id="presentation-close" class="presentation-close">✖</button>
+
+          <h1 class="presentation-title">
+            Current Pipeline (<span id="pipeline_total">0</span> Prospects)
+          </h1>
+          <h2 class="presentation-subtitle">
+            <span id="pipeline_range">Date Range</span>
+          </h2>
+<!-- 🧠 Mini AI Summary (3 KPI lines + narrative) -->
+<div class="presentation-ai">
+  <div class="presentation-ai-kpis">
+    <span id="ai_summary_line1">🎯 Waiting for data…</span>
+    <span id="ai_summary_line2">📈 — upgrades | 📉 — downgrades</span>
+    <span id="ai_summary_line3">🔥 Strongest: — | Weakest: —</span>
+  </div>
+  <div class="presentation-ai-narrative" id="ai_summary_narrative">
+    Presentation insights will appear here once a date range is applied.
+  </div>
+</div>
+          <div class="presentation-layout">
+		  
+            <!-- Funnel -->
+<div class="pipeline-funnel">
+  <div class="funnel-band funnel-cold" data-status="Cold">
+    <div class="funnel-band-inner">
+      <span class="funnel-count" id="funnel_cold">0</span>
+      <span class="funnel-percent" id="funnel_cold_pct">0%</span>
+    </div>
+  </div>
+
+  <div class="funnel-band funnel-followup" data-status="Follow-Up">
+    <div class="funnel-band-inner">
+      <span class="funnel-count" id="funnel_followup">0</span>
+      <span class="funnel-percent" id="funnel_followup_pct">0%</span>
+    </div>
+  </div>
+
+  <div class="funnel-band funnel-warm" data-status="Warm">
+    <div class="funnel-band-inner">
+      <span class="funnel-count" id="funnel_warm">0</span>
+      <span class="funnel-percent" id="funnel_warm_pct">0%</span>
+    </div>
+  </div>
+
+  <div class="funnel-band funnel-hot" data-status="Hot">
+    <div class="funnel-band-inner">
+      <span class="funnel-count" id="funnel_hot">0</span>
+      <span class="funnel-percent" id="funnel_hot_pct">0%</span>
+    </div>
+  </div>
+
+  <div class="funnel-band funnel-converted" data-status="Converted">
+    <div class="funnel-band-inner">
+      <span class="funnel-count" id="funnel_converted">0</span>
+      <span class="funnel-percent" id="funnel_converted_pct">0%</span>
+    </div>
+  </div>
+</div>
+
+
+            <!-- Legend / Notes -->
+            <div class="pipeline-legend">
+              <div class="legend-row">
+                <div class="legend-emoji">🧊</div>
+                <div class="legend-text">
+                  <div class="legend-title">Cold Leads</div>
+                  <div class="legend-notes-line"></div>
+                  <div class="legend-subtitle" id="ai_note_cold_presentation">
+                    Notes on Cold Leads
+                  </div>
+                </div>
+              </div>
+
+              <div class="legend-row">
+                <div class="legend-emoji">⏳</div>
+                <div class="legend-text">
+                  <div class="legend-title">Follow-Up Leads</div>
+                  <div class="legend-notes-line"></div>
+                  <div class="legend-subtitle" id="ai_note_followup_presentation">
+                    Notes on Follow-Up Leads
+                  </div>
+                </div>
+              </div>
+
+              <div class="legend-row">
+                <div class="legend-emoji">🌞</div>
+                <div class="legend-text">
+                  <div class="legend-title">Warm Leads</div>
+                  <div class="legend-notes-line"></div>
+                  <div class="legend-subtitle" id="ai_note_warm_presentation">
+                    Notes on Warm Leads
+                  </div>
+                </div>
+              </div>
+
+              <div class="legend-row">
+                <div class="legend-emoji">🔥</div>
+                <div class="legend-text">
+                  <div class="legend-title">Hot Leads</div>
+                  <div class="legend-notes-line"></div>
+                  <div class="legend-subtitle" id="ai_note_hot_presentation">
+                    Notes on Hot Leads
+                  </div>
+                </div>
+              </div>
+
+              <div class="legend-row">
+                <div class="legend-emoji">🏆</div>
+                <div class="legend-text">
+                  <div class="legend-title">Converted</div>
+                  <div class="legend-notes-line"></div>
+                  <div class="legend-subtitle" id="ai_note_converted_presentation">
+                    Notes on Converted Leads
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+		  
+		              <!-- Converted-only Trophy Panel -->
+            <div class="presentation-trophy-panel">
+              <div class="trophy-header-row">
+                <div class="trophy-title-wrap">
+                  <span class="trophy-emoji">🏆</span>
+                  <div>
+                    <div class="trophy-title">Converted Pipeline Highlights</div>
+                    <div class="trophy-subtitle">
+                      Wins in this filtered range
+                    </div>
+                  </div>
+                </div>
+                <div class="trophy-kpi">
+                  <span class="trophy-kpi-label">Converted leads</span>
+                  <span class="trophy-kpi-value" id="trophy_converted_total">—</span>
+                </div>
+              </div>
+
+              <div class="trophy-section">
+                <div class="trophy-section-title">Top wins</div>
+                <div id="trophy_top_wins" class="trophy-win-list">
+                  <div class="trophy-win trophy-win-empty">
+                    No converted wins in this view yet.
+                  </div>
+                </div>
+              </div>
+
+              <div class="trophy-section">
+                <div class="trophy-section-title">Insight</div>
+                <div id="trophy_insight" class="trophy-insight-text">
+                  Converted insights will appear here once you have wins in this
+                  window.
+                </div>
+              </div>
+            </div>
+
+
+
+          <!-- ICP Vertical Breakdown bar (stacked under funnel + notes) -->
+          <div class="presentation-icp-panel">
+            <div class="icp-header">
+              <div class="icp-title">ICP Vertical Breakdown</div>
+              <div class="icp-subtitle">
+                How your core Finexio verticals are converting in this window.
+              </div>
+            </div>
+            <div class="icp-tiles" id="icp_tiles">
+              <!-- tiles are injected by JS -->
+            </div>
+          </div>
+        </div> <!-- /.presentation-inner -->
+      </div>   <!-- /#presentation-overlay -->
+
+
+
+
+
+      <div id="statsSummary">Status Breakdown: (loading...)</div>
+      <div id="pinCount">Displaying 0 of 0 leads</div>
+	  
+	        <!-- Daily Queue panel -->
+      <div id="dailyQueuePanel">
+        <header>
+          <h3 id="dailyQueueTitle">Daily Queue</h3>
+          <button class="close" id="dailyQueueClose" title="Hide Daily Queue">×</button>
+        </header>
+        <div style="font-size:12px; color:#4b5563; margin-bottom:4px;">
+          Auto-selected batch of leads for today’s activity.
+        </div>
+        <ul id="dailyQueueList">
+          <!-- Filled by JS -->
+        </ul>
+      </div>
+
+
+      <div id="legend">
+        <div class="legend-item"><div class="legend-color" style="background-image: url('images/marker-icon-green.png');"></div>Converted</div>
+        <div class="legend-item"><div class="legend-color" style="background-image: url('images/marker-icon-red.png');"></div>Hot</div>
+        <div class="legend-item"><div class="legend-color" style="background-image: url('images/marker-icon-orange.png');"></div>Warm</div>
+        <div class="legend-item"><div class="legend-color" style="background-image: url('images/marker-icon-yellow.png');"></div>Follow-Up</div>
+        <div class="legend-item"><div class="legend-color" style="background-image: url('images/marker-icon-blue.png');"></div>Cold</div>
+        <div class="legend-item"><div class="legend-color" style="background-image: url('images/marker-icon-violet.png');"></div>Research</div>
+        <div class="legend-item"><div class="legend-color" style="background-image: url('images/marker-icon-grey.png');"></div>Unspecified</div>
+      </div>
+    </div>
+
+    <!-- LIST VIEW -->
+    <div id="listView" aria-label="Lead List">
+<div id="listToolbar">
+  <!-- Global search -->
+  <input
+    id="listSearch"
+    type="search"
+    placeholder="Search name, company, city, state, tags…"
+    aria-label="Search"
+  />
+
+  <!-- ⭐ NEW: Tag-only filter (List view) -->
+  <input
+    id="listTagFilter"
+    type="search"
+    placeholder="Filter by tag…"
+    aria-label="Filter by tag"
+    style="margin-left:8px; min-width:160px; padding:6px 10px; font-size:14px; border:1px solid #ddd; border-radius:6px;"
+  />
+
+  <!-- Status chips -->
+  <button class="chip" data-status="Converted">🏆 Converted</button>
+  <button class="chip" data-status="Hot">🔥 Hot</button>
+  <button class="chip" data-status="Warm">🌞 Warm</button>
+  <button class="chip" data-status="Cold">🧊 Cold</button>
+  <button class="chip" data-status="Follow-Up">⏳ Follow-Up</button>
+  <button class="chip" data-status="Research">🔍 Research</button>
+  <button class="chip" data-status="Unspecified">⚪ Unspecified</button>
+
+  <button id="listReset" class="chip" style="margin-left:8px;">Reset</button>
+
+  <!-- Back to Presentation -->
+  <button id="backToPresentation" class="chip" style="margin-left:4px;">
+    ⬅ Back to Presentation
+  </button>
+
+  <!-- ⭐ Geocode All Missing button -->
+  <button id="geocodeAllMissingBtn" class="chip" style="margin-left:4px;">
+    📡 Geocode All Missing
+  </button>
+
+  <div id="columnsMenu" style="margin-left:auto;">
+    <details>
+      <summary>Columns ▾</summary>
+      <div class="panel" id="columnsPanel"><!-- JS populates --></div>
+    </details>
+  </div>
+</div>
+
+
+
+
+      <div id="leadTableWrap">
+        <table id="leadTable" aria-describedby="leadCount">
+          <thead id="leadThead"><tr id="leadHeaderRow"></tr></thead>
+          <tbody id="leadTbody"></tbody>
+        </table>
+      </div>
+      <div id="leadCount" style="padding:8px 12px; font-size:12px; color:#555;">0 leads</div>
+    </div>
+
+    <!-- NEW: Account 360° slide-in panel -->
+    <div id="account360Panel" class="slide-panel hidden"></div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- Scripts -->
+
+<script>
+  (function() {
+    // --- Upload CSV wiring ---
+    const uploadBtn    = document.getElementById('uploadCsvBtn');
+    const fileInput    = document.getElementById('csvInput');
+    const uploadStatus = document.getElementById('uploadStatus');
+
+    if (uploadBtn && fileInput && uploadStatus) {
+      uploadBtn.addEventListener('click', () => fileInput.click());
+
+      fileInput.addEventListener('change', async () => {
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+
+        uploadStatus.style.display = 'inline';
+        uploadStatus.textContent = 'Uploading…';
+        uploadStatus.style.color = '#6b7280';
+
+        try {
+          const fd = new FormData();
+          fd.append('file', file, file.name); // field name matches backend
+
+          // 🔹 NEW: grab default Source + Tag from the new inputs
+          const defaultSourceInput = document.getElementById('csvDefaultSource');
+          const defaultTagInput    = document.getElementById('csvDefaultTag');
+
+          const defaultSource = defaultSourceInput
+            ? defaultSourceInput.value.trim()
+            : '';
+          const defaultTag = defaultTagInput
+            ? defaultTagInput.value.trim()
+            : '';
+
+          // Build URL with optional query params
+          const params = new URLSearchParams();
+          if (defaultSource) params.set('default_source', defaultSource);
+          if (defaultTag)    params.set('default_tag', defaultTag);
+
+          let url = '/import/csv';
+          const qs = params.toString();
+          if (qs) {
+            url += `?${qs}`;
+          }
+
+          const res  = await fetch(url, { method: 'POST', body: fd });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data?.error || 'Upload failed');
+
+          const count = data?.inserted_or_updated ?? 0;
+          const failed =
+            data?.failed ??
+            (Array.isArray(data?.failed_rows) ? data.failed_rows.length : 0);
+
+          uploadStatus.textContent = `✅ Imported ${count} row(s) • ${failed} failed`;
+          uploadStatus.style.color = '#16a34a';
+
+          if (window.refreshLeads) await window.refreshLeads();
+          if (window.autoGeocodeMissing) {
+            window.autoGeocodeMissing({ max: 25, delayMs: 1000 });
+          }
+        } catch (err) {
+          uploadStatus.textContent = `❌ ${err.message || 'Upload error'}`;
+          uploadStatus.style.color = '#dc2626';
+        } finally {
+          setTimeout(() => {
+            uploadStatus.style.display = 'none';
+            uploadStatus.textContent = '';
+            fileInput.value = '';
+          }, 3500);
+        }
+      });
+
+    }
+
+    // Helper: get IDs for current filtered/visible leads
+    function getFilteredLeadIdsForDelete() {
+      const DS   = window.DS || {};
+      const rows = (DS.state && (DS.state.filtered || DS.state.rawRows)) || [];
+      return rows
+        .map(r => r.id ?? r.ID ?? r.lead_id)
+        .filter(id => id !== null && id !== undefined);
+    }
+
+    // --- Bulk Delete Filtered Leads (Safe mode) wiring ---
+    const deleteFilteredBtn = document.getElementById('deleteFilteredLeadsBtn');
+
+    if (deleteFilteredBtn) {
+      deleteFilteredBtn.addEventListener('click', async () => {
+        const ids = getFilteredLeadIdsForDelete();
+
+        if (!ids.length) {
+          alert('No leads match the current filters, so there is nothing to delete.');
+          return;
+        }
+
+        const ok = window.confirm(
+          `Delete ${ids.length} lead(s) that match the CURRENT filters? This cannot be undone.`
+        );
+        if (!ok) return;
+
+        const originalText = deleteFilteredBtn.textContent;
+        deleteFilteredBtn.disabled = true;
+        deleteFilteredBtn.textContent = 'Deleting…';
+
+        try {
+          const res = await fetch('/leads/bulk-delete-by-ids', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids })
+          });
+
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
+
+          const deletedCount = data.deleted ?? ids.length;
+          alert(`Deleted ${deletedCount} lead(s).`);
+
+          if (window.refreshLeads) await window.refreshLeads();
+        } catch (err) {
+          console.error('Bulk delete (filtered) failed', err);
+          alert(`Bulk delete failed: ${err.message || 'Unknown error'}`);
+        } finally {
+          deleteFilteredBtn.disabled = false;
+          deleteFilteredBtn.textContent = originalText;
+        }
+      });
+    }
+
+    // --- ⭐ NEW: Geocode All Missing wiring ---
+    const geocodeAllBtn = document.getElementById('geocodeAllMissingBtn');
+
+    if (geocodeAllBtn) {
+      geocodeAllBtn.addEventListener('click', async () => {
+        const ok = window.confirm(
+          'Geocode ALL leads that are missing latitude/longitude in the database?\n\n' +
+          'This will call the backend geocoder with a short delay between requests ' +
+          'to avoid rate limits.'
+        );
+        if (!ok) return;
+
+        const originalText = geocodeAllBtn.textContent;
+        geocodeAllBtn.disabled = true;
+        geocodeAllBtn.textContent = '⏳ Geocoding…';
+
+        try {
+          // You can tweak limit/delay here if needed
+          const res = await fetch('/geocode/missing', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ limit: 500, delayMs: 1200 })
+          });
+
+          const data = await res.json().catch(() => null);
+          if (!res.ok) {
+            console.error('Bulk geocode failed', res.status, data);
+            alert('Bulk geocode failed – check backend logs.');
+          } else {
+            const updated = data?.result?.updatedCount ?? 0;
+            const skipped = data?.result?.skippedCount ?? 0;
+            alert(`Geocode complete: ${updated} updated, ${skipped} skipped.`);
+
+            if (window.refreshLeads) await window.refreshLeads();
+          }
+        } catch (err) {
+          console.error('Bulk geocode error', err);
+          alert('Bulk geocode failed due to a network error.');
+        } finally {
+          geocodeAllBtn.disabled = false;
+          geocodeAllBtn.textContent = originalText;
+        }
+      });
+    }
+  })();
+</script>
+
+
+	
+	
+<!-- your app scripts -->
+<script src="leads.js" defer></script>
+
+
+
+<!-- ✅ Auto-geocode helper (place near the end of <body>) -->
+<script>
+async function autoGeocodeMissing({ max = 25, delayMs = 1000 } = {}) {
+  try {
+    const res = await fetch('/summary');
+    const data = await res.json();
+    const leads = Array.isArray(data) ? data : (data.data || data.leads || []);
+
+    const targets = leads
+      .filter(l => (!l.latitude || !l.longitude) && (l.city || l.state || l.company))
+      .slice(0, max);
+
+    for (const lead of targets) {
+      const q = [lead.company, lead.city, lead.state].filter(Boolean).join(', ');
+      if (!q) continue;
+
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`;
+      const geo = await fetch(url, { headers: { 'Accept-Language': 'en' } }).then(r => r.json());
+
+      if (Array.isArray(geo) && geo[0]) {
+        const lat = parseFloat(geo[0].lat);
+        const lon = parseFloat(geo[0].lon);
+if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
+  const id = lead.id || lead.uuid;
+  const base = window.DELI_API_BASE || '';
+  await fetch(`${base}/update-lead/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ latitude: lat, longitude: lon })
+  });
+}
+
+      }
+
+      // throttle to avoid 429
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+
+    if (window.refreshLeads) await window.refreshLeads();
+  } catch (e) {
+    console.warn('Auto-geocode failed:', e);
+  }
+}
+</script>
+
+
+
+<!-- ✅ ADD THIS BLOCK RIGHT BELOW THE TWO LINES ABOVE -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const mapView   = document.getElementById('mapView');
+  const listView  = document.getElementById('listView');
+  const dash      = document.getElementById('dashboard');
+  const btnMap    = document.getElementById('btnMapView');
+  const btnList   = document.getElementById('btnListView');
+  const dashTgl   = document.getElementById('dashboardToggle');
+  const logo      = document.getElementById('logo');   // 👈 NEW
+
+  // Map/List switcher
+  function showMap() {
+    mapView.style.display = 'block';
+    listView.classList.remove('show');
+    btnMap.classList.add('active');
+    btnList.classList.remove('active');
+    if (logo) logo.style.display = '';                 // 👈 NEW (show logo)
+  }
+  function showList() {
+    mapView.style.display = 'none';
+    listView.classList.add('show');
+    btnList.classList.add('active');
+    btnMap.classList.remove('active');
+    if (logo) logo.style.display = 'none';             // 👈 NEW (hide logo)
+  }
+  btnMap?.addEventListener('click', showMap);
+  btnList?.addEventListener('click', showList);
+
+  // Hide Controls toggle
+  dashTgl?.addEventListener('click', () => {
+    const isHidden = dash.classList.toggle('hidden');
+    dashTgl.textContent = isHidden ? 'Show Controls' : 'Hide Controls';
+    dashTgl.setAttribute('aria-pressed', (!isHidden).toString());
+  });
+});
+</script>
+
+    <!-- 🧾 Add Lead Modal (updated with Last Touched) -->
+    <div class="modal hidden" id="leadModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: none; justify-content: center; align-items: center;">
+      <div class="modal-content" style="background: white; padding: 20px; width: 400px; max-height: 80vh; overflow-y: auto; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.2);">
+        <h2>New Lead</h2>
+<form id="leadForm">
+  <input type="hidden" name="id" />
+
+  <input name="name" placeholder="Name" required
+         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+
+  <input name="company" placeholder="Company"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+
+  <input name="city" placeholder="City"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+
+  <input name="state" placeholder="State"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+
+  <!-- NEW FIELD -->
+  <input name="industry" placeholder="Industry"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+
+  <input name="tags" placeholder="Tags (comma-separated)"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+
+  <input name="cadence_name" placeholder="Cadence Name"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+
+  <input name="website" placeholder="Website"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+
+  <select name="status"
+          style="width: 100%; margin-bottom: 10px; padding: 8px;">
+    <option value="">Select Status</option>
+    <option value="Unspecified">Unspecified ⚪</option>
+    <option value="Converted">Converted 🏆</option>
+    <option value="Hot">Hot 🔥</option>
+    <option value="Warm">Warm 🌞</option>
+    <option value="Cold">Cold 🧊</option>
+    <option value="Follow-Up">Follow-Up ⏳</option>
+    <option value="Research">Research 🔍</option>
+  </select>
+
+  <label style="display:block; font-weight:600; margin-top:6px;">
+    Last Touched
+  </label>
+  <input name="last_touched" type="date"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+
+  <input name="net_new" placeholder="Net New (true/false)"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+
+  <!-- ARR + AP Spend (Finexio-style shorthand like 25M or 2.5B) -->
+  <div style="display:flex; gap:8px; margin-bottom: 10px;">
+    <input
+      name="arr"
+      placeholder="ARR (e.g. 25M)"
+      style="flex: 1; padding: 8px;"
+    />
+
+    <input
+      name="ap_spend"
+      placeholder="AP Spend (e.g. 10M)"
+      style="flex: 1; padding: 8px;"
+    />
+  </div>
+
+  <input name="obstacle" placeholder="Obstacle"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+
+
+  <input name="self_sourced" placeholder="Self Sourced (true/false)"
+         style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+
+  <textarea name="notes" placeholder="Notes..."
+            style="width: 100%; margin-bottom: 10px; padding: 8px;"></textarea>
+
+  <div class="modal-buttons"
+       style="display: flex; justify-content: flex-end; gap: 10px;">
+    <button id="cancelLead" type="button">Cancel</button>
+    <button type="submit">Save Lead</button>
+  </div>
+</form>
+
+      </div>
+    </div>
+<script>
+/* ---------- List View wiring + sorting ---------- */
+
+  // Helpers
+  const $  = (sel) => document.querySelector(sel);
+  const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+  
+    // Make sure website links are absolute (so "www.cuny.edu" works)
+  function normalizeWebsiteUrl(url) {
+    if (!url) return '';
+    let u = String(url).trim();
+    if (!u) return '';
+
+    // strip any existing http/https just in case
+    u = u.replace(/^https?:\/\//i, '');
+
+    return 'https://' + u;
+  }
+
+
+   // Sort state
+  const SORT = { key: 'company', dir: 'asc' };
+
+
+  // Column definitions
+  const COLUMNS = [
+    { key:'status',         label:'Status',         sortable:true },
+    { key:'pin',            label:'Pin',            sortable:true },
+    { key:'company',        label:'Company',        sortable:true },
+    { key:'name',           label:'Name',           sortable:true },
+    { key:'city',           label:'City',           sortable:true },
+    { key:'state',          label:'State',          sortable:true },
+    { key:'industry',       label:'Industry',       sortable:true },
+    { key:'forecast_month', label:'Forecast',       sortable:true },
+    { key:'lead_type',      label:'Type',           sortable:true },
+    { key:'arr',            label:'ARR',            sortable:true, numeric:true },
+    { key:'ap_spend',       label:'AP Spend',       sortable:true, numeric:true },
+    { key:'tags',           label:'Tags',           sortable:false },
+    { key:'cadence_name',   label:'Cadence',        sortable:true },
+    { key:'website',        label:'Website',        sortable:false },
+    { key:'notes',          label:'Notes',          sortable:false },
+
+    // ⭐ NEW: actions column (for delete button)
+    { key:'actions',        label:'',               sortable:false },
+  ];
+
+
+  const STATUS_RANK = {
+    converted: 0,
+    hot: 1,
+    warm: 2,
+    'follow-up': 3,
+    cold: 4,
+    research: 5,
+    unspecified: 6
+  };
+
+  // 🔁 Global caches for List View row editor
+  window.LIST_STATE_OPTIONS = [];
+  window.LIST_INDUSTRY_OPTIONS = [];
+
+  // NEW: build Industry options from current dataset
+  function buildIndustryOptions() {
+    const DS = window.DS || {};
+    const rows = (DS.state && (DS.state.rawRows || DS.state.filtered)) || [];
+    const set = new Set();
+
+    rows.forEach((r) => {
+      const raw =
+        r.industry ||
+        r.Industry ||
+        r.vertical ||
+        r.Vertical ||
+        '';
+      const s = String(raw || '').trim();
+      if (!s) return;
+      set.add(s);
+    });
+
+    return Array.from(set).sort((a, b) =>
+      a.toLowerCase().localeCompare(b.toLowerCase())
+    );
+  }
+  
+  // Normalize state labels so we don't end up with "ALABAMA" + "Alabama"
+  function normalizeStateLabel(raw) {
+    if (!raw) return '';
+    const s = String(raw).trim();
+    if (!s) return '';
+
+    const lower = s.toLowerCase();
+
+    // Special-case DC
+    if (lower === 'dc' || lower === 'd.c.' || lower === 'district of columbia') {
+      return 'District of Columbia';
+    }
+
+    // Title-case each word (alabama -> Alabama, new york -> New York)
+    return lower.replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  // Build dropdown option lists from current data
+  function buildStateOptions() {
+    const DS = window.DS || {};
+    const rows = (DS.state && (DS.state.rawRows || DS.state.filtered)) || [];
+    const set = new Set();
+
+    rows.forEach((r) => {
+      const raw = r.state || r.State || r['State/Province'] || '';
+      if (!raw) return;
+
+      const label = normalizeStateLabel(raw);
+      if (label) set.add(label);
+    });
+
+    // Sort alphabetically, case-insensitive
+    return Array.from(set).sort((a, b) =>
+      a.toLowerCase().localeCompare(b.toLowerCase())
+    );
+  }
+
+
+
+function getCI(row, key) {
+    if (!row) return '';
+
+    // ⭐ NEW: handle virtual column
+    if (key.toLowerCase() === 'pin') {
+        const lat = row.latitude || row.lat;
+        const lon = row.longitude || row.lon;
+        return lat && lon ? '1' : '0';  // sortable numeric
+    }
+
+    const hit = Object.keys(row).find(k => k.toLowerCase() === key.toLowerCase());
+    return hit ? row[hit] ?? '' : '';
+}
+
+  // Patch a single lead in DS.state without blowing away filters
+  function patchLeadInState(id, partial) {
+    const DS = window.DS || {};
+    if (!DS.state) return;
+
+    const apply = (rows) => {
+      if (!Array.isArray(rows)) return;
+      rows.forEach((r) => {
+        const rid = r.id || r.ID || r.lead_id;
+        if (rid != null && String(rid) === String(id)) {
+          Object.keys(partial).forEach((k) => {
+            r[k] = partial[k];
+          });
+        }
+      });
+    };
+
+    apply(DS.state.rawRows);
+    apply(DS.state.filtered);
+  }
+  
+    // Remove a single lead from DS.state (raw + filtered) without resetting filters
+  function deleteLeadFromState(id) {
+    const DS = window.DS || {};
+    if (!DS.state) return;
+
+    const remove = (rows) => {
+      if (!Array.isArray(rows)) return;
+      const idx = rows.findIndex((r) => {
+        const rid = r.id || r.ID || r.lead_id;
+        return rid != null && String(rid) === String(id);
+      });
+      if (idx !== -1) {
+        rows.splice(idx, 1);
+      }
+    };
+
+    remove(DS.state.rawRows);
+    remove(DS.state.filtered);
+  }
+
+
+
+  function prettyStatus(s) {
+    if (!s) return '⚪ Unspecified';
+    const k = String(s).toLowerCase();
+    if (k.includes('convert')) return '🏆 Converted';
+    if (k.includes('hot'))      return '🔥 Hot';
+    if (k.includes('warm'))     return '🌞 Warm';
+    if (k.includes('cold'))     return '🧊 Cold';
+    if (k.includes('follow'))   return '⏳ Follow-Up';
+    if (k.includes('research')) return '🔍 Research';
+    return '⚪ Unspecified';
+  }
+
+  function statusRankVal(s) {
+    const k = String(s || '').toLowerCase();
+    if (k.includes('convert')) return STATUS_RANK.converted;
+    if (k.includes('hot'))     return STATUS_RANK.hot;
+    if (k.includes('warm'))    return STATUS_RANK.warm;
+    if (k.includes('follow'))  return STATUS_RANK['follow-up'];
+    if (k.includes('cold'))    return STATUS_RANK.cold;
+    if (k.includes('research'))return STATUS_RANK.research;
+    return STATUS_RANK.unspecified;
+  }
+
+  function renderListTable(rows) {
+    const thead = $('#leadThead');
+    const tbody = $('#leadTbody');
+    const count = $('#leadCount');
+
+    // Header with sort indicators
+    thead.innerHTML =
+      '<tr id="leadHeaderRow">' +
+      COLUMNS.map(c => {
+        const isActive = SORT.key === c.key;
+        const indicator = c.sortable
+          ? `<span class="sort-indicator" style="margin-left:6px; font-size:11px; opacity:${isActive?1:.35}">
+               ${isActive ? (SORT.dir === 'asc' ? '▲' : '▼') : '▲'}
+             </span>`
+          : '';
+        const cls = c.sortable ? 'sortable' : '';
+        return `<th data-key="${c.key}" class="${cls}">${c.label}${indicator}</th>`;
+      }).join('') +
+      '</tr>';
+
+    // Wire header clicks
+    $$('#leadThead th.sortable').forEach(th => {
+      th.onclick = () => {
+        const key = th.getAttribute('data-key');
+        if (SORT.key === key) {
+          SORT.dir = SORT.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          SORT.key = key;
+          SORT.dir = 'asc';
+        }
+        window.renderListView(); // re-render with new sort
+      };
+    });
+
+    const stateOptions    = buildStateOptions();
+    const industryOptions = buildIndustryOptions();
+
+    // update global caches for the inline row editor
+    window.LIST_STATE_OPTIONS    = stateOptions;
+    window.LIST_INDUSTRY_OPTIONS = industryOptions;
+
+
+    // Rows
+    const html = rows.map(r => {
+      const t = (v) => (v == null || v === '') ? '' : String(v);
+      const website = getCI(r,'website');
+      const websiteUrl = website ? normalizeWebsiteUrl(website) : '';
+      const arr = getCI(r,'arr');
+      const ap  = getCI(r,'ap_spend');
+      const hasPin = getCI(r, 'pin') === '1';
+
+      // DB id (case-insensitive) so we can call API routes
+      const id = getCI(r, 'id') || r.id || r.lead_id || '';
+
+      const deleteCell = id
+        ? `<button class="list-delete-btn"
+                    data-id="${id}"
+                    title="Delete this lead">🗑</button>`
+        : '';
+
+      // Tags value as plain string for initial display
+      const rawTags = t(getCI(r,'tags'));
+
+      return `<tr data-id="${id}">
+        <td class="status-cell">${prettyStatus(getCI(r,'status'))}</td>
+        <td>${hasPin ? '✅' : '❌'}</td>
+        <td>${t(getCI(r,'company'))}</td>
+        <td>${t(getCI(r,'name'))}</td>
+        <td>${t(getCI(r,'city'))}</td>
+        <td>${t(getCI(r,'state'))}</td>
+        <td>${t(getCI(r,'industry'))}</td>
+        <td>${t(getCI(r,'forecast_month'))}</td>
+        <td>${t(getCI(r,'lead_type'))}</td>
+        <td>${arr ? ('$' + Number(arr).toLocaleString()) : ''}</td>
+        <td>${ap  ? ('$' + Number(ap).toLocaleString())  : ''}</td>
+
+        <!-- ⭐ TAGS CELL EDITABLE -->
+        <td class="tags-cell" data-id="${id}">
+          <span class="tags-text">${rawTags}</span>
+          <button class="tags-edit-btn" title="Edit tags">✏️</button>
+        </td>
+
+        <td>${t(getCI(r,'cadence_name'))}</td>
+        <td>${websiteUrl
+              ? `<a class="website-link" href="${websiteUrl}" target="_blank" rel="noopener noreferrer">Visit</a>`
+              : ''}</td>
+        <td>${t(getCI(r,'notes'))}</td>
+        <td class="actions-cell">
+          <button class="row-edit-btn"
+                  data-id="${id}"
+                  title="Edit State & Industry">📝 Edit</button>
+          ${hasPin
+            ? '' 
+            : `<button class="geo-btn" data-id="${id}" title="Geocode this lead">📍 Geocode</button>`}
+          ${deleteCell}
+        </td>
+      </tr>`;
+    }).join('');
+
+    tbody.innerHTML = html;
+
+    count.textContent = `${rows.length} lead${rows.length===1?'':'s'}`;
+
+    // 🔥 DELETE button handlers
+    $$('#leadTbody .list-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // don’t trigger row-level events
+
+        const id = btn.dataset.id;
+        if (!id) return;
+
+        const ok = window.confirm(
+          'Delete this lead from Deli Sandwich?\n\nThis cannot be undone.'
+        );
+        if (!ok) return;
+
+        try {
+          const API_BASE = window.DELI_API_BASE || '';
+          const res = await fetch(`${API_BASE}/leads/${encodeURIComponent(id)}`, {
+            method: 'DELETE'
+          });
+
+          if (!res.ok) {
+            console.error('List delete failed', res.status);
+            alert('Delete failed – please try again.');
+            return;
+          }
+
+          // ✅ Remove this lead from in-memory state so filters stay put
+          deleteLeadFromState(id);
+
+          // Re-render the List View with the same filters + chips
+          if (typeof window.renderListView === 'function') {
+            window.renderListView();
+          }
+        } catch (err) {
+          console.error('List delete error', err);
+          alert('Delete failed due to a network error.');
+        }
+
+      });
+    });
+
+    // 📍 GEOCODE button handlers
+    $$('#leadTbody .geo-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation(); // don’t trigger row-level events
+
+        const id = btn.dataset.id;
+        if (!id) return;
+
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '⏳ Geocoding…';
+
+        try {
+          const API_BASE = window.DELI_API_BASE || '';
+          const res = await fetch(`${API_BASE}/leads/${encodeURIComponent(id)}/geocode`, {
+            method: 'POST'
+          });
+
+          const data = await res.json().catch(() => null);
+          if (!res.ok || !data?.success) {
+            console.error('Row geocode failed', res.status, data);
+            alert('Geocode failed – please try again.');
+          } else {
+            // ✅ Try to grab new lat/lng from the response, if provided
+            const updated = (data.lead || data.updated || data.row || data) || {};
+            const lat = updated.latitude ?? updated.lat ?? null;
+            const lng = updated.longitude ?? updated.lng ?? updated.lon ?? null;
+
+            // ✅ Patch this lead in memory so filters stay put
+            if (lat != null && lng != null) {
+              patchLeadInState(id, {
+                latitude: lat,
+                longitude: lng
+              });
+            }
+
+            // Re-render the List View with current filters
+            if (typeof window.renderListView === 'function') {
+              window.renderListView();
+            }
+          }
+        } catch (err) {
+          console.error('Row geocode error', err);
+          alert('Geocode failed due to a network error.');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      });
+    });
+
+
+    // 🏷️ TAGS INLINE EDIT HANDLERS (unchanged)
+    $$('#leadTbody .tags-edit-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const cell = btn.closest('.tags-cell');
+        if (!cell) return;
+
+        const id = cell.dataset.id;
+        const textEl = cell.querySelector('.tags-text');
+        const current = textEl ? textEl.textContent.trim() : '';
+
+        cell.innerHTML = `
+          <input class="tags-input" type="text"
+                 value="${current.replace(/"/g, '&quot;')}"
+                 style="width: 70%; padding: 4px; font-size: 13px;" />
+          <button class="tags-save-btn" style="margin-left:4px; font-size:12px;">Save</button>
+          <button class="tags-cancel-btn" style="margin-left:4px; font-size:12px;">Cancel</button>
+        `;
+
+        const input  = cell.querySelector('.tags-input');
+        const save   = cell.querySelector('.tags-save-btn');
+        const cancel = cell.querySelector('.tags-cancel-btn');
+
+        if (input) {
+          input.focus();
+          input.select();
+        }
+
+        const restoreView = (value) => {
+          cell.innerHTML = `
+            <span class="tags-text">${value}</span>
+            <button class="tags-edit-btn" title="Edit tags">✏️</button>
+          `;
+        };
+
+        if (cancel) {
+          cancel.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            restoreView(current);
+          });
+        }
+
+        if (save) {
+          save.addEventListener('click', async (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+
+            if (!input || !id) return;
+            const newTags = input.value.trim();
+
+            try {
+              const API_BASE = window.DELI_API_BASE || '';
+              const res = await fetch(`${API_BASE}/update-lead/${encodeURIComponent(id)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tags: newTags })
+              });
+
+              if (!res.ok) {
+                console.error('Tags update failed', res.status);
+                alert('Could not save tags – please try again.');
+                return;
+              }
+
+              // ✅ Patch this lead in memory so filters stay put
+              patchLeadInState(id, { tags: newTags });
+
+              if (typeof window.renderListView === 'function') {
+                window.renderListView();
+              }
+
+            } catch (err) {
+              console.error('Error updating tags', err);
+              alert('Error saving tags – network or server issue.');
+            }
+          });
+        }
+
+        if (input) {
+          input.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') {
+              ev.preventDefault();
+              save?.click();
+            } else if (ev.key === 'Escape') {
+              ev.preventDefault();
+              cancel?.click();
+            }
+          });
+        }
+      });
+    });
+
+
+  // 📝 ROW EDIT (State + Industry dropdowns)
+  $$('#leadTbody .row-edit-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const row = btn.closest('tr');
+      if (!row) return;
+      if (row.dataset.editing === '1') return; // already editing
+
+      const id = row.getAttribute('data-id') || btn.dataset.id;
+      if (!id) return;
+
+      const cells = row.querySelectorAll('td');
+      if (cells.length < 16) return;
+
+      const stateCell    = cells[5]; // State column
+      const industryCell = cells[6]; // Industry column
+      const actionsCell  = cells[15];
+
+      const currentState    = stateCell.textContent.trim();
+      const currentIndustry = industryCell.textContent.trim();
+
+      row.dataset.editing = '1';
+
+      // Pull from cached options populated in renderListTable
+      const stateOptions    = window.LIST_STATE_OPTIONS    || [];
+      const industryOptions = window.LIST_INDUSTRY_OPTIONS || [];
+
+      const stateOptionsHtml = [
+        '<option value="">--</option>',
+        ...stateOptions.map(opt => {
+          const selected = opt === currentState ? ' selected' : '';
+          return `<option value="${opt}"${selected}>${opt}</option>`;
+        })
+      ].join('');
+
+      const industryOptionsHtml = [
+        '<option value="">--</option>',
+        ...industryOptions.map(opt => {
+          const selected = opt === currentIndustry ? ' selected' : '';
+          return `<option value="${opt}"${selected}>${opt}</option>`;
+        })
+      ].join('');
+
+      stateCell.innerHTML =
+        `<select class="inline-edit-state">${stateOptionsHtml}</select>`;
+      industryCell.innerHTML =
+        `<select class="inline-edit-industry">${industryOptionsHtml}</select>`;
+
+      const originalActionsHtml = actionsCell.innerHTML;
+      actionsCell.innerHTML = `
+        <button class="btn-small btn-save-inline">Save</button>
+        <button class="btn-small btn-cancel-inline">Cancel</button>
+      `;
+
+      const saveBtn   = actionsCell.querySelector('.btn-save-inline');
+      const cancelBtn = actionsCell.querySelector('.btn-cancel-inline');
+      const stateSel  = stateCell.querySelector('.inline-edit-state');
+      const indSel    = industryCell.querySelector('.inline-edit-industry');
+
+      const restoreRow = () => {
+        row.dataset.editing = '';
+        stateCell.textContent    = currentState;
+        industryCell.textContent = currentIndustry;
+        actionsCell.innerHTML    = originalActionsHtml;
+      };
+
+      cancelBtn.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        restoreRow();
+      });
+
+      saveBtn.addEventListener('click', async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+
+        const newState    = stateSel.value;
+        const newIndustry = indSel.value;
+
+        try {
+          const API_BASE = window.DELI_API_BASE || '';
+          const res = await fetch(
+            `${API_BASE}/update-lead/${encodeURIComponent(id)}`,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                state: newState || null,
+                industry: newIndustry || null
+              })
+            }
+          );
+
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || (data && data.ok === false)) {
+            console.error('Inline update failed:', data);
+            alert('Save failed. Please try again.');
+            return;
+          }
+
+          // ✅ Update UI on success
+          stateCell.textContent    = newState || '';
+          industryCell.textContent = newIndustry || '';
+
+          // ✅ Patch in-memory DS.state so filters stay put
+          if (typeof patchLeadInState === 'function') {
+            patchLeadInState(id, {
+              state: newState || null,
+              industry: newIndustry || null
+            });
+          }
+
+        } catch (err) {
+          console.error('Inline update error:', err);
+          alert('Save failed (network error).');
+        } finally {
+          row.dataset.editing = '';
+          actionsCell.innerHTML = originalActionsHtml;
+        }
+      });
+    });
+  });
+
+  // 🗺️ Row click → jump to Map + open that lead’s pin
+  $$('#leadTbody tr').forEach(row => {
+    row.addEventListener('click', () => {
+      // Don’t navigate when inline editing is active
+      if (row.dataset.editing === '1') return;
+
+      const id = row.getAttribute('data-id');
+      if (!id) return;
+
+      // Ask map code to focus this lead, or at least switch to map view
+      if (typeof window.focusLeadOnMap === 'function') {
+        window.focusLeadOnMap(id);
+      } else {
+        const mapBtn = document.getElementById('btnMapView');
+        if (mapBtn) mapBtn.click();
+      }
+    });
+  });
+
+}  // close renderListView's renderListTable
+
+  // Base rows from leads.js
+  function getFilteredRows() {
+
+    const DS = window.DS || {};
+    const rows = (DS.state && (DS.state.filtered || DS.state.rawRows)) || [];
+    return Array.isArray(rows) ? rows : [];
+  }
+
+// Apply List toolbar filters (search + chips), then sort
+function computeListFilteredAndSorted() {
+  const q = ($('#listSearch')?.value || '').trim().toLowerCase();
+
+  // ⭐ NEW: tag-only filter for List view
+  const tagQ = ($('#listTagFilter')?.value || '').trim().toLowerCase();
+
+  const activeStatuses = $$('#listToolbar .chip.active[data-status]')
+    .map(el => el.dataset.status.toLowerCase());
+
+  let rows = getFilteredRows();
+
+  // Status chip filter
+  if (activeStatuses.length) {
+    rows = rows.filter(r => {
+      const s = String(getCI(r, 'status')).toLowerCase();
+      return activeStatuses.some(a => s.includes(a) || a === s);
+    });
+  }
+
+  // Global search (name, company, city, state, tags, etc.)
+  if (q) {
+    rows = rows.filter(r => {
+      const hay = [
+        getCI(r, 'name'),
+        getCI(r, 'company'),
+        getCI(r, 'city'),
+        getCI(r, 'state'),
+        getCI(r, 'tags'),
+        getCI(r, 'industry'),
+        getCI(r, 'notes'),
+        getCI(r, 'cadence_name'),
+        getCI(r, 'lead_type'),
+        getCI(r, 'website')
+      ].join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }
+
+  // ⭐ Tag-only filter: matches JUST on tags column
+  if (tagQ) {
+    rows = rows.filter(r => {
+      const tags = String(getCI(r, 'tags') || '').toLowerCase();
+      return tags.includes(tagQ);
+    });
+  }
+
+  // ---- SORTING ----
+  const { key, dir } = SORT;
+  const asc = dir === 'asc' ? 1 : -1;
+
+  rows = rows.slice().sort((a, b) => {
+    // Status uses custom rank
+    if (key === 'status') {
+      return (
+        asc *
+        (statusRankVal(getCI(a, 'status')) -
+          statusRankVal(getCI(b, 'status')))
+      );
+    }
+
+    const col = COLUMNS.find(c => c.key === key);
+    const avRaw = getCI(a, key);
+    const bvRaw = getCI(b, key);
+
+    // Nulls last
+    const aNull = avRaw === null || avRaw === undefined || avRaw === '';
+    const bNull = bvRaw === null || bvRaw === undefined || bvRaw === '';
+    if (aNull && !bNull) return 1;
+    if (!aNull && bNull) return -1;
+    if (aNull && bNull) return 0;
+
+    if (col && col.numeric) {
+      const av = Number(avRaw);
+      const bv = Number(bvRaw);
+      return asc * ((av > bv) - (av < bv));
+    }
+
+    const av = String(avRaw).toLowerCase();
+    const bv = String(bvRaw).toLowerCase();
+    return asc * av.localeCompare(bv, undefined, {
+      numeric: true,
+      sensitivity: 'base'
+    });
+  });
+
+  return rows;
+}
+
+
+  // Public render fn
+  window.renderListView = function renderListView() {
+    renderListTable(computeListFilteredAndSorted());
+  };
+
+  // Wire List toolbar controls
+  function wireListControls() {
+    // Global search
+    $('#listSearch')?.addEventListener('input', () => window.renderListView());
+
+    // Tag-only filter search
+    $('#listTagFilter')?.addEventListener('input', () => window.renderListView());
+
+    // Status chips
+    $$('#listToolbar .chip[data-status]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        btn.classList.toggle('active');
+        window.renderListView();
+      });
+    });
+
+    // Reset: clears statuses, global search, and tag filter
+    $('#listReset')?.addEventListener('click', () => {
+      $$('#listToolbar .chip.active').forEach(b => b.classList.remove('active'));
+
+      const s = $('#listSearch');
+      if (s) s.value = '';
+
+      const t = $('#listTagFilter');
+      if (t) t.value = '';
+
+      window.renderListView();
+    });
+
+    // React to main dashboard filter changes (map filters)
+    [
+      'tagFilter',
+      'typeFilter',
+      'cadenceFilter',
+      'stateFilter',
+      'industryFilter',
+      'startDate',
+      'endDate'
+    ]
+      .map(id => document.getElementById(id))
+      .forEach(el => {
+        if (!el) return;
+        el.addEventListener('change', () => window.renderListView());
+      });
+  }
+
+  // Render on List tab click + wire Back to Presentation
+  document.addEventListener('DOMContentLoaded', () => {
+    wireListControls();
+
+    // When user clicks "List" tab, render the list
+    const btnList = document.getElementById('btnListView');
+    if (btnList) {
+      btnList.addEventListener('click', () => {
+        setTimeout(() => window.renderListView(), 0);
+      });
+    }
+
+    // Back to Presentation button
+    const backBtn = document.getElementById('backToPresentation');
+    if (backBtn) {
+      backBtn.addEventListener('click', () => {
+        // 1) Manually switch back to Map view
+        const mapView = document.getElementById('mapView');
+        const listView = document.getElementById('listView');
+        const btnMap  = document.getElementById('btnMapView');
+
+        if (mapView && listView && btnMap && btnList) {
+          mapView.style.display = 'block';
+          listView.classList.remove('show');
+          btnMap.classList.add('active');
+          btnList.classList.remove('active');
+        }
+
+        // 2) Re-open Presentation Mode using current filters
+        if (typeof window.openPresentationMode === 'function') {
+          window.openPresentationMode();
+        }
+      });
+    }
+  });
+</script>
+
+<script>
+  // Redirect Start My Day → Daily Queue
+  // Normal mode: mixed stack
+  // Event Mode: tag-locked stack (AFP / IOFM / etc.)
+  document.addEventListener('DOMContentLoaded', () => {
+    const normalBtn = document.getElementById('startMyDayBtn');
+    const eventBtn  = document.getElementById('startMyDayEventBtn');
+    const afpBtn    = document.getElementById('startMyDayAFPBtn'); // 🏟 new stadium button
+    const tagSelect = document.getElementById('tagFilter'); // existing Tag filter dropdown
+
+    // 🚀 Normal mode: ignore tags, just build the best next 20
+    if (normalBtn) {
+      normalBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        window.location.href = '/daily-queue?autostart=1';
+      });
+    }
+
+    // 🎯 Event Mode: lock Daily Queue to the *current* tag
+    if (eventBtn) {
+      eventBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+
+        if (!tagSelect) {
+          alert('Set a Tag filter first (e.g. AFP Event or IOFM Event).');
+          return;
+        }
+
+        const value = tagSelect.value || '';
+        const trimmed = value.trim();
+
+        if (!trimmed || trimmed.toLowerCase() === 'all') {
+          alert('Choose a specific Tag (e.g. AFP Event or IOFM Event) before starting Event Mode.');
+          return;
+        }
+
+        const url = '/daily-queue?autostart=1&tag=' + encodeURIComponent(trimmed);
+        window.location.href = url;
+      });
+    }
+
+    // 🏟 AFP Event Mode: hard-lock to "AFP Event" tag, regardless of current filter
+    if (afpBtn) {
+      afpBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const afpTag = 'AFP Event';
+        const url = '/daily-queue?autostart=1&tag=' + encodeURIComponent(afpTag);
+        window.location.href = url;
+      });
+    }
+  });
+</script>
+
+
+
+
+<script>
+(function () {
+  // Grab the same filtered data used everywhere else
+  function getPresentationLeads() {
+    const DS = window.DS || {};
+    const rows = (DS.state && (DS.state.filtered || DS.state.rawRows)) || [];
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  // Status funnel totals (Cold / Follow-Up / Warm / Hot / Converted)
+  function bucketTotals(leads) {
+    const DS = window.DS || {};
+    const statusKey =
+      typeof DS.statusKey === 'function'
+        ? DS.statusKey
+        : function fallbackStatusKey(s) {
+            if (!s || typeof s !== 'string') return 'unspecified';
+            const k = s.trim().toLowerCase();
+            if (k.includes('convert'))  return 'converted';
+            if (k.includes('hot'))      return 'hot';
+            if (k.includes('warm'))     return 'warm';
+            if (k.includes('cold'))     return 'cold';
+            if (k.includes('research')) return 'research';
+            if (k.includes('follow'))   return 'follow-up';
+            return 'unspecified';
+          };
+
+    const totals = {
+      cold: 0,
+      follow: 0,
+      warm: 0,
+      hot: 0,
+      converted: 0
+    };
+
+    leads.forEach((lead) => {
+      const raw = lead.status || lead.Status || '';
+      const key = statusKey(raw);
+
+      switch (key) {
+        case 'converted':
+          totals.converted++;
+          break;
+        case 'hot':
+          totals.hot++;
+          break;
+        case 'warm':
+          totals.warm++;
+          break;
+        case 'follow-up':
+          totals.follow++;
+          break;
+        case 'cold':
+        case 'research':
+          totals.cold++;
+          break;
+        default:
+          // unspecified → ignore in funnel
+          break;
+      }
+    });
+
+    return totals;
+  }
+  
+    // 🔎 AFP Event Mode detector (Presentation Mode → Event Mode)
+  function isEventMode() {
+    const tagSel = document.getElementById('tagFilter');
+    const tag = tagSel ? tagSel.value.trim() : '';
+    return tag === 'AFP Event';
+  }
+
+
+  // ---------- NEW: ICP Vertical Breakdown helpers ----------
+
+  function buildIcpBreakdown(leads) {
+    const DS = window.DS || {};
+    const statusKey =
+      typeof DS.statusKey === 'function'
+        ? DS.statusKey
+        : function fallbackStatusKey(s) {
+            if (!s || typeof s !== 'string') return 'unspecified';
+            const k = s.trim().toLowerCase();
+            if (k.includes('convert'))  return 'converted';
+            if (k.includes('hot'))      return 'hot';
+            if (k.includes('warm'))     return 'warm';
+            if (k.includes('cold'))     return 'cold';
+            if (k.includes('research')) return 'research';
+            if (k.includes('follow'))   return 'follow-up';
+            return 'unspecified';
+          };
+
+    // Map industry strings to Finexio ICP verticals
+    function industryKey(raw) {
+      if (!raw || typeof raw !== 'string') return 'Other';
+      const s = raw.toLowerCase();
+
+      if (s.includes('educ'))               return 'Education';
+      if (s.includes('health'))             return 'Healthcare';
+      if (s.includes('gov'))                return 'Government';
+      if (s.includes('hospitality')
+          || s.includes('hotel')
+          || s.includes('lodging')
+          || s.includes('resort'))          return 'Hospitality';
+      if (s.includes('construct')
+          || s.includes('contractor')
+          || s.includes('builder'))         return 'Construction';
+      if (s.includes('manufact')
+          || s.includes('factory')
+          || s.includes('plant'))           return 'Manufacturing';
+
+      return 'Other';
+    }
+
+    const buckets = {
+      Education:     { total: 0, converted: 0 },
+      Healthcare:    { total: 0, converted: 0 },
+      Government:    { total: 0, converted: 0 },
+      Hospitality:   { total: 0, converted: 0 },
+      Construction:  { total: 0, converted: 0 },
+      Manufacturing: { total: 0, converted: 0 },
+      Other:         { total: 0, converted: 0 }
+    };
+
+    leads.forEach((lead) => {
+      const rawIndustry =
+        lead.industry ||
+        lead.Industry ||
+        lead.vertical ||
+        lead.Vertical ||
+        '';
+
+      const vert = industryKey(rawIndustry);
+      const statusRaw = lead.status || lead.Status || '';
+      const key = statusKey(statusRaw);
+
+      const bucket = buckets[vert] || buckets.Other;
+      bucket.total++;
+      if (key === 'converted') bucket.converted++;
+    });
+
+    const order = [
+      'Education',
+      'Healthcare',
+      'Government',
+      'Hospitality',
+      'Construction',
+      'Manufacturing',
+      'Other'
+    ];
+
+    return order.map((name) => {
+      const b = buckets[name];
+      const pct = b.total > 0
+        ? Math.round((b.converted / b.total) * 100)
+        : 0;
+      return {
+        name,
+        percent: pct,
+        leads: b.total
+      };
+    });
+  }
+
+  function renderIcpBreakdown(rows) {
+    const container = document.getElementById('icp_tiles');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    rows.forEach((row) => {
+      const tile = document.createElement('div');
+      tile.className = 'icp-tile';
+
+      const label = row.leads === 1 ? '1 lead' : `${row.leads} leads`;
+
+      tile.innerHTML = `
+        <div class="icp-name">${row.name.toUpperCase()}</div>
+        <div class="icp-percent">${row.percent}%</div>
+        <div class="icp-count">${label}</div>
+      `;
+
+      container.appendChild(tile);
+    });
+  }
+  
+    // ===== Presentation Mode: AI band notes =====
+  function renderPresentationBandNotes(notes) {
+    const safe = (v) => {
+      if (!v) return 'No AI notes for this band yet.';
+      const s = String(v).trim();
+      return s || 'No AI notes for this band yet.';
+    };
+
+    const mapping = [
+      { id: 'ai_note_cold_presentation',      key: 'cold' },
+      { id: 'ai_note_followup_presentation',  key: 'followup' },
+      { id: 'ai_note_warm_presentation',      key: 'warm' },
+      { id: 'ai_note_hot_presentation',       key: 'hot' },
+      { id: 'ai_note_converted_presentation', key: 'converted' }
+    ];
+
+    mapping.forEach(({ id, key }) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = safe(notes && notes[key]);
+    });
+  }
+  
+    // ===== Mini AI Summary for Presentation Mode =====
+  function renderPresentationMiniSummary(data) {
+    const line1El = document.getElementById('ai_summary_line1');
+    const line2El = document.getElementById('ai_summary_line2');
+    const line3El = document.getElementById('ai_summary_line3');
+    const textEl  = document.getElementById('ai_summary_narrative');
+
+    if (!line1El || !line2El || !line3El || !textEl || !data) return;
+
+    const act     = (data.metrics && data.metrics.activity) || {};
+    const pip     = (data.metrics && data.metrics.pipeline) || {};
+    const byState = (data.metrics && data.metrics.perf_by_state) || [];
+    const byInd   = (data.metrics && data.metrics.perf_by_industry) || [];
+
+    const touched    = act.leads_contacted_window ?? act.leads_contacted ?? 0;
+    const touches    = act.total_touches ?? 0;
+    const upgrades   = pip.upgrades ?? 0;
+    const downgrades = pip.downgrades ?? 0;
+
+    // Strongest / weakest regions by traction_score (same logic as summary.js)
+    let bestState = null;
+    if (byState.length) {
+      bestState = [...byState].sort(
+        (a, b) => (b.traction_score || 0) - (a.traction_score || 0)
+      )[0];
+    }
+
+    let weakestState = null;
+    if (byState.length) {
+      weakestState =
+        [...byState]
+          .filter((r) => (r.traction_score || 0) > 0)
+          .sort((a, b) => (a.traction_score || 0) - (b.traction_score || 0))[0] ||
+        null;
+    }
+
+    const bestName = bestState ? bestState.key : '—';
+    const weakName = weakestState ? weakestState.key : '—';
+
+    // Strongest industry by conversion pct (if available)
+    let bestInd = null;
+    if (byInd.length) {
+      bestInd = [...byInd].sort(
+        (a, b) => (b.conv_pct || 0) - (a.conv_pct || 0)
+      )[0];
+    }
+
+    const inEventMode =
+      typeof isEventMode === 'function' && isEventMode();
+
+    // 3 KPI lines (different copy in Event Mode)
+    if (inEventMode) {
+      line1El.textContent = `🎯 AFP Event engagement: ${touched} leads touched`;
+    } else {
+      line1El.textContent = `🎯 ${touched} leads touched this cycle`;
+    }
+
+    line2El.textContent = `📈 ${upgrades} upgrades | 📉 ${downgrades} downgrades`;
+    line3El.textContent = `🔥 Strongest region: ${bestName} | Weakest: ${weakName}`;
+
+    // Short narrative (3–4 sentences max)
+    const parts = [];
+
+if (inEventMode) {
+  parts.push(
+    `Across AFP Event accounts, you contacted ${touched} lead${touched === 1 ? '' : 's'} over ${touches} total touches in this window.`
+  );
+} else {
+  parts.push(
+    `You contacted ${touched} lead${touched === 1 ? '' : 's'} across ${touches} total touches in this window.`
+  );
+}
+
+    if (upgrades || downgrades) {
+      parts.push(
+        `Status movement shows ${upgrades} upgrade${upgrades === 1 ? '' : 's'} and ${downgrades} downgrade${downgrades === 1 ? '' : 's'}.`
+      );
+    }
+
+    if (bestInd && bestInd.key) {
+      parts.push(
+        `The strongest converting vertical is ${bestInd.key} at ${bestInd.conv_pct || 0}% conversion.`
+      );
+    }
+
+    if (bestName !== '—' || weakName !== '—') {
+      parts.push(
+        `Regional traction is highest in ${bestName} and softer in ${weakName}, which can guide where you focus the next wave of outreach.`
+      );
+    }
+
+    const narrative = parts.join(' ');
+    textEl.textContent =
+      narrative ||
+      'No activity in this window yet — once you log touches, AI-style insights will appear here.';
+  }
+
+  
+    // 🏆 Converted-only Trophy Panel
+  function renderPresentationTrophyPanel(summaryJson) {
+    const totalEl   = document.getElementById('trophy_converted_total');
+    const winsEl    = document.getElementById('trophy_top_wins');
+    const insightEl = document.getElementById('trophy_insight');
+
+    if (!totalEl || !winsEl || !insightEl) return;
+
+    const DS = window.DS || {};
+    const leads = Array.isArray(DS.presentationLeads) ? DS.presentationLeads : [];
+
+    // Reuse the same statusKey logic as the funnel
+    const statusKey =
+      typeof DS.statusKey === 'function'
+        ? DS.statusKey
+        : function fallbackStatusKey(s) {
+            if (!s || typeof s !== 'string') return 'unspecified';
+            const k = s.trim().toLowerCase();
+            if (k.includes('convert'))  return 'converted';
+            if (k.includes('hot'))      return 'hot';
+            if (k.includes('warm'))     return 'warm';
+            if (k.includes('cold'))     return 'cold';
+            if (k.includes('research')) return 'research';
+            if (k.includes('follow'))   return 'follow-up';
+            return 'unspecified';
+          };
+
+    const converted = leads.filter((lead) => {
+      const raw = lead.status || lead.Status || '';
+      return statusKey(raw) === 'converted';
+    });
+
+    // Big KPI
+    totalEl.textContent = converted.length.toString();
+
+    // Top wins list
+    winsEl.innerHTML = '';
+
+    if (!converted.length) {
+      winsEl.innerHTML = `
+        <div class="trophy-win trophy-win-empty">
+          No converted wins in this view yet.
+        </div>
+      `;
+      insightEl.textContent =
+        'Once you log converted wins in this filtered window, a quick insight will appear here.';
+      return;
+    }
+
+    // Score converted leads by AP Spend (or ARR fallback) to pick "top wins"
+    const scored = converted.map((lead) => {
+      const ap  = Number(lead.ap_spend || lead.AP_SPEND || 0) || 0;
+      const arr = Number(lead.arr || lead.ARR || 0) || 0;
+      const score = ap || arr;
+      return { lead, score };
+    });
+
+    const hasScore = scored.some((s) => s.score > 0);
+    const sorted = hasScore
+      ? scored.slice().sort((a, b) => b.score - a.score)
+      : scored;
+
+    const top = sorted.slice(0, 3);
+
+    top.forEach(({ lead }) => {
+      const company =
+        lead.company ||
+        lead.Company ||
+        lead.account ||
+        lead['Company / Account'] ||
+        'Unnamed company';
+
+      const city =
+        lead.city ||
+        lead.City ||
+        '';
+
+      const state =
+        lead.state ||
+        lead.State ||
+        lead['State/Province'] ||
+        '';
+
+      const location = [city, state].filter(Boolean).join(', ');
+
+      const row = document.createElement('div');
+      row.className = 'trophy-win';
+      row.innerHTML = `
+        <div class="trophy-win-company">🏢 ${company}</div>
+        <div class="trophy-win-location">
+          ${location || 'Location not set'}
+        </div>
+      `;
+      winsEl.appendChild(row);
+    });
+
+    // Insight line: reuse summary metrics (strongest industry + region)
+    const byInd   = summaryJson.metrics?.perf_by_industry || [];
+    const byState = summaryJson.metrics?.perf_by_state || [];
+
+    let bestInd = null;
+    if (byInd.length) {
+      bestInd = [...byInd].sort(
+        (a, b) => (b.conv_pct || 0) - (a.conv_pct || 0)
+      )[0];
+    }
+
+    let bestState = null;
+    if (byState.length) {
+      bestState = [...byState].sort(
+        (a, b) => (b.traction_score || 0) - (a.traction_score || 0)
+      )[0];
+    }
+
+    const verticalPart = bestInd?.key || '';
+    const regionPart   = bestState?.key || '';
+
+    let text = '';
+    if (verticalPart && regionPart) {
+      text = `Most conversions in this view came from ${verticalPart} in ${regionPart}.`;
+    } else if (verticalPart) {
+      text = `Most conversions in this view came from ${verticalPart}.`;
+    } else if (regionPart) {
+      text = `Most conversions in this view were concentrated in ${regionPart}.`;
+    } else {
+      text = 'Conversions in this window are still too light to surface a clear pattern yet.';
+    }
+
+    insightEl.textContent = text;
+  }
+
+
+
+// ===== Pull AI summary + band notes from /summary and render into Presentation Mode =====
+async function loadPresentationBandNotesFromSummary() {
+  try {
+    const fromInput = document.getElementById('startDate');
+    const toInput   = document.getElementById('endDate');
+    const tagSelect = document.getElementById('tagFilter');
+
+    const from = fromInput?.value;
+    const to   = toInput?.value;
+    const tag  = tagSelect?.value && tagSelect.value !== 'All'
+      ? tagSelect.value
+      : '';
+
+    // If there’s no date range, don’t try to pull AI notes
+    if (!from || !to) {
+      console.log('[Presentation AI] No date range selected; skipping /summary call.');
+      return;
+    }
+
+    // Build /summary URL with same filters as the main bar
+    const params = new URLSearchParams();
+    params.set('from', from);
+    params.set('to', to);
+    if (tag) params.set('tag', tag);
+
+    const url = `/summary?${params.toString()}`;
+    console.log('[Presentation AI] Fetching summary from:', url);
+
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn('[Presentation AI] /summary returned non-OK status:', res.status);
+      return;
+    }
+
+    const data = await res.json();
+    console.log('[Presentation AI] Summary payload:', data);
+
+    // 1) Mini 3-line AI block at the top
+    try {
+      renderPresentationMiniSummary(data);
+    } catch (err) {
+      console.warn('[Presentation AI] Mini summary render failed:', err);
+    }
+
+    // 2) Per-band notes (Cold / Follow-Up / Warm / Hot / Converted)
+    try {
+      const notes = (data && data.ai_band_notes) || {};
+      renderPresentationBandNotes(notes);
+      console.log('[Presentation AI] Band notes updated from /summary.');
+    } catch (err) {
+      console.warn('[Presentation AI] Band notes render failed:', err);
+    }
+  } catch (err) {
+    console.error('[Presentation AI notes/summary failed]:', err);
+  }
+}  
+
+
+
+
+
+
+  // ---------- Open / close handlers ----------
+
+  async function openPresentationMode() {
+    const leads  = getPresentationLeads();
+    const totals = bucketTotals(leads);
+
+    // Make the current presentation dataset available to the trophy panel
+    window.DS = window.DS || {};
+    window.DS.presentationLeads = leads;
+
+    const total        = leads.length;
+    const addedInRange = total; // later we can refine to “new in range”
+
+    // ---- Title + Date Range (AFP-aware) ----
+    const elRange = document.getElementById('pipeline_range');
+
+    // Format the date range
+    const from = document.getElementById('startDate')?.value;
+    const to   = document.getElementById('endDate')?.value || from;
+
+    function formatDate(d) {
+      if (!d) return '';
+      const obj = new Date(d + 'T00:00:00');
+      return obj.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+
+    const inEventMode =
+      typeof isEventMode === 'function' && isEventMode();
+
+    if (elRange) {
+      if (from) {
+        const fromTxt = formatDate(from);
+        const toTxt   = to ? formatDate(to) : fromTxt;
+        const prefix  = inEventMode ? 'AFP Event • ' : '';
+        elRange.textContent = `${prefix}${fromTxt} – ${toTxt}`;
+      } else {
+        elRange.textContent = inEventMode
+          ? 'AFP Event (no date range selected)'
+          : '';
+      }
+    }
+
+    // Update title line with correct label + total
+    const titleEl = document.querySelector('.presentation-title');
+    if (titleEl) {
+      const headingLabel = inEventMode ? 'AFP Event Pipeline' : 'Current Pipeline';
+      titleEl.innerHTML = `${headingLabel} (<span id="pipeline_total">${total}</span> Prospects)`;
+    }
+
+    // ---- Funnel bands (counts + percentages) ----
+    const elCold   = document.getElementById('funnel_cold');
+    const elFollow = document.getElementById('funnel_followup');
+    const elWarm   = document.getElementById('funnel_warm');
+    const elHot    = document.getElementById('funnel_hot');
+    const elConv   = document.getElementById('funnel_converted');
+
+    const elColdPct   = document.getElementById('funnel_cold_pct');
+    const elFollowPct = document.getElementById('funnel_followup_pct');
+    const elWarmPct   = document.getElementById('funnel_warm_pct');
+    const elHotPct    = document.getElementById('funnel_hot_pct');
+    const elConvPct   = document.getElementById('funnel_converted_pct');
+
+    if (elCold)   elCold.textContent   = totals.cold;
+    if (elFollow) elFollow.textContent = totals.follow;
+    if (elWarm)   elWarm.textContent   = totals.warm;
+    if (elHot)    elHot.textContent    = totals.hot;
+    if (elConv)   elConv.textContent   = totals.converted;
+
+    const funnelTotal =
+      totals.cold + totals.follow + totals.warm + totals.hot + totals.converted;
+
+    function formatPct(count) {
+      if (!funnelTotal) return '0%';
+      const pct = Math.round((count / funnelTotal) * 100);
+      return `${pct}%`;
+    }
+
+    if (elColdPct)   elColdPct.textContent   = formatPct(totals.cold);
+    if (elFollowPct) elFollowPct.textContent = formatPct(totals.follow);
+    if (elWarmPct)   elWarmPct.textContent   = formatPct(totals.warm);
+    if (elHotPct)    elHotPct.textContent    = formatPct(totals.hot);
+    if (elConvPct)   elConvPct.textContent   = formatPct(totals.converted);
+
+    // NEW: update ICP tiles
+    const icpRows = buildIcpBreakdown(leads);
+    renderIcpBreakdown(icpRows);
+
+    // 🧠 NEW: pull AI notes for each band (now AFP-aware via tag parameter)
+    await loadPresentationBandNotesFromSummary();
+
+    // Show overlay
+    const overlay = document.getElementById('presentation-overlay');
+    if (overlay) overlay.classList.remove('hidden');
+  }
+
+
+
+  function closePresentationMode() {
+    const overlay = document.getElementById('presentation-overlay');
+    if (overlay) overlay.classList.add('hidden');
+  }
+  
+
+  // 👉 When you click a funnel band, we close Presentation Mode,
+  //    jump to List View, and auto-filter to that status.
+  function drillDownToStatus(statusLabel) {
+    // 1) Switch to List View (re-uses existing showList wiring)
+    const listBtn = document.getElementById('btnListView');
+    if (listBtn) {
+      listBtn.click();
+    }
+
+    // 2) After List View is visible, toggle the status chips
+    setTimeout(() => {
+      const toolbar = document.getElementById('listToolbar');
+      if (!toolbar) return;
+
+      // Clear all active status chips
+      document
+        .querySelectorAll('#listToolbar .chip[data-status]')
+        .forEach((btn) => {
+          btn.classList.remove('active');
+        });
+
+      // Decide which statuses to activate
+      let targets = [statusLabel];
+      // Special case: Cold funnel also represents Research in your funnel math
+      if (statusLabel === 'Cold') {
+        targets = ['Cold', 'Research'];
+      }
+
+      // Activate the matching chips
+      targets.forEach((label) => {
+        const chip = document.querySelector(
+          `#listToolbar .chip[data-status="${label}"]`
+        );
+        if (chip) {
+          chip.classList.add('active');
+        }
+      });
+
+      // Clear search box so we see full filtered set
+      const search = document.getElementById('listSearch');
+      if (search) search.value = '';
+
+      // Re-render list with new filters
+      if (typeof window.renderListView === 'function') {
+        window.renderListView();
+      }
+
+      // Scroll table to the top
+      const wrap = document.getElementById('leadTableWrap');
+      if (wrap) wrap.scrollTop = 0;
+    }, 60);
+  }
+
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const launchBtn = document.getElementById('launchPresentation');
+    const closeBtn  = document.getElementById('presentation-close');
+    const overlay   = document.getElementById('presentation-overlay');
+
+    if (launchBtn) {
+      launchBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        try {
+          await openPresentationMode();
+        } catch (err) {
+          console.error('Error opening presentation mode:', err);
+        }
+      });
+    }
+
+    // Close when clicking the ✖ button
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        closePresentationMode();
+      });
+    }
+
+    // Optional: click on dim background closes too
+    if (overlay) {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          closePresentationMode();
+        }
+      });
+    }
+
+    // Escape key closes Presentation Mode
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closePresentationMode();
+      }
+    });
+
+    // ⭐ NEW: Wire funnel bands → drill-down into List View
+    document
+      .querySelectorAll('.funnel-band[data-status]')
+      .forEach((band) => {
+        band.addEventListener('click', () => {
+          const status = band.getAttribute('data-status');
+          if (!status) return;
+
+          // Close Presentation overlay
+          closePresentationMode();
+
+          // Drill down into the right slice in List View
+          drillDownToStatus(status);
+        });
+      });
+  });
+
+
+
+
+
+  // Optional: expose globally if needed
+  window.openPresentationMode = openPresentationMode;
+})();
+</script>
+
+</body>
+</html>
+
+	
