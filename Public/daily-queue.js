@@ -87,6 +87,144 @@ function normalizeWebsite(url) {
     return `${mm}/${dd}`;
   }
 
+function fmtMoney(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '—';
+  return '$' + Math.round(n).toLocaleString();
+}
+
+// ———————————————————————
+// AP Snapshot helpers (Midpoint row)
+// ———————————————————————
+function getApSnapshotFromItem(item) {
+  const src = item && item.lead ? item.lead : item;
+
+  return {
+    status: src?.ap_snapshot_status ?? null,
+    run_at: src?.ap_snapshot_run_at ?? null,
+    arr: src?.ap_snapshot_arr ?? null,
+    arr_confidence: src?.ap_snapshot_arr_confidence ?? null,
+    suppliers: src?.ap_snapshot_suppliers ?? null,
+    ap_spend: src?.ap_snapshot_ap_spend ?? null,
+    source: src?.ap_snapshot_source ?? null,
+    notes: src?.ap_snapshot_notes ?? null,
+  };
+}
+
+function fmtInt(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '—';
+  return Math.round(n).toLocaleString();
+}
+
+function renderApSnapshotBadges(item) {
+  const snap = getApSnapshotFromItem(item);
+
+  // Distinct “not found”
+  if (snap.status === 'not_found' ||
+      (snap.status && String(snap.status).toLowerCase() === 'not_found')) {
+    return `
+      <span class="dq-ap-snap-badge not-found">ARR: Not found</span>
+      <span class="dq-ap-snap-badge">Suppliers: —</span>
+      <span class="dq-ap-snap-badge">AP Spend: —</span>
+    `;
+  }
+
+  const conf = snap.arr_confidence
+    ? String(snap.arr_confidence).toUpperCase()
+    : null;
+
+  const arrLabel =
+    snap.arr != null ? `${fmtMoney(snap.arr)}${conf ? ` (${conf})` : ''}` : '—';
+
+  const suppliersLabel = snap.suppliers != null ? fmtInt(snap.suppliers) : '—';
+  const apSpendLabel = snap.ap_spend != null ? fmtMoney(snap.ap_spend) : '—';
+
+  return `
+    <span class="dq-ap-snap-badge">ARR: ${escapeHtml(arrLabel)}</span>
+    <span class="dq-ap-snap-badge">Suppliers: ${escapeHtml(suppliersLabel)}</span>
+    <span class="dq-ap-snap-badge">AP Spend: ${escapeHtml(apSpendLabel)}</span>
+  `;
+}
+
+function setApSnapshotOnItem(item, leadPayload) {
+  if (!item || !leadPayload) return;
+
+  const apply = (obj) => {
+    if (!obj) return;
+    obj.ap_snapshot_status = leadPayload.ap_snapshot_status ?? obj.ap_snapshot_status ?? null;
+    obj.ap_snapshot_run_at = leadPayload.ap_snapshot_run_at ?? obj.ap_snapshot_run_at ?? null;
+    obj.ap_snapshot_arr = leadPayload.ap_snapshot_arr ?? obj.ap_snapshot_arr ?? null;
+    obj.ap_snapshot_arr_confidence = leadPayload.ap_snapshot_arr_confidence ?? obj.ap_snapshot_arr_confidence ?? null;
+    obj.ap_snapshot_suppliers = leadPayload.ap_snapshot_suppliers ?? obj.ap_snapshot_suppliers ?? null;
+    obj.ap_snapshot_ap_spend = leadPayload.ap_snapshot_ap_spend ?? obj.ap_snapshot_ap_spend ?? null;
+    obj.ap_snapshot_source = leadPayload.ap_snapshot_source ?? obj.ap_snapshot_source ?? null;
+    obj.ap_snapshot_notes = leadPayload.ap_snapshot_notes ?? obj.ap_snapshot_notes ?? null;
+  };
+
+  apply(item);
+  if (item.lead) apply(item.lead);
+}
+
+function refreshApSnapshotRow(cardEl, item) {
+  if (!cardEl) return;
+  const row = cardEl.querySelector('.dq-ap-snap');
+  if (!row) return;
+
+  const valuesEl = row.querySelector('.dq-ap-snap-values');
+  if (valuesEl) valuesEl.innerHTML = renderApSnapshotBadges(item);
+
+  const btn = row.querySelector('button[data-action="ap-snapshot"]');
+  if (btn) {
+    const snap = getApSnapshotFromItem(item);
+    btn.textContent = snap.run_at ? 'Re-run' : 'Run';
+  }
+}
+
+async function runApSnapshot(leadId, cardEl) {
+  if (!leadId) return;
+
+  const btn = cardEl?.querySelector('button[data-action="ap-snapshot"]');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Running...';
+  }
+
+  try {
+    const res = await fetch(`/api/leads/${encodeURIComponent(leadId)}/ap-snapshot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    if (!res.ok) {
+      console.error('AP Snapshot failed:', await res.text());
+      alert('AP Snapshot failed. Check console for details.');
+      return;
+    }
+
+    const data = await res.json();
+    const leadPayload = data?.lead || null;
+
+    const itemId = cardEl?.dataset?.itemId;
+    const item = items.find((i) => String(i.item_id || i.id) === String(itemId));
+
+    if (item && leadPayload) {
+      setApSnapshotOnItem(item, leadPayload);
+      refreshApSnapshotRow(cardEl, item);
+    } else if (cardEl && leadPayload) {
+      refreshApSnapshotRow(cardEl, { lead: leadPayload });
+    }
+  } catch (err) {
+    console.error('AP Snapshot error:', err);
+    alert('AP Snapshot error. Check console for details.');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+
+
   function formatLocation(item) {
     const city = item.city || item.City;
     const state = item.state || item.State;
@@ -276,6 +414,35 @@ function normalizeWebsite(url) {
         markItemSkip(itemId, cardEl);
         return;
       }
+	  
+	  // ⭐ NEW: AP Snapshot button
+if (action === 'ap-snapshot') {
+  event.preventDefault();
+  event.stopPropagation();
+
+  // Prefer dataset lead_id → fallback → lookup item model
+  let leadId =
+    cardEl.dataset.leadId ||
+    (cardEl.querySelector('.dq-ap-snap')?.dataset?.leadId) ||
+    null;
+
+  if (!leadId) {
+    const item = items.find((i) =>
+      String(i.item_id || i.id) === String(itemId)
+    );
+    leadId = item?.lead_id || item?.id || (item?.lead && item.lead.id) || null;
+  }
+
+  if (!leadId) {
+    console.error('AP Snapshot: no valid leadId for card', cardEl);
+    return;
+  }
+
+  runApSnapshot(leadId, cardEl);
+  return;   // important: stop further click processing
+}
+
+	  
     }
 
     // Otherwise, just set this card as the active card
@@ -303,6 +470,13 @@ function normalizeWebsite(url) {
     const card = document.createElement('div');
     card.className = 'dq-queue-card' + (isDone ? ' dq-queue-card--done' : '');
     card.dataset.itemId = item.item_id || item.id || '';
+	
+	card.dataset.leadId =
+  item.lead_id ||
+  item.id ||
+  (item.lead && item.lead.id) ||
+  '';
+
 
     card.innerHTML = `
       <div class="dq-card-header">
@@ -346,7 +520,28 @@ function normalizeWebsite(url) {
   </div>
 </div>
 	  
-	  
+<!-- ⭐ AP SNAPSHOT MIDPOINT ROW -->
+<div class="dq-ap-snap"
+     data-lead-id="${escapeHtml(
+       String(item.lead_id || item.id || (item.lead && item.lead.id) || '')
+     )}">
+  
+  <div class="dq-ap-snap-left">
+    <div class="dq-ap-snap-title">AP Snapshot</div>
+    <div class="dq-ap-snap-values">
+      ${renderApSnapshotBadges(item)}
+    </div>
+  </div>
+
+  <button class="dq-ap-snap-btn"
+          type="button"
+          data-action="ap-snapshot">
+    ${getApSnapshotFromItem(item).run_at ? 'Re-run' : 'Run'}
+  </button>
+</div>
+<!-- ⭐ END AP SNAPSHOT ROW -->
+
+
 
       <!-- ⭐ HORIZONTAL OPTION B CONTROLS -->
       <div class="dq-card-controls">

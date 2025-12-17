@@ -1224,6 +1224,16 @@ app.post('/api/daily-queue/generate', async (req, res) => {
         status:   lead.status,
         industry: lead.industry,
 		website: lead.website || null, // ✅ NEW
+		
+		ap_snapshot_status: lead.ap_snapshot_status || null,
+ap_snapshot_run_at: lead.ap_snapshot_run_at || null,
+ap_snapshot_arr: lead.ap_snapshot_arr ?? null,
+ap_snapshot_arr_confidence: lead.ap_snapshot_arr_confidence || null,
+ap_snapshot_suppliers: lead.ap_snapshot_suppliers ?? null,
+ap_snapshot_ap_spend: lead.ap_snapshot_ap_spend ?? null,
+ap_snapshot_source: lead.ap_snapshot_source || null,
+ap_snapshot_notes: lead.ap_snapshot_notes || null,
+
 
         forecast_month:   lead.forecast_month,
         lead_type:        lead.lead_type,
@@ -1330,6 +1340,16 @@ app.get('/api/daily-queue/current', async (_req, res) => {
       last_activity_at: r.last_contacted_at || r.last_touch_at || null,
 	  
 	   website: r.website || null, // ✅ NEW (top-level)
+	   
+	   ap_snapshot_status: r.ap_snapshot_status || null,
+ap_snapshot_run_at: r.ap_snapshot_run_at || null,
+ap_snapshot_arr: r.ap_snapshot_arr ?? null,
+ap_snapshot_arr_confidence: r.ap_snapshot_arr_confidence || null,
+ap_snapshot_suppliers: r.ap_snapshot_suppliers ?? null,
+ap_snapshot_ap_spend: r.ap_snapshot_ap_spend ?? null,
+ap_snapshot_source: r.ap_snapshot_source || null,
+ap_snapshot_notes: r.ap_snapshot_notes || null,
+
 	  
       lead: {
         id:              r.id,
@@ -1349,6 +1369,16 @@ app.get('/api/daily-queue/current', async (_req, res) => {
         last_contacted_at: r.last_contacted_at,
 		
 		 website: r.website || null, // ✅ NEW (top-level)
+		 
+		ap_snapshot_status: r.ap_snapshot_status || null,
+ap_snapshot_run_at: r.ap_snapshot_run_at || null,
+ap_snapshot_arr: r.ap_snapshot_arr ?? null,
+ap_snapshot_arr_confidence: r.ap_snapshot_arr_confidence || null,
+ap_snapshot_suppliers: r.ap_snapshot_suppliers ?? null,
+ap_snapshot_ap_spend: r.ap_snapshot_ap_spend ?? null,
+ap_snapshot_source: r.ap_snapshot_source || null,
+ap_snapshot_notes: r.ap_snapshot_notes || null,
+ 
 		
       }
     }));
@@ -1957,6 +1987,190 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
 });
 
 
+// =============================================
+// AP SNAPSHOT (Daily Queue click -> compute + store on lead)
+// POST /api/leads/:id/ap-snapshot
+// Body: { force?: boolean }
+// =============================================
+app.post('/api/leads/:id/ap-snapshot', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const force = !!(req.body && req.body.force);
+
+  if (!Number.isInteger(id)) {
+    return res.status(400).json({ ok: false, error: 'invalid_id' });
+  }
+
+  // --- helpers ---
+  const normStr = (v) => (v == null ? '' : String(v).trim());
+  const normIndustryKey = (v) => normStr(v).toLowerCase();
+
+  // ✅ TODO: Replace these two functions with YOUR locked heuristics
+  function estimateSuppliers(industry, arr) {
+    // Example placeholder rule (replace):
+    // Return a bounded guess that scales with ARR.
+    const a = Number(arr || 0);
+    if (!a || a <= 0) return null;
+    const base = Math.round(a / 250000); // <- placeholder
+    return Math.max(25, Math.min(base, 20000));
+  }
+
+  function estimateAPSpendFromSuppliers(suppliers, industry) {
+    // Example placeholder rule (replace):
+    const s = Number(suppliers || 0);
+    if (!s || s <= 0) return null;
+    const perSupplier = 15000; // <- placeholder
+    return Math.round(s * perSupplier);
+  }
+
+  const client = await pool.connect();
+  try {
+    // 1) Load lead
+    const { rows: leadRows } = await client.query(
+      `SELECT *
+       FROM leads
+       WHERE id = $1
+       LIMIT 1;`,
+      [id]
+    );
+
+    if (!leadRows.length) {
+      return res.status(404).json({ ok: false, error: 'lead_not_found' });
+    }
+
+    const lead = leadRows[0];
+
+    // 2) If we already have a snapshot and not forcing, return it
+    const hasExisting =
+      lead.ap_snapshot_run_at &&
+      (lead.ap_snapshot_status === 'ok' || lead.ap_snapshot_status === 'not_found');
+
+    if (hasExisting && !force) {
+      return res.json({
+        ok: true,
+        status: lead.ap_snapshot_status,
+        lead: {
+          id: lead.id,
+          ap_snapshot_status: lead.ap_snapshot_status,
+          ap_snapshot_run_at: lead.ap_snapshot_run_at,
+          ap_snapshot_arr: lead.ap_snapshot_arr,
+          ap_snapshot_arr_confidence: lead.ap_snapshot_arr_confidence,
+          ap_snapshot_suppliers: lead.ap_snapshot_suppliers,
+          ap_snapshot_ap_spend: lead.ap_snapshot_ap_spend,
+          ap_snapshot_source: lead.ap_snapshot_source,
+          ap_snapshot_notes: lead.ap_snapshot_notes,
+        },
+      });
+    }
+
+    // 3) ARR anchor (today: fallback to existing lead.arr if present)
+    // ✅ Later you’ll swap this for your real “web ARR lookup” function.
+    const arrFromLead = lead.arr != null ? Number(lead.arr) : null;
+    const industry = normStr(lead.industry);
+    const industryKey = normIndustryKey(industry);
+
+    let arr = arrFromLead && arrFromLead > 0 ? arrFromLead : null;
+    let arrConfidence = arr ? 'medium' : null;        // <- placeholder
+    let source = arr ? 'lead_arr' : 'web';            // <- placeholder
+    let status = 'ok';
+    let notes = null;
+
+    // 4) Not found state (distinct, not a technical error)
+    if (!arr) {
+      status = 'not_found';
+      notes = 'ARR not found (no anchor available)';
+      await client.query(
+        `UPDATE leads
+         SET
+           ap_snapshot_status = $2,
+           ap_snapshot_run_at = NOW(),
+           ap_snapshot_arr = NULL,
+           ap_snapshot_arr_confidence = NULL,
+           ap_snapshot_suppliers = NULL,
+           ap_snapshot_ap_spend = NULL,
+           ap_snapshot_source = $3,
+           ap_snapshot_notes = $4,
+           updated_at = NOW()
+         WHERE id = $1
+         RETURNING *;`,
+        [id, status, source, notes]
+      );
+
+      // Reload updated lead (small + safe)
+      const { rows: updatedRows } = await client.query(`SELECT * FROM leads WHERE id = $1 LIMIT 1;`, [id]);
+      const updated = updatedRows[0];
+
+      return res.json({
+        ok: true,
+        status,
+        lead: {
+          id: updated.id,
+          ap_snapshot_status: updated.ap_snapshot_status,
+          ap_snapshot_run_at: updated.ap_snapshot_run_at,
+          ap_snapshot_arr: updated.ap_snapshot_arr,
+          ap_snapshot_arr_confidence: updated.ap_snapshot_arr_confidence,
+          ap_snapshot_suppliers: updated.ap_snapshot_suppliers,
+          ap_snapshot_ap_spend: updated.ap_snapshot_ap_spend,
+          ap_snapshot_source: updated.ap_snapshot_source,
+          ap_snapshot_notes: updated.ap_snapshot_notes,
+        },
+      });
+    }
+
+    // 5) Compute suppliers + AP spend (using heuristics)
+    const suppliers = estimateSuppliers(industryKey, arr);
+    const apSpend = estimateAPSpendFromSuppliers(suppliers, industryKey);
+
+    // 6) Store on lead record
+    const { rows: updatedRows } = await client.query(
+      `UPDATE leads
+       SET
+         ap_snapshot_status = $2,
+         ap_snapshot_run_at = NOW(),
+         ap_snapshot_arr = $3,
+         ap_snapshot_arr_confidence = $4,
+         ap_snapshot_suppliers = $5,
+         ap_snapshot_ap_spend = $6,
+         ap_snapshot_source = $7,
+         ap_snapshot_notes = $8,
+         updated_at = NOW()
+       WHERE id = $1
+       RETURNING *;`,
+      [
+        id,
+        status,
+        arr,
+        arrConfidence,
+        suppliers,
+        apSpend,
+        source,
+        notes,
+      ]
+    );
+
+    const updated = updatedRows[0];
+
+    return res.json({
+      ok: true,
+      status,
+      lead: {
+        id: updated.id,
+        ap_snapshot_status: updated.ap_snapshot_status,
+        ap_snapshot_run_at: updated.ap_snapshot_run_at,
+        ap_snapshot_arr: updated.ap_snapshot_arr,
+        ap_snapshot_arr_confidence: updated.ap_snapshot_arr_confidence,
+        ap_snapshot_suppliers: updated.ap_snapshot_suppliers,
+        ap_snapshot_ap_spend: updated.ap_snapshot_ap_spend,
+        ap_snapshot_source: updated.ap_snapshot_source,
+        ap_snapshot_notes: updated.ap_snapshot_notes,
+      },
+    });
+  } catch (err) {
+    console.error('POST /api/leads/:id/ap-snapshot error', err);
+    return res.status(500).json({ ok: false, error: 'ap_snapshot_failed' });
+  } finally {
+    client.release();
+  }
+});
 
 
 // --- UPDATE A LEAD (Safe UPSERT; now logs status history) ---
@@ -2003,6 +2217,8 @@ app.put('/update-lead/:id', async (req, res) => {
     const n = parseShortMoney(v);
     return n == null ? null : n;
   };
+  
+
 
 
   // Normalize status (frontend may send 'follow-up', etc.)
@@ -2097,17 +2313,21 @@ app.put('/update-lead/:id', async (req, res) => {
   ];
 
   try {
-    // 1) Read previous status before update
-    const { rows: beforeRows } = await pool.query(
-      'SELECT status FROM leads WHERE id = $1',
-      [id]
-    );
-    if (!beforeRows.length) {
-      return res.status(404).json({ error: 'Lead not found', id });
-    }
-    const oldStatus = beforeRows[0].status || null;
+	  
+	  
+
 
     // 2) Run the update
+	// Capture old status BEFORE applying update
+let oldStatusBeforeUpdate = null;
+{
+  const check = await pool.query(
+    `SELECT status FROM leads WHERE id = $1`,
+    [id]
+  );
+  oldStatusBeforeUpdate = check.rows?.[0]?.status || null;
+}
+
     const { rows } = await pool.query(sql, params);
     if (!rows.length) {
       return res.status(404).json({ error: 'Lead not found', id });
@@ -2117,6 +2337,7 @@ app.put('/update-lead/:id', async (req, res) => {
 
     // 3) If status actually changed, log into lead_status_history
     if (payload.status != null) {
+	  const oldStatus = oldStatusBeforeUpdate;
       const prevNorm = (oldStatus || '').toLowerCase();
       const newNorm = (lead.status || '').toLowerCase();
       if (prevNorm !== newNorm) {
