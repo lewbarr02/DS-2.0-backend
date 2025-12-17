@@ -1582,6 +1582,8 @@ document.addEventListener('DOMContentLoaded', () => {
     research: 5,
     unspecified: 6
   };
+  
+  
 
   // 🔁 Global caches for List View row editor
   window.LIST_STATE_OPTIONS = [];
@@ -1728,6 +1730,8 @@ function getCI(row, key) {
     if (k.includes('research'))return STATUS_RANK.research;
     return STATUS_RANK.unspecified;
   }
+  
+  
 
   function renderListTable(rows) {
     const thead = $('#leadThead');
@@ -1765,6 +1769,19 @@ function getCI(row, key) {
 
     const stateOptions    = buildStateOptions();
     const industryOptions = buildIndustryOptions();
+	
+// Status Options (must load before List View)
+window.LIST_STATUS_OPTIONS = [
+  { value: "Converted", label: "🏆 Converted" },
+  { value: "Hot", label: "🔥 Hot" },
+  { value: "Warm", label: "🌞 Warm" },
+  { value: "Follow-Up", label: "⏳ Follow-Up" },
+  { value: "Cold", label: "🧊 Cold" },
+  { value: "Research", label: "🔍 Research" },
+  { value: "Unspecified", label: "⚪ Unspecified" }
+];
+
+	
 
     // update global caches for the inline row editor
     window.LIST_STATE_OPTIONS    = stateOptions;
@@ -2328,9 +2345,25 @@ function computeListFilteredAndSorted() {
 
 
   // Public render fn
-  window.renderListView = function renderListView() {
-    renderListTable(computeListFilteredAndSorted());
-  };
+window.renderListView = function renderListView() {
+
+  // SAFETY: DS must exist
+  const DS = window.DS;
+  if (!DS || !DS.state) {
+    console.warn("ListView blocked → DS not initialized yet.");
+    return;
+  }
+
+  // SAFETY: must have rows
+  const rows = computeListFilteredAndSorted();
+  if (!Array.isArray(rows)) {
+    console.warn("ListView blocked → rows missing.");
+    return;
+  }
+
+  renderListTable(rows);
+};
+
 
   // Wire List toolbar controls
   function wireListControls() {
