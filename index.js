@@ -2326,10 +2326,7 @@ let ap_spend = apSpendEst.ap_spend;
 let apSpendSource = apSpendEst.source;
 let apSpendConfidence = apSpendEst.confidence;
 
-	
 
-
-    // 5) Compute suppliers + AP spend (using heuristics)
 
 
     // 6) Store on lead record

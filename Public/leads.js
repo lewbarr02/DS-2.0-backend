@@ -98,6 +98,36 @@ window.refreshLeads = async function refreshLeads() {
     markersLayer: null,
     markerById: new Map(),
   };
+  
+  // ======================================================
+// Helper: Patch a single lead in DS.state.rawRows + filtered
+// ======================================================
+window.patchLeadInState = function patchLeadInState(id, patch) {
+  if (!id || !patch) return;
+
+  const key = leadKey(id);
+
+  // Update rawRows
+  if (Array.isArray(DS.state.rawRows)) {
+    DS.state.rawRows = DS.state.rawRows.map(r => {
+      if (leadKey(r.id || r.uuid || r.lead_id) === key) {
+        return { ...r, ...patch };
+      }
+      return r;
+    });
+  }
+
+  // Update filtered rows so List View stays in sync
+  if (Array.isArray(DS.state.filtered)) {
+    DS.state.filtered = DS.state.filtered.map(r => {
+      if (leadKey(r.id || r.uuid || r.lead_id) === key) {
+        return { ...r, ...patch };
+      }
+      return r;
+    });
+  }
+};
+
 
   // ---------- UTIL ----------
   const toNumber = (v) => (v == null)

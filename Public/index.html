@@ -1793,7 +1793,17 @@ function getCI(row, key) {
       const rawTags = t(getCI(r,'tags'));
 
       return `<tr data-id="${id}">
-        <td class="status-cell">${prettyStatus(getCI(r,'status'))}</td>
+        
+		
+		<td class="status-cell">
+  <select class="status-select" data-id="${id}">
+    ${window.LIST_STATUS_OPTIONS.map(opt => {
+      const isSelected = String(getCI(r,'status') || '').toLowerCase() === opt.value.toLowerCase();
+      return `<option value="${opt.value}" ${isSelected ? 'selected' : ''}>${opt.label}</option>`;
+    }).join('')}
+  </select>
+</td>
+		
         <td>${hasPin ? '✅' : '❌'}</td>
         <td>${t(getCI(r,'company'))}</td>
         <td>${t(getCI(r,'name'))}</td>
@@ -1802,8 +1812,9 @@ function getCI(row, key) {
         <td>${t(getCI(r,'industry'))}</td>
         <td>${t(getCI(r,'forecast_month'))}</td>
         <td>${t(getCI(r,'lead_type'))}</td>
-        <td>${arr ? ('$' + Number(arr).toLocaleString()) : ''}</td>
-        <td>${ap  ? ('$' + Number(ap).toLocaleString())  : ''}</td>
+<td>${arr ? ('$' + arr) : ''}</td>
+<td>${ap  ? ('$' + ap)  : ''}</td>
+
 
         <!-- ⭐ TAGS CELL EDITABLE -->
         <td class="tags-cell" data-id="${id}">
@@ -1924,6 +1935,56 @@ function getCI(row, key) {
         }
       });
     });
+	
+	// 🔄 STATUS dropdown handlers
+$$('#leadTbody .status-select').forEach(select => {
+  select.addEventListener('change', async (e) => {
+    e.stopPropagation();
+
+    const row = select.closest('tr');
+    const id  = row?.dataset?.id;
+    if (!id) return;
+
+    const newStatus = select.value;
+
+    try {
+      const API_BASE = window.DELI_API_BASE || '';
+      const res = await fetch(`${API_BASE}/update-lead/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      if (!res.ok) {
+        throw new Error(`Status update failed (${res.status})`);
+      }
+
+      const updated = await res.json().catch(() => ({}));
+      const fresh   = updated.lead || updated || {};
+
+      // Patch in-memory state
+      patchLeadInState(id, {
+        status: newStatus,
+        last_status_change: fresh.last_status_change || new Date().toISOString()
+      });
+
+      // Update map marker color if present
+      const marker = window.DS?.state?.markerById?.get(String(id));
+      if (marker && typeof marker.setIcon === 'function') {
+        marker.setIcon(iconForStatus(newStatus));
+      }
+
+      // Re-render to maintain sorting
+      window.renderListView();
+
+    } catch (err) {
+      console.error(err);
+      alert('Status update failed. Reverting.');
+      window.renderListView();
+    }
+  });
+});
+
 
 
     // 🏷️ TAGS INLINE EDIT HANDLERS (unchanged)
