@@ -2214,27 +2214,10 @@ app.post('/api/leads/:id/ap-snapshot', async (req, res) => {
   const normStr = (v) => (v == null ? '' : String(v).trim());
   const normIndustryKey = (v) => normStr(v).toLowerCase();
   
-  // Determine normalized industry key
-const industryKey = normIndustryKey(lead.industry);
 
 
-  // ✅ TODO: Replace these two functions with YOUR locked heuristics
-  function estimateSuppliers(industry, arr) {
-    // Example placeholder rule (replace):
-    // Return a bounded guess that scales with ARR.
-    const a = Number(arr || 0);
-    if (!a || a <= 0) return null;
-    const base = Math.round(a / 250000); // <- placeholder
-    return Math.max(25, Math.min(base, 20000));
-  }
 
-  function estimateAPSpendFromSuppliers(suppliers, industry) {
-    // Example placeholder rule (replace):
-    const s = Number(suppliers || 0);
-    if (!s || s <= 0) return null;
-    const perSupplier = 15000; // <- placeholder
-    return Math.round(s * perSupplier);
-  }
+
 
   const client = await pool.connect();
   try {
@@ -2252,6 +2235,8 @@ const industryKey = normIndustryKey(lead.industry);
     }
 
     const lead = leadRows[0];
+	const industryKey = normIndustryKey(lead.industry);
+
 
     // 2) If we already have a snapshot and not forcing, return it
     const hasExisting =
