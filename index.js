@@ -1986,6 +1986,216 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
   }
 });
 
+// ======================================================
+// HYBRID ARR ENGINE (Option A — Revenue Range First)
+// ======================================================
+
+// 1. Revenue range → midpoint → ARR
+function arrFromRevenueRange(range) {
+  if (!range) return null;
+  const s = String(range).trim().toLowerCase();
+
+  // Patterns vary ("$50M - $100M", "10M-25M", "500M+")
+  const clean = s.replace(/[\$,]/g, '');
+
+  // "50m - 100m"
+  const matchRange = clean.match(/(\d+(\.\d+)?)(m|b)?\s*-\s*(\d+(\.\d+)?)(m|b)?/i);
+  if (matchRange) {
+    const low  = parseRevenue(matchRange[1], matchRange[3]);
+    const high = parseRevenue(matchRange[4], matchRange[6]);
+    if (low && high) return Math.round((low + high) / 2);
+  }
+
+  // "500m+" or "2b+"
+  const plusMatch = clean.match(/(\d+(\.\d+)?)(m|b)?\+/i);
+  if (plusMatch) {
+    const base = parseRevenue(plusMatch[1], plusMatch[3]);
+    return base;
+  }
+
+  return null;
+}
+
+// Parses "50" + "m" → 50,000,000
+function parseRevenue(numberStr, suffix) {
+  let num = parseFloat(numberStr);
+  if (!Number.isFinite(num)) return null;
+
+  if (suffix === 'm') return num * 1_000_000;
+  if (suffix === 'b') return num * 1_000_000_000;
+  return num;
+}
+
+// 2. Employees → ARR (industry multipliers applied below)
+function arrFromEmployees(emp, industryKey) {
+  if (!emp || emp <= 0) return null;
+
+  const multi = INDUSTRY_EMP_ARR_MULTIPLIERS[industryKey] ||
+                INDUSTRY_EMP_ARR_MULTIPLIERS['other'];
+  return Math.round(emp * multi);
+}
+
+// 3. Primary Hybrid Estimate
+function estimateARR({ revenueRange, employees, industry }) {
+  const key = (industry || 'other').toLowerCase();
+
+  // Priority 1 — ZoomInfo Revenue Range
+  const arrFromRev = arrFromRevenueRange(revenueRange);
+  if (arrFromRev) {
+    return {
+      arr: arrFromRev,
+      confidence: 'high',
+      source: 'zoominfo_revenue_range'
+    };
+  }
+
+  // Priority 2 — Employees × industry multiplier
+  if (employees && employees > 0) {
+    return {
+      arr: arrFromEmployees(employees, key),
+      confidence: 'medium',
+      source: 'employee_multiplier'
+    };
+  }
+
+  // Priority 3 — Industry baseline ARR
+  const baseline = INDUSTRY_BASELINES[key] || INDUSTRY_BASELINES['other'];
+  return {
+    arr: baseline,
+    confidence: 'low',
+    source: 'industry_baseline'
+  };
+}
+
+// ======================================================
+// SUPPLIER COUNT ENGINE
+// ======================================================
+
+// Suppliers per $1M ARR by industry
+const SUPPLIERS_PER_ARR_M = {
+  healthcare:     2.5,   // hospitals + vendors heavy
+  education:      1.4,
+  hospitality:    2.0,
+  manufacturing:  3.5,   // very supplier-dense
+  construction:   3.8,
+  government:     2.2,
+  nonprofit:      1.2,
+  other:          1.8
+};
+
+// Fallback ratios if ARR missing
+const SUPPLIER_FALLBACK = {
+  healthcare:     400,
+  education:      150,
+  hospitality:    250,
+  manufacturing:  500,
+  construction:   600,
+  government:     350,
+  nonprofit:      80,
+  other:          200
+};
+
+function estimateSuppliers({ arr, industry }) {
+  const key = (industry || 'other').toLowerCase();
+
+  if (arr && arr > 0) {
+    const arrM = arr / 1_000_000; // ARR in millions
+    const ratio = SUPPLIERS_PER_ARR_M[key] || SUPPLIERS_PER_ARR_M['other'];
+    const est = Math.round(arrM * ratio);
+    return {
+      suppliers: est,
+      source: "arr_based",
+      confidence: "medium"
+    };
+  }
+
+  // fallback: no ARR → industry average
+  const fallback = SUPPLIER_FALLBACK[key] || SUPPLIER_FALLBACK['other'];
+  return {
+    suppliers: fallback,
+    source: "industry_baseline",
+    confidence: "low"
+  };
+}
+
+// ======================================================
+// AP SPEND ENGINE
+// ======================================================
+
+// Average AP spend per supplier (annual)
+const AP_SPEND_PER_SUPPLIER = {
+  healthcare:     90_000,
+  education:      40_000,
+  hospitality:    55_000,
+  manufacturing: 120_000,
+  construction: 130_000,
+  government:     70_000,
+  nonprofit:      20_000,
+  other:          45_000
+};
+
+// fallback if suppliers missing
+const AP_SPEND_FALLBACK = {
+  healthcare:    40_000_000,
+  education:     10_000_000,
+  hospitality:   15_000_000,
+  manufacturing: 60_000_000,
+  construction:  70_000_000,
+  government:    30_000_000,
+  nonprofit:      5_000_000,
+  other:         12_000_000
+};
+
+function estimateAPSpend({ suppliers, industry }) {
+  const key = (industry || 'other').toLowerCase();
+
+  if (suppliers && suppliers > 0) {
+    const perSup = AP_SPEND_PER_SUPPLIER[key] || AP_SPEND_PER_SUPPLIER['other'];
+    const est = suppliers * perSup;
+    return {
+      ap_spend: est,
+      source: "suppliers_based",
+      confidence: "medium"
+    };
+  }
+
+  // No supplier count → fallback
+  return {
+    ap_spend: AP_SPEND_FALLBACK[key] || AP_SPEND_FALLBACK['other'],
+    source: "industry_baseline",
+    confidence: "low"
+  };
+}
+
+
+// ======================================================
+// INDUSTRY BASELINES (Used when no revenue/employee data)
+// ======================================================
+const INDUSTRY_BASELINES = {
+  healthcare:     150_000_000,
+  education:       90_000_000,
+  hospitality:    120_000_000,
+  manufacturing:  200_000_000,
+  construction:   100_000_000,
+  government:     180_000_000,
+  nonprofit:       40_000_000,
+  other:           60_000_000
+};
+
+// ======================================================
+// EMPLOYEE → ARR MULTIPLIERS (used when revenue missing)
+// ======================================================
+const INDUSTRY_EMP_ARR_MULTIPLIERS = {
+  healthcare:    250_000,
+  education:     150_000,
+  hospitality:   200_000,
+  manufacturing: 300_000,
+  construction:  220_000,
+  government:    260_000,
+  nonprofit:      80_000,
+  other:         120_000
+};
+
 
 // =============================================
 // AP SNAPSHOT (Daily Queue click -> compute + store on lead)
@@ -2003,6 +2213,10 @@ app.post('/api/leads/:id/ap-snapshot', async (req, res) => {
   // --- helpers ---
   const normStr = (v) => (v == null ? '' : String(v).trim());
   const normIndustryKey = (v) => normStr(v).toLowerCase();
+  
+  // Determine normalized industry key
+const industryKey = normIndustryKey(lead.industry);
+
 
   // ✅ TODO: Replace these two functions with YOUR locked heuristics
   function estimateSuppliers(industry, arr) {
@@ -2062,22 +2276,27 @@ app.post('/api/leads/:id/ap-snapshot', async (req, res) => {
       });
     }
 
-    // 3) ARR anchor (today: fallback to existing lead.arr if present)
-    // ✅ Later you’ll swap this for your real “web ARR lookup” function.
-    const arrFromLead = lead.arr != null ? Number(lead.arr) : null;
-    const industry = normStr(lead.industry);
-    const industryKey = normIndustryKey(industry);
+    // 3) Hybrid ARR Engine
+    const rev = lead.zoominfo_revenue_range || lead.revenue_range || null;
+    const emp = lead.zoominfo_employee_range  || lead.employees || null;
 
-    let arr = arrFromLead && arrFromLead > 0 ? arrFromLead : null;
-    let arrConfidence = arr ? 'medium' : null;        // <- placeholder
-    let source = arr ? 'lead_arr' : 'web';            // <- placeholder
+    const hybrid = estimateARR({
+      revenueRange: rev,
+      employees: emp ? Number(emp) : null,
+      industry: industryKey
+    });
+
+    let arr = hybrid.arr;
+    let arrConfidence = hybrid.confidence;
+    let source = hybrid.source;
     let status = 'ok';
     let notes = null;
 
-    // 4) Not found state (distinct, not a technical error)
+    // If still no ARR
     if (!arr) {
       status = 'not_found';
-      notes = 'ARR not found (no anchor available)';
+      source = 'none';
+      notes = 'ARR not found from revenue, employees, or industry baseline';
       await client.query(
         `UPDATE leads
          SET
@@ -2090,62 +2309,75 @@ app.post('/api/leads/:id/ap-snapshot', async (req, res) => {
            ap_snapshot_source = $3,
            ap_snapshot_notes = $4,
            updated_at = NOW()
-         WHERE id = $1
-         RETURNING *;`,
+         WHERE id = $1`,
         [id, status, source, notes]
       );
-
-      // Reload updated lead (small + safe)
-      const { rows: updatedRows } = await client.query(`SELECT * FROM leads WHERE id = $1 LIMIT 1;`, [id]);
-      const updated = updatedRows[0];
-
-      return res.json({
-        ok: true,
-        status,
-        lead: {
-          id: updated.id,
-          ap_snapshot_status: updated.ap_snapshot_status,
-          ap_snapshot_run_at: updated.ap_snapshot_run_at,
-          ap_snapshot_arr: updated.ap_snapshot_arr,
-          ap_snapshot_arr_confidence: updated.ap_snapshot_arr_confidence,
-          ap_snapshot_suppliers: updated.ap_snapshot_suppliers,
-          ap_snapshot_ap_spend: updated.ap_snapshot_ap_spend,
-          ap_snapshot_source: updated.ap_snapshot_source,
-          ap_snapshot_notes: updated.ap_snapshot_notes,
-        },
-      });
+      const { rows: updatedRows } =
+        await client.query(`SELECT * FROM leads WHERE id = $1`, [id]);
+      return res.json({ ok: true, status, lead: updatedRows[0] });
     }
+	
+	// ======================================================
+// 4) SUPPLIERS (depends on ARR)
+// ======================================================
+const supplierEst = estimateSuppliers({
+  arr: arr,
+  industry: industryKey
+});
+
+let suppliers = supplierEst.suppliers;
+let suppliersSource = supplierEst.source;
+let suppliersConfidence = supplierEst.confidence;
+
+// ======================================================
+// 5) AP SPEND (depends on suppliers)
+// ======================================================
+const apSpendEst = estimateAPSpend({
+  suppliers: suppliers,
+  industry: industryKey
+});
+
+let ap_spend = apSpendEst.ap_spend;
+let apSpendSource = apSpendEst.source;
+let apSpendConfidence = apSpendEst.confidence;
+
+	
+
 
     // 5) Compute suppliers + AP spend (using heuristics)
-    const suppliers = estimateSuppliers(industryKey, arr);
-    const apSpend = estimateAPSpendFromSuppliers(suppliers, industryKey);
+
 
     // 6) Store on lead record
-    const { rows: updatedRows } = await client.query(
-      `UPDATE leads
-       SET
-         ap_snapshot_status = $2,
-         ap_snapshot_run_at = NOW(),
-         ap_snapshot_arr = $3,
-         ap_snapshot_arr_confidence = $4,
-         ap_snapshot_suppliers = $5,
-         ap_snapshot_ap_spend = $6,
-         ap_snapshot_source = $7,
-         ap_snapshot_notes = $8,
-         updated_at = NOW()
-       WHERE id = $1
-       RETURNING *;`,
-      [
-        id,
-        status,
-        arr,
-        arrConfidence,
-        suppliers,
-        apSpend,
-        source,
-        notes,
-      ]
-    );
+const { rows: updatedRows } = await client.query(
+  `UPDATE leads
+     SET
+       ap_snapshot_status = $2,
+       ap_snapshot_run_at = NOW(),
+       ap_snapshot_arr = $3,
+       ap_snapshot_arr_confidence = $4,
+       ap_snapshot_suppliers = $5,
+       ap_snapshot_suppliers_confidence = $6,
+       ap_snapshot_ap_spend = $7,
+       ap_snapshot_ap_spend_confidence = $8,
+       ap_snapshot_source = $9,
+       ap_snapshot_notes = $10,
+       updated_at = NOW()
+     WHERE id = $1
+     RETURNING *;`,
+  [
+    id,
+    status,
+    arr,
+    arrConfidence,
+    suppliers,
+    suppliersConfidence,
+    ap_spend,
+    apSpendConfidence,
+    source,
+    notes
+  ]
+);
+
 
     const updated = updatedRows[0];
 
