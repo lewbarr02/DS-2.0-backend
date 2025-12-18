@@ -1120,6 +1120,15 @@ app.get('/api/daily-queue/check/:leadId', async (req, res) => {
 // POST /api/daily-queue/generate
 // Body: { batch_size?: number, industries?: string[], tag?: string }
 app.post('/api/daily-queue/generate', async (req, res) => {
+	
+	  return res.json({
+    ok: true,
+    batch: null,
+    items: [],
+    message: 'auto_generation_disabled'
+  });
+
+	
   const rawSize = req.body?.batch_size;
   const size = normalizeBatchSize(rawSize);
 
@@ -1510,8 +1519,13 @@ app.get('/api/daily-queue/current', async (_req, res) => {
     `;
     const { rows: batchRows } = await client.query(batchSql);
     if (!batchRows.length) {
-      return res.status(404).json({ ok: false, error: 'no_active_batch' });
+      return res.json({
+        ok: true,
+        batch: null,
+        items: []
+      });
     }
+
     const batch = batchRows[0];
 
     const itemsSql = `

@@ -951,7 +951,7 @@ function normalizeWebsite(url) {
   
 // After popup renders, check if lead is already in queue
 setTimeout(async () => {
-  const container = document.querySelector('.ds-add-to-queue-container');
+  const container = document.querySelector('.ds-btn-add-to-queue-container');
   if (!container || !DS_CURRENT_LEAD) return;
 
   try {
@@ -993,10 +993,12 @@ function attachPopupEventDelegates() {
       openLeadPopup("edit", latlng);
     }
 
-// ➕ Add to Daily Queue (from map popup)
+// ➕ Add to Daily Queue (from map popup + list view)
 if (node.classList?.contains("ds-btn-add-to-queue")) {
   e.preventDefault();
-  if (!DS_CURRENT_LEAD || !DS_CURRENT_LEAD.id) return;
+
+  const leadId = node.dataset.id || (DS_CURRENT_LEAD && DS_CURRENT_LEAD.id);
+  if (!leadId) return;
 
   const original = node.textContent;
   node.disabled = true;
@@ -1006,7 +1008,7 @@ if (node.classList?.contains("ds-btn-add-to-queue")) {
     const res = await fetch(`${API_BASE}/api/daily-queue/add`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lead_id: DS_CURRENT_LEAD.id })
+      body: JSON.stringify({ lead_id: leadId })   // ✅ ONLY change here
     });
 
     const data = await res.json().catch(() => ({}));
@@ -1031,6 +1033,7 @@ if (node.classList?.contains("ds-btn-add-to-queue")) {
     node.textContent = original;
   }
 }
+
 
 
 

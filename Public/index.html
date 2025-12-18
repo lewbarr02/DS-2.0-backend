@@ -1898,12 +1898,10 @@ const statusEmoji = prettyStatus(rawStatus).split(' ')[0];        // 🏆 / 🔥
       <option value="unspecified" ${rawStatus === 'unspecified' ? 'selected' : ''}>⚪ Unspecified</option>
     </select>
 
-    <button class="ds-btn-add-to-queue"
-            data-lead-id="${id}"
-            title="Add to Daily Queue"
-            style="padding:4px 8px;border-radius:6px;border:1px solid #ddd;background:#fff;cursor:pointer;">
-      ➕ Queue
-    </button>
+<button class="ds-btn-add-to-queue"
+        data-lead-id="${id}"
+        title="Add to Daily Queue">➕ Queue</button>
+
   </div>
 </td>
 
@@ -1939,6 +1937,11 @@ const statusEmoji = prettyStatus(rawStatus).split(' ')[0];        // 🏆 / 🔥
   <button class="preview-btn"
           data-id="${id}"
           title="Open Pin Preview">👁 Preview</button>
+		  
+	  <button class="ds-btn-add-to-queue"
+          data-id="${id}"
+          title="Add to Daily Queue">➕ Queue</button>
+
 
   <button class="row-edit-btn"
           data-id="${id}"

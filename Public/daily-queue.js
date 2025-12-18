@@ -963,29 +963,16 @@ if (action === 'ap-snapshot') {
     // 🎯 Special case: Event Mode with autostart
     // If we came here via /daily-queue?autostart=1&tag=..., do NOT reuse
     // whatever "current" batch exists. Instead, force a fresh tag-locked batch.
-    if (batchTag && autoStart) {
-      await generateNewBatch();
-      return;
-    }
+    //  if (batchTag && autoStart) {
+    //  await generateNewBatch();
+    //    return;
+    //   }
 
     toggleLoading(true);
     try {
       const res = await fetch('/api/daily-queue/current', {
         method: 'GET',
       });
-
-      if (res.status === 404) {
-        // No active batch yet
-        currentBatch = null;
-        items = [];
-        renderBatch();
-
-        // If this page was opened with ?autostart=1, immediately generate a new batch
-        if (autoStart) {
-          await generateNewBatch();
-        }
-        return;
-      }
 
       if (!res.ok) {
         console.error('Failed to load current batch', await res.text());
@@ -997,10 +984,9 @@ if (action === 'ap-snapshot') {
       currentBatch = data.batch || null;
       items = data.items || [];
 
-      // 🔹 NEW: keep active cards on top when we reload the page
       sortItemsForDisplay();
-
       renderBatch();
+
     } catch (err) {
       console.error('Error loading current batch', err);
       alert('Error reaching the server while loading your Daily Queue.');
@@ -1053,9 +1039,10 @@ if (action === 'ap-snapshot') {
   // ———————————————————————
   if (newBatchBtn) {
     newBatchBtn.addEventListener('click', () => {
-      generateNewBatch();
+      alert('Daily Queue is manual-only. Add leads from Map or List view.');
     });
   }
+
 
   setTodayText();
   loadCurrentBatch();
