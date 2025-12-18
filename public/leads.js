@@ -993,43 +993,45 @@ function attachPopupEventDelegates() {
       openLeadPopup("edit", latlng);
     }
 
-+   // ➕ Add to Daily Queue (from map popup)
-+   if (node.classList?.contains("ds-btn-add-to-queue")) {
-+     e.preventDefault();
-+     if (!DS_CURRENT_LEAD || !DS_CURRENT_LEAD.id) return;
-+
-+     const original = node.textContent;
-+     node.disabled = true;
-+     node.textContent = "Adding…";
-+
-+     try {
-+       const res = await fetch(`${API_BASE}/api/daily-queue/add`, {
-+         method: "POST",
-+         headers: { "Content-Type": "application/json" },
-+         body: JSON.stringify({ lead_id: DS_CURRENT_LEAD.id })
-+       });
-+
-+       const data = await res.json().catch(() => ({}));
-+       if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
-+
-+       node.textContent = "✅ Added";
-// Replace the entire container so the button becomes permanently disabled
-const container = document.querySelector('.ds-add-to-queue-container');
-if (container) {
-  container.innerHTML = `
-    <button class="ds-btn-add-to-queue" disabled
-            style="padding:.4rem .7rem;border-radius:8px;background:#e8e8e8;border:1px solid #ccc;cursor:not-allowed;">
-      ✅ In Queue
-    </button>`;
+// ➕ Add to Daily Queue (from map popup)
+if (node.classList?.contains("ds-btn-add-to-queue")) {
+  e.preventDefault();
+  if (!DS_CURRENT_LEAD || !DS_CURRENT_LEAD.id) return;
+
+  const original = node.textContent;
+  node.disabled = true;
+  node.textContent = "Adding…";
+
+  try {
+    const res = await fetch(`${API_BASE}/api/daily-queue/add`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lead_id: DS_CURRENT_LEAD.id })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+    node.textContent = "✅ Added";
+
+    // Replace entire container so button becomes disabled permanently
+    const container = document.querySelector('.ds-add-to-queue-container');
+    if (container) {
+      container.innerHTML = `
+        <button class="ds-btn-add-to-queue" disabled
+                style="padding:.4rem .7rem;border-radius:8px;background:#e8e8e8;border:1px solid #ccc;cursor:not-allowed;">
+          ✅ In Queue
+        </button>`;
+    }
+
+  } catch (err) {
+    console.error("Add-to-Queue failed:", err);
+    alert("Could not add to Daily Queue.");
+    node.disabled = false;
+    node.textContent = original;
+  }
 }
 
-+     } catch (err) {
-+       console.error("Add-to-Queue failed:", err);
-+       alert("Could not add to Daily Queue.");
-+       node.disabled = false;
-+       node.textContent = original;
-+     }
-+   }
 
 
     // Website links
