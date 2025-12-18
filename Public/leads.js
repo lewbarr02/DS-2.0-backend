@@ -534,11 +534,27 @@ function renderMarkers() {
       }
     }
 
-    // Bottom-left footer
-    if (els.pinCount()) {
-      els.pinCount().textContent = `Displaying ${shown} of ${total} leads`;
-    }
+// Bottom-left footer (mirror List View language)
+if (els.pinCount()) {
+  const activeStatuses = els.statusChecks()
+    .filter(cb => cb.checked)
+    .map(cb => cb.value.toLowerCase());
+
+  if (activeStatuses.length === 1) {
+    const s = activeStatuses[0];
+
+    const totalForStatus = allRows.filter(
+      r => statusKey(r.status || r.Status) === s
+    ).length;
+
+    els.pinCount().textContent =
+      `Showing ${shown} of ${totalForStatus} ${prettyStatus(s)} leads`;
+  } else {
+    els.pinCount().textContent =
+      `Showing ${shown} of ${total} leads`;
   }
+}
+
   
 
 
