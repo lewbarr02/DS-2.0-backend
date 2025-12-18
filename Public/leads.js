@@ -948,6 +948,35 @@ function normalizeWebsite(url) {
     const html = mode === "edit" ? renderEditPopup(DS_CURRENT_LEAD) : renderPreviewPopup(DS_CURRENT_LEAD);
     dsPopup.setLatLng(latlng).setContent(html).openOn(window.map); // window.map is set in boot()
   }
+  
+// After popup renders, check if lead is already in queue
+setTimeout(async () => {
+  const container = document.querySelector('.ds-add-to-queue-container');
+  if (!container || !DS_CURRENT_LEAD) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/daily-queue/check/${DS_CURRENT_LEAD.id}`);
+    const data = await res.json();
+
+    if (data.inQueue) {
+      container.innerHTML = `
+        <button class="ds-btn-add-to-queue" disabled
+                style="padding:.4rem .7rem;border:1px solid #ccc;border-radius:8px;background:#e8e8e8;cursor:not-allowed;">
+          ✅ In Queue
+        </button>`;
+    } else {
+      container.innerHTML = `
+        <button class="ds-btn-add-to-queue"
+                style="padding:.4rem .7rem;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;">
+          ➕ Add
+        </button>`;
+    }
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = `<div style="color:#b00">Error loading status</div>`;
+  }
+}, 50);
+  
 
 // ——— Attach one-time document listeners (call from boot()) ———
 function attachPopupEventDelegates() {
@@ -1026,33 +1055,7 @@ if (container) {
       openLeadPopup("preview", latlng);
     }
 	
-	// After popup renders, check if lead is already in queue
-setTimeout(async () => {
-  const container = document.querySelector('.ds-add-to-queue-container');
-  if (!container || !DS_CURRENT_LEAD) return;
 
-  try {
-    const res = await fetch(`${API_BASE}/api/daily-queue/check/${DS_CURRENT_LEAD.id}`);
-    const data = await res.json();
-
-    if (data.inQueue) {
-      container.innerHTML = `
-        <button class="ds-btn-add-to-queue" disabled
-                style="padding:.4rem .7rem;border:1px solid #ccc;border-radius:8px;background:#e8e8e8;cursor:not-allowed;">
-          ✅ In Queue
-        </button>`;
-    } else {
-      container.innerHTML = `
-        <button class="ds-btn-add-to-queue"
-                style="padding:.4rem .7rem;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;">
-          ➕ Add
-        </button>`;
-    }
-  } catch (err) {
-    console.error(err);
-    container.innerHTML = `<div style="color:#b00">Error loading status</div>`;
-  }
-}, 50);
 
 
     // Delete lead
