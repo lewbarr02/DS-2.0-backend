@@ -1844,15 +1844,24 @@ window.LIST_STATUS_OPTIONS = [
               ? `<a class="website-link" href="${websiteUrl}" target="_blank" rel="noopener noreferrer">Visit</a>`
               : ''}</td>
         <td>${t(getCI(r,'notes'))}</td>
-        <td class="actions-cell">
-          <button class="row-edit-btn"
-                  data-id="${id}"
-                  title="Edit State & Industry">📝 Edit</button>
-          ${hasPin
-            ? '' 
-            : `<button class="geo-btn" data-id="${id}" title="Geocode this lead">📍 Geocode</button>`}
-          ${deleteCell}
-        </td>
+		
+<td class="actions-cell">
+  <button class="preview-btn"
+          data-id="${id}"
+          title="Open Pin Preview">👁 Preview</button>
+
+  <button class="row-edit-btn"
+          data-id="${id}"
+          title="Edit State & Industry">📝 Edit</button>
+
+  ${!hasPin 
+    ? `<button class="geo-btn" data-id="${id}" title="Geocode this lead">📍 Geocode</button>`
+    : ''
+  }
+
+  ${deleteCell}
+</td>
+
       </tr>`;
     }).join('');
 
@@ -1953,8 +1962,20 @@ window.LIST_STATUS_OPTIONS = [
       });
     });
 	
-	// 🔄 STATUS dropdown handlers
+
+
+	
+// 🔄 STATUS dropdown handlers
 $$('#leadTbody .status-select').forEach(select => {
+
+  // ✅ Prevent row-click from hijacking the dropdown open
+  ['pointerdown', 'mousedown', 'click'].forEach(evt => {
+    select.addEventListener(evt, (e) => {
+      e.stopPropagation();
+    });
+  });
+
+  // Existing change handler (save)
   select.addEventListener('change', async (e) => {
     e.stopPropagation();
 
@@ -1972,35 +1993,45 @@ $$('#leadTbody .status-select').forEach(select => {
         body: JSON.stringify({ status: newStatus })
       });
 
-      if (!res.ok) {
-        throw new Error(`Status update failed (${res.status})`);
-      }
+      if (!res.ok) throw new Error(`Status update failed (${res.status})`);
 
       const updated = await res.json().catch(() => ({}));
       const fresh   = updated.lead || updated || {};
 
-      // Patch in-memory state
       patchLeadInState(id, {
         status: newStatus,
         last_status_change: fresh.last_status_change || new Date().toISOString()
       });
 
-      // Update map marker color if present
       const marker = window.DS?.state?.markerById?.get(String(id));
       if (marker && typeof marker.setIcon === 'function') {
         marker.setIcon(iconForStatus(newStatus));
       }
 
-      // Re-render to maintain sorting
-      window.renderListView();
-
     } catch (err) {
       console.error(err);
-      alert('Status update failed. Reverting.');
-      window.renderListView();
+      alert('Could not update status — please try again.');
     }
   });
 });
+
+	// 👁 PREVIEW button handlers
+$$('#leadTbody .preview-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const id = btn.dataset.id;
+    if (!id) return;
+
+    if (typeof window.focusLeadOnMap === 'function') {
+      window.focusLeadOnMap(id);
+    } else {
+      document.getElementById('btnMapView')?.click();
+    }
+  });
+});
+
 
 
 
@@ -2225,24 +2256,36 @@ $$('#leadTbody .status-select').forEach(select => {
     });
   });
 
-  // 🗺️ Row click → jump to Map + open that lead’s pin
-  $$('#leadTbody tr').forEach(row => {
-    row.addEventListener('click', () => {
-      // Don’t navigate when inline editing is active
-      if (row.dataset.editing === '1') return;
 
-      const id = row.getAttribute('data-id');
-      if (!id) return;
+// 🗺️ Row click → jump to Map + open that lead’s pin
+$$('#leadTbody tr').forEach(row => {
+  row.addEventListener('click', (e) => {
 
-      // Ask map code to focus this lead, or at least switch to map view
-      if (typeof window.focusLeadOnMap === 'function') {
-        window.focusLeadOnMap(id);
-      } else {
-        const mapBtn = document.getElementById('btnMapView');
-        if (mapBtn) mapBtn.click();
-      }
-    });
+    // 🚫 Ignore clicks on interactive elements
+    if (
+  e.target.closest('button') ||
+  e.target.closest('select') ||
+  e.target.closest('input') ||
+  e.target.closest('a') ||
+  e.target.closest('.tags-cell') ||
+  e.target.closest('.actions-cell')
+) return;
+
+
+    // Don’t navigate when inline editing is active
+    if (row.dataset.editing === '1') return;
+
+    const id = row.getAttribute('data-id');
+    if (!id) return;
+
+    if (typeof window.focusLeadOnMap === 'function') {
+      window.focusLeadOnMap(id);
+    } else {
+      document.getElementById('btnMapView')?.click();
+    }
   });
+});
+
 
 }  // close renderListView's renderListTable
 
