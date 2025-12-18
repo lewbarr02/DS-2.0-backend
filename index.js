@@ -1,3 +1,8 @@
+function prettyStatus(raw) {
+  if (!raw) return '';
+  return String(raw).trim().replace(/_/g, '-');
+}
+
 // index.js
 require('dotenv').config();
 const express = require('express');
@@ -1085,6 +1090,8 @@ app.get('/api/forecast', async (req, res) => {
 // DAILY QUEUE ENGINE
 // =========================
 
+
+
 // Helper: clamp batch size
 function normalizeBatchSize(raw) {
   const n = parseInt(raw, 10);
@@ -1093,6 +1100,22 @@ function normalizeBatchSize(raw) {
   if (n > 100) return 100;
   return n;
 }
+
+app.get('/api/daily-queue/check/:leadId', async (req, res) => {
+  const { leadId } = req.params;
+
+  try {
+    const existing = await db('daily_queue')
+      .where({ lead_id: leadId })
+      .first();
+
+    res.json({ inQueue: !!existing });
+  } catch (err) {
+    console.error('Check error:', err);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
 
 // POST /api/daily-queue/generate
 // Body: { batch_size?: number, industries?: string[], tag?: string }
@@ -1274,6 +1297,205 @@ ap_snapshot_notes: lead.ap_snapshot_notes || null,
     client.release();
   }
 });
+
+// POST /api/daily-queue/add
+// Body: { lead_id: number }
+// Purpose: manually append a single lead into the current active Daily Queue batch
+app.post('/api/daily-queue/add', async (req, res) => {
+  const rawLeadId = req.body?.lead_id;
+  const leadId = parseInt(rawLeadId, 10);
+
+  if (!Number.isFinite(leadId) || leadId <= 0) {
+    return res.status(400).json({ ok: false, error: 'invalid_lead_id' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1) Find active batch (latest incomplete)
+    const findBatchSql = `
+      SELECT id, created_at, batch_size, is_completed
+      FROM daily_batches
+      WHERE COALESCE(is_completed, false) = false
+      ORDER BY created_at DESC
+      LIMIT 1
+      FOR UPDATE;
+    `;
+    let { rows: batchRows } = await client.query(findBatchSql);
+
+    // 2) If no active batch exists, create one (mirrors generate batch insert)
+    // NOTE: batch_size here is just a display field; progress/total are computed from item rows.
+    if (!batchRows.length) {
+      const createBatchSql = `
+        INSERT INTO daily_batches (batch_date, batch_size, is_completed)
+        VALUES (CURRENT_DATE, $1, false)
+        RETURNING id, created_at, batch_size, is_completed;
+      `;
+      const created = await client.query(createBatchSql, [20]); // default display size
+      batchRows = created.rows;
+    }
+
+    const batch = batchRows[0];
+
+    // 3) Validate lead exists
+    const leadSql = `
+      SELECT *
+      FROM leads
+      WHERE id = $1
+      LIMIT 1;
+    `;
+    const { rows: leadRows } = await client.query(leadSql, [leadId]);
+    if (!leadRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'lead_not_found' });
+    }
+    const lead = leadRows[0];
+
+    // 4) Prevent duplicates in the same active batch
+    const dupSql = `
+      SELECT id, batch_id, lead_id, position, is_completed, is_skipped
+      FROM daily_batch_items
+      WHERE batch_id = $1 AND lead_id = $2
+      LIMIT 1;
+    `;
+    const { rows: dupRows } = await client.query(dupSql, [batch.id, leadId]);
+    if (dupRows.length) {
+      const existing = dupRows[0];
+      await client.query('COMMIT');
+
+      return res.json({
+        ok: true,
+        message: 'already_in_active_batch',
+        batch: {
+          id: batch.id,
+          created_at: batch.created_at,
+          batch_size: batch.batch_size,
+          is_completed: batch.is_completed,
+        },
+        item: {
+          item_id: existing.id,
+          batch_id: existing.batch_id,
+          lead_id: existing.lead_id,
+          position: existing.position,
+          is_completed: existing.is_completed,
+          is_skipped: existing.is_skipped,
+
+          // Flattened lead fields (match the shape used by generate/current)
+          id: lead.id,
+          name: lead.name,
+          company: lead.company,
+          city: lead.city,
+          state: lead.state,
+          status: lead.status,
+          industry: lead.industry,
+          website: lead.website || null,
+
+          ap_snapshot_status: lead.ap_snapshot_status || null,
+          ap_snapshot_run_at: lead.ap_snapshot_run_at || null,
+          ap_snapshot_arr: lead.ap_snapshot_arr ?? null,
+          ap_snapshot_arr_confidence: lead.ap_snapshot_arr_confidence || null,
+          ap_snapshot_suppliers: lead.ap_snapshot_suppliers ?? null,
+          ap_snapshot_ap_spend: lead.ap_snapshot_ap_spend ?? null,
+          ap_snapshot_source: lead.ap_snapshot_source || null,
+          ap_snapshot_notes: lead.ap_snapshot_notes || null,
+
+          forecast_month: lead.forecast_month,
+          lead_type: lead.lead_type,
+          arr: lead.arr,
+          ap_spend: lead.ap_spend,
+          last_touch_at: lead.last_touch_at,
+          next_touch_at: lead.next_touch_at,
+          next_action_at: lead.next_action_at,
+          last_activity_at: lead.last_contacted_at || lead.last_touch_at || null,
+
+          lead,
+        },
+      });
+    }
+
+    // 5) Determine next position (append to end)
+    const posSql = `
+      SELECT COALESCE(MAX(position), 0) + 1 AS next_pos
+      FROM daily_batch_items
+      WHERE batch_id = $1;
+    `;
+    const { rows: posRows } = await client.query(posSql, [batch.id]);
+    const nextPos = Number(posRows[0]?.next_pos || 1);
+
+    // 6) Insert new batch item (mirrors generate item insert)
+    const insertItemSql = `
+      INSERT INTO daily_batch_items (batch_id, lead_id, position, is_completed, is_skipped)
+      VALUES ($1, $2, $3, false, false)
+      RETURNING id, batch_id, lead_id, position, is_completed, is_skipped;
+    `;
+    const { rows: itemRows } = await client.query(insertItemSql, [
+      batch.id,
+      leadId,
+      nextPos,
+    ]);
+
+    const item = itemRows[0];
+
+    await client.query('COMMIT');
+
+    return res.json({
+      ok: true,
+      message: 'added_to_active_batch',
+      batch: {
+        id: batch.id,
+        created_at: batch.created_at,
+        batch_size: batch.batch_size,
+        is_completed: batch.is_completed,
+      },
+      item: {
+        item_id: item.id,
+        batch_id: item.batch_id,
+        lead_id: item.lead_id,
+        position: item.position,
+        is_completed: item.is_completed,
+        is_skipped: item.is_skipped,
+
+        // Flattened lead fields (match the shape used by generate/current)
+        id: lead.id,
+        name: lead.name,
+        company: lead.company,
+        city: lead.city,
+        state: lead.state,
+        status: lead.status,
+        industry: lead.industry,
+        website: lead.website || null,
+
+        ap_snapshot_status: lead.ap_snapshot_status || null,
+        ap_snapshot_run_at: lead.ap_snapshot_run_at || null,
+        ap_snapshot_arr: lead.ap_snapshot_arr ?? null,
+        ap_snapshot_arr_confidence: lead.ap_snapshot_arr_confidence || null,
+        ap_snapshot_suppliers: lead.ap_snapshot_suppliers ?? null,
+        ap_snapshot_ap_spend: lead.ap_snapshot_ap_spend ?? null,
+        ap_snapshot_source: lead.ap_snapshot_source || null,
+        ap_snapshot_notes: lead.ap_snapshot_notes || null,
+
+        forecast_month: lead.forecast_month,
+        lead_type: lead.lead_type,
+        arr: lead.arr,
+        ap_spend: lead.ap_spend,
+        last_touch_at: lead.last_touch_at,
+        next_touch_at: lead.next_touch_at,
+        next_action_at: lead.next_action_at,
+        last_activity_at: lead.last_contacted_at || lead.last_touch_at || null,
+
+        lead,
+      },
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('POST /api/daily-queue/add error:', err);
+    return res.status(500).json({ ok: false, error: 'daily_queue_add_failed' });
+  } finally {
+    client.release();
+  }
+});
+
 
 // GET /api/daily-queue/current
 app.get('/api/daily-queue/current', async (_req, res) => {

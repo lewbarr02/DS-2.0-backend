@@ -811,11 +811,15 @@ function normalizeWebsite(url) {
     Edit
   </button>
 
+<div class="ds-add-to-queue-container"></div>
+
+
   <button class="ds-btn-close"
           style="padding:.4rem .7rem;border:1px solid #ddd;border-radius:8px;cursor:pointer;background:white">
     Close
   </button>
 </div>
+
 
     `;
   }
@@ -951,12 +955,53 @@ function attachPopupEventDelegates() {
   document.addEventListener("click", async (e) => {
     const node = e.target;
 
-    // Edit from preview → open edit form
+
+	
+	    // Edit from preview → open edit form
     if (node.classList?.contains("ds-btn-edit")) {
       e.preventDefault();
       const latlng = dsPopup.getLatLng();
       openLeadPopup("edit", latlng);
     }
+
++   // ➕ Add to Daily Queue (from map popup)
++   if (node.classList?.contains("ds-btn-add-to-queue")) {
++     e.preventDefault();
++     if (!DS_CURRENT_LEAD || !DS_CURRENT_LEAD.id) return;
++
++     const original = node.textContent;
++     node.disabled = true;
++     node.textContent = "Adding…";
++
++     try {
++       const res = await fetch(`${API_BASE}/api/daily-queue/add`, {
++         method: "POST",
++         headers: { "Content-Type": "application/json" },
++         body: JSON.stringify({ lead_id: DS_CURRENT_LEAD.id })
++       });
++
++       const data = await res.json().catch(() => ({}));
++       if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
++
++       node.textContent = "✅ Added";
+// Replace the entire container so the button becomes permanently disabled
+const container = document.querySelector('.ds-add-to-queue-container');
+if (container) {
+  container.innerHTML = `
+    <button class="ds-btn-add-to-queue" disabled
+            style="padding:.4rem .7rem;border-radius:8px;background:#e8e8e8;border:1px solid #ccc;cursor:not-allowed;">
+      ✅ In Queue
+    </button>`;
+}
+
++     } catch (err) {
++       console.error("Add-to-Queue failed:", err);
++       alert("Could not add to Daily Queue.");
++       node.disabled = false;
++       node.textContent = original;
++     }
++   }
+
 
     // Website links
     if (node.classList?.contains("ds-website-link")) {
@@ -980,6 +1025,35 @@ function attachPopupEventDelegates() {
       const latlng = dsPopup.getLatLng();
       openLeadPopup("preview", latlng);
     }
+	
+	// After popup renders, check if lead is already in queue
+setTimeout(async () => {
+  const container = document.querySelector('.ds-add-to-queue-container');
+  if (!container || !DS_CURRENT_LEAD) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/daily-queue/check/${DS_CURRENT_LEAD.id}`);
+    const data = await res.json();
+
+    if (data.inQueue) {
+      container.innerHTML = `
+        <button class="ds-btn-add-to-queue" disabled
+                style="padding:.4rem .7rem;border:1px solid #ccc;border-radius:8px;background:#e8e8e8;cursor:not-allowed;">
+          ✅ In Queue
+        </button>`;
+    } else {
+      container.innerHTML = `
+        <button class="ds-btn-add-to-queue"
+                style="padding:.4rem .7rem;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;">
+          ➕ Add
+        </button>`;
+    }
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = `<div style="color:#b00">Error loading status</div>`;
+  }
+}, 50);
+
 
     // Delete lead
     if (node.classList?.contains("ds-btn-delete")) {
