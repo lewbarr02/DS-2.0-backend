@@ -1769,7 +1769,36 @@ function getCI(row, key) {
     return STATUS_RANK.unspecified;
   }
   
-  
+  // =====================================
+// STATUS NORMALIZATION HELPERS (REQUIRED)
+// =====================================
+
+// Converts DB/CSV statuses into clean, frontend-safe keys
+function statusKey(raw) {
+  if (!raw) return 'unspecified';
+
+  return String(raw)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')      // turn spaces into hyphens
+    .replace(/_/g, '-')        // unify underscores → hyphens
+    .replace(/[^a-z\-]/g, ''); // remove weird chars
+}
+
+// Human-friendly + emoji for display
+function prettyStatus(key) {
+  switch (key) {
+    case 'converted':   return '🏆 Converted';
+    case 'hot':         return '🔥 Hot';
+    case 'warm':        return '🌞 Warm';
+    case 'follow-up':   return '⏳ Follow-Up';
+    case 'cold':        return '🧊 Cold';
+    case 'research':    return '🔍 Research';
+    case 'unspecified': return '⚪ Unspecified';
+    default:            return '⚪ Unspecified';
+  }
+}
+
 
   function renderListTable(rows) {
     const thead = $('#leadThead');
