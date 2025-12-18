@@ -1812,14 +1812,19 @@ window.LIST_STATUS_OPTIONS = [
       return `<tr data-id="${id}">
         
 		
-		<td class="status-cell">
+<td class="status-cell">
   <select class="status-select" data-id="${id}">
-    ${window.LIST_STATUS_OPTIONS.map(opt => {
-      const isSelected = String(getCI(r,'status') || '').toLowerCase() === opt.value.toLowerCase();
-      return `<option value="${opt.value}" ${isSelected ? 'selected' : ''}>${opt.label}</option>`;
-    }).join('')}
+    <option value="converted"   ${rawStatus === 'converted' ? 'selected' : ''}>Converted</option>
+    <option value="hot"         ${rawStatus === 'hot' ? 'selected' : ''}>Hot</option>
+    <option value="warm"        ${rawStatus === 'warm' ? 'selected' : ''}>Warm</option>
+    <option value="cold"        ${rawStatus === 'cold' ? 'selected' : ''}>Cold</option>
+    <option value="research"    ${rawStatus === 'research' ? 'selected' : ''}>Research</option>
+    <option value="follow-up"   ${rawStatus === 'follow-up' ? 'selected' : ''}>Follow-Up</option>
+    <option value="unspecified" ${rawStatus === 'unspecified' ? 'selected' : ''}>Unspecified</option>
   </select>
 </td>
+
+
 		
         <td>${hasPin ? '✅' : '❌'}</td>
         <td>${t(getCI(r,'company'))}</td>
