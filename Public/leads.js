@@ -192,7 +192,7 @@ function normalizeStateLabel(raw) {
   DS.statusKey = statusKey;
 
 
-  function iconForStatus(status){
+  window.iconForStatus = function iconForStatus(status){
     const file = STATUS_ICON[statusKey(status)] || STATUS_ICON._default;
     return L.icon({
       iconUrl: ICON_BASE + file,
