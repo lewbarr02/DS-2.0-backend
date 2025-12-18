@@ -651,6 +651,44 @@ html, body {
       }
       .status-cell { white-space: nowrap; font-weight: 600; }
       .website-link { color: #0b6bcb; text-decoration: none; }
+	  
+	  /* ============================================
+   LIST VIEW — STATUS COLORS + BADGE UI
+   (Lewis Visual Processor Upgrade)
+   ============================================ */
+
+#leadTable tbody tr.lead-row {
+  border-left: 8px solid transparent;
+}
+
+#leadTable tbody tr.lead-row td.status-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Emoji badge next to the dropdown */
+.status-badge {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 14px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+/* Status-based colored outlines */
+#leadTable tbody tr.status-converted   { border-left-color: #16a34a; } /* green */
+#leadTable tbody tr.status-hot         { border-left-color: #dc2626; } /* red */
+#leadTable tbody tr.status-warm        { border-left-color: #f97316; } /* orange */
+#leadTable tbody tr.status-follow-up   { border-left-color: #facc15; } /* yellow */
+#leadTable tbody tr.status-cold        { border-left-color: #2563eb; } /* blue */
+#leadTable tbody tr.status-research    { border-left-color: #7c3aed; } /* violet */
+#leadTable tbody tr.status-unspecified { border-left-color: #6b7280; } /* gray */
+
 
       /* Modal (existing) */
       .modal.hidden { display: none; }
@@ -1790,7 +1828,8 @@ window.LIST_STATUS_OPTIONS = [
 
     // Rows
     const html = rows.map(r => {
-	  const rawStatus = String(getCI(r, 'status') || '').toLowerCase();
+	  const rawStatus = statusKey(getCI(r, 'status') || 'unspecified'); // ALWAYS normalized (follow_up → follow-up)
+const statusEmoji = prettyStatus(rawStatus).split(' ')[0];        // 🏆 / 🔥 / 🌞 / ⏳ / 🧊 / 🔍 / ⚪
       const t = (v) => (v == null || v === '') ? '' : String(v);
       const website = getCI(r,'website');
       const websiteUrl = website ? normalizeWebsiteUrl(website) : '';
@@ -1810,20 +1849,24 @@ window.LIST_STATUS_OPTIONS = [
       // Tags value as plain string for initial display
       const rawTags = t(getCI(r,'tags'));
 
-      return `<tr data-id="${id}">
+      return `<tr data-id="${id}" class="lead-row status-${rawStatus}">
+
         
 		
 <td class="status-cell">
+  <span class="status-badge" title="${prettyStatus(rawStatus)}">${statusEmoji}</span>
+
   <select class="status-select" data-id="${id}">
-    <option value="converted"   ${rawStatus === 'converted' ? 'selected' : ''}>Converted</option>
-    <option value="hot"         ${rawStatus === 'hot' ? 'selected' : ''}>Hot</option>
-    <option value="warm"        ${rawStatus === 'warm' ? 'selected' : ''}>Warm</option>
-    <option value="cold"        ${rawStatus === 'cold' ? 'selected' : ''}>Cold</option>
-    <option value="research"    ${rawStatus === 'research' ? 'selected' : ''}>Research</option>
-    <option value="follow-up"   ${rawStatus === 'follow-up' ? 'selected' : ''}>Follow-Up</option>
-    <option value="unspecified" ${rawStatus === 'unspecified' ? 'selected' : ''}>Unspecified</option>
+    <option value="converted"   ${rawStatus === 'converted' ? 'selected' : ''}>🏆 Converted</option>
+    <option value="hot"         ${rawStatus === 'hot' ? 'selected' : ''}>🔥 Hot</option>
+    <option value="warm"        ${rawStatus === 'warm' ? 'selected' : ''}>🌞 Warm</option>
+    <option value="follow-up"   ${rawStatus === 'follow-up' ? 'selected' : ''}>⏳ Follow-Up</option>
+    <option value="cold"        ${rawStatus === 'cold' ? 'selected' : ''}>🧊 Cold</option>
+    <option value="research"    ${rawStatus === 'research' ? 'selected' : ''}>🔍 Research</option>
+    <option value="unspecified" ${rawStatus === 'unspecified' ? 'selected' : ''}>⚪ Unspecified</option>
   </select>
 </td>
+
 
 
 		
