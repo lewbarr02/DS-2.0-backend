@@ -555,7 +555,7 @@ if (els.pinCount()) {
   }
 }
 
-  
+}  
 
 
   function populateFilterOptions() {
