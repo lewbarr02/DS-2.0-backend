@@ -1790,6 +1790,7 @@ window.LIST_STATUS_OPTIONS = [
 
     // Rows
     const html = rows.map(r => {
+	  const rawStatus = String(getCI(r, 'status') || '').toLowerCase();
       const t = (v) => (v == null || v === '') ? '' : String(v);
       const website = getCI(r,'website');
       const websiteUrl = website ? normalizeWebsiteUrl(website) : '';
