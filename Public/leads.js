@@ -811,7 +811,7 @@ function normalizeWebsite(url) {
     Edit
   </button>
 
-<div class="ds-add-to-queue-container"></div>
+<div class="ds-btn-add-to-queue-container"></div>
 
 
   <button class="ds-btn-close"
