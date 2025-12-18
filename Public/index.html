@@ -1883,18 +1883,30 @@ const statusEmoji = prettyStatus(rawStatus).split(' ')[0];        // 🏆 / 🔥
         
 		
 <td class="status-cell">
-  <span class="status-badge" title="${prettyStatus(rawStatus)}">${statusEmoji}</span>
+  <div class="ds-status-actions" style="display:flex;gap:6px;align-items:center;">
+    <span class="status-badge" title="${prettyStatus(rawStatus)}">
+      ${statusEmoji}
+    </span>
 
-  <select class="status-select" data-id="${id}">
-    <option value="converted"   ${rawStatus === 'converted' ? 'selected' : ''}>🏆 Converted</option>
-    <option value="hot"         ${rawStatus === 'hot' ? 'selected' : ''}>🔥 Hot</option>
-    <option value="warm"        ${rawStatus === 'warm' ? 'selected' : ''}>🌞 Warm</option>
-    <option value="follow-up"   ${rawStatus === 'follow-up' ? 'selected' : ''}>⏳ Follow-Up</option>
-    <option value="cold"        ${rawStatus === 'cold' ? 'selected' : ''}>🧊 Cold</option>
-    <option value="research"    ${rawStatus === 'research' ? 'selected' : ''}>🔍 Research</option>
-    <option value="unspecified" ${rawStatus === 'unspecified' ? 'selected' : ''}>⚪ Unspecified</option>
-  </select>
+    <select class="status-select" data-id="${id}">
+      <option value="converted"   ${rawStatus === 'converted' ? 'selected' : ''}>🏆 Converted</option>
+      <option value="hot"         ${rawStatus === 'hot' ? 'selected' : ''}>🔥 Hot</option>
+      <option value="warm"        ${rawStatus === 'warm' ? 'selected' : ''}>🌞 Warm</option>
+      <option value="follow-up"   ${rawStatus === 'follow-up' ? 'selected' : ''}>⏳ Follow-Up</option>
+      <option value="cold"        ${rawStatus === 'cold' ? 'selected' : ''}>🧊 Cold</option>
+      <option value="research"    ${rawStatus === 'research' ? 'selected' : ''}>🔍 Research</option>
+      <option value="unspecified" ${rawStatus === 'unspecified' ? 'selected' : ''}>⚪ Unspecified</option>
+    </select>
+
+    <button class="ds-btn-add-to-queue"
+            data-lead-id="${id}"
+            title="Add to Daily Queue"
+            style="padding:4px 8px;border-radius:6px;border:1px solid #ddd;background:#fff;cursor:pointer;">
+      ➕ Queue
+    </button>
+  </div>
 </td>
+
 
 
 
@@ -2567,6 +2579,47 @@ window.renderListView = function renderListView() {
       });
     }
   });
+  
+  document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.ds-btn-add-to-queue');
+  if (!btn) return;
+
+  e.preventDefault();
+
+  const leadId = btn.dataset.leadId;
+  if (!leadId) return;
+
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Adding…';
+
+  try {
+    const res = await fetch('/api/daily-queue/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lead_id: leadId })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+
+    // Lock button permanently for this render cycle
+    btn.textContent = '✓ In Queue';
+    btn.style.background = '#e8e8e8';
+    btn.style.borderColor = '#ccc';
+    btn.style.cursor = 'not-allowed';
+
+  } catch (err) {
+    console.error('Add-to-Queue failed:', err);
+    alert('Could not add to Daily Queue.');
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+});
+
+  
 </script>
 
 <script>
