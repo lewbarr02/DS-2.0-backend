@@ -630,6 +630,22 @@ if (els.pinCount()) {
     setOpts(els.industryFilter(), uniqueFrom('industry'));
   }
 
+// ======================================================
+// 🔁 Force true zero-state filters on first load
+// ======================================================
+function resetAllFiltersToZero() {
+  if (els.tagFilter())      els.tagFilter().value = 'All';
+  if (els.typeFilter())     els.typeFilter().value = 'All';
+  if (els.cadenceFilter())  els.cadenceFilter().value = 'All';
+  if (els.stateFilter())    els.stateFilter().value = 'All';
+  if (els.industryFilter()) els.industryFilter().value = 'All';
+
+  if (els.startDate()) els.startDate().value = '';
+  if (els.endDate())   els.endDate().value = '';
+
+  // ✅ Neutral state = ALL statuses checked
+  els.statusChecks().forEach(cb => cb.checked = true);
+}
 
 
 
@@ -655,7 +671,7 @@ function wireDashboard() {
       if (els.tagFilter()) els.tagFilter().value = 'All';
       if (els.typeFilter()) els.typeFilter().value = 'All';
       if (els.cadenceFilter()) els.cadenceFilter().value = 'All';
-      if (els.stateFilter()) els.stateFilter().value = 'All';
+      if (els.industryFilter()) els.industryFilter().value = 'All';
       if (els.startDate()) els.startDate().value = '';
       if (els.endDate()) els.endDate().value = '';
       els.statusChecks().forEach(cb => cb.checked = true);
@@ -1342,12 +1358,15 @@ window.focusLeadOnMap = function focusLeadOnMap(id) {
       return;
     }
 
-  DS.state.rawRows = unwrapData(payload);
-  populateFilterOptions();
-  wireDashboard();
-  computeFiltered();
-  renderMarkers();
-  updateStats();
+DS.state.rawRows = unwrapData(payload);
+populateFilterOptions();
+resetAllFiltersToZero();   // ✅ REQUIRED
+computeFiltered();
+renderMarkers();
+updateStats();
+
+
+
 
   // 🔁 Initial List View render once data + filters are ready
   if (typeof window.renderListView === 'function') {
@@ -1358,8 +1377,9 @@ window.focusLeadOnMap = function focusLeadOnMap(id) {
 
 
   // Auto-run boot once when the page loads
-  if (!DS.leadsBootBound) {
-    document.addEventListener('DOMContentLoaded', boot);
-    DS.leadsBootBound = true;
-  }
+if (!DS.leadsBootBound) {
+  document.addEventListener('DOMContentLoaded', boot);
+  DS.leadsBootBound = true;
+}
 })();
+
