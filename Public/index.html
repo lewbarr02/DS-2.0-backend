@@ -1800,54 +1800,44 @@ function prettyStatus(key) {
 }
 
 
- function renderListTable(rows, baseRows) {
+function renderListTable(rows, baseRows) {
 
-    const thead = $('#leadThead');
-    const tbody = $('#leadTbody');
-    const count = $('#leadCount');
-	
-if (count) {
-  if (activeStatuses.length === 1) {
-    const s = activeStatuses[0];
-    const total = safeBase.filter(
-      r => statusKey(getCI(r, 'status')) === s
-    ).length;
-    const shown = safeRows.length;
+  const thead = $('#leadThead');
+  const tbody = $('#leadTbody');
+  const count = $('#leadCount');
 
-    count.textContent =
-      `Showing ${shown} of ${total} ${titleStatus(s)} leads`;
-  } else {
-    count.textContent =
-      `Showing ${safeRows.length} of ${safeBase.length} leads`;
+  // ===== List Banner: "Showing X of Y ..." =====
+  const activeStatuses = $$('#listToolbar .chip.active[data-status]')
+    .map(el => (el.dataset.status || '').toLowerCase())
+    .filter(Boolean);
+
+  const safeBase = Array.isArray(baseRows) ? baseRows : [];
+  const safeRows = Array.isArray(rows) ? rows : [];
+
+  function titleStatus(s) {
+    if (s === 'follow-up') return 'Follow-Up';
+    return (s || '').replace(/\b\w/g, c => c.toUpperCase());
   }
-}
-	
-	
-	
 
-// ===== List Banner: "Showing X of Y ..." =====
-const activeStatuses = $$('#listToolbar .chip.active[data-status]')
-  .map(el => (el.dataset.status || '').toLowerCase())
-  .filter(Boolean);
+  if (count) {
+    if (activeStatuses.length === 1) {
+      const s = activeStatuses[0];
+      const total = safeBase.filter(
+        r => statusKey(getCI(r, 'status')) === s
+      ).length;
+      const shown = safeRows.length;
 
-const safeBase = Array.isArray(baseRows) ? baseRows : [];
-const safeRows = Array.isArray(rows) ? rows : [];
-
-function titleStatus(s) {
-  if (s === 'follow-up') return 'Follow-Up';
-  return (s || '').replace(/\b\w/g, c => c.toUpperCase());
-}
-
-if (count) {
-  if (activeStatuses.length === 1) {
-    const s = activeStatuses[0];
-    const total = safeBase.filter(r => statusKey(getCI(r, 'status')) === s).length;
-    const shown = safeRows.length;
-    count.textContent = `Showing ${shown} of ${total} ${titleStatus(s)} leads`;
-  } else {
-    count.textContent = `Showing ${safeRows.length} of ${safeBase.length} leads`;
+      count.textContent =
+        `Showing ${shown} of ${total} ${titleStatus(s)} leads`;
+    } else {
+      count.textContent =
+        `Showing ${safeRows.length} of ${safeBase.length} leads`;
+    }
   }
-}
+
+  // ✅ everything else continues BELOW
+
+
 
 
     // Header with sort indicators
