@@ -638,7 +638,11 @@ html, body {
       #columnsMenu .panel { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 8px; margin-top: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
       #columnsMenu .panel label { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; }
 
-      #leadTableWrap { height: calc(100% - 64px); overflow: auto; }
+      #leadTableWrap {
+  height: calc(100% - 96px); /* toolbar + counter */
+  overflow: auto;
+}
+
       table { width: 100%; border-collapse: collapse; font-size: 14px; background: #fff; }
       thead th {
         position: sticky; top: 0; background: #fff; z-index: 1; text-align: left; padding: 10px; border-bottom: 1px solid #eee; cursor: default;
@@ -1190,14 +1194,20 @@ html, body {
 
 
 
-      <div id="leadTableWrap">
-        <table id="leadTable" aria-describedby="leadCount">
-          <thead id="leadThead"><tr id="leadHeaderRow"></tr></thead>
-          <tbody id="leadTbody"></tbody>
-        </table>
-      </div>
-      <div id="leadCount" style="padding:8px 12px; font-size:12px; color:#555;">0 leads</div>
-    </div>
+<div id="leadCount"
+     style="padding:8px 12px; font-size:12px; color:#555;">
+  0 leads
+</div>
+
+<div id="leadTableWrap">
+  <table id="leadTable" aria-describedby="leadCount">
+    <thead id="leadThead">
+      <tr id="leadHeaderRow"></tr>
+    </thead>
+    <tbody id="leadTbody"></tbody>
+  </table>
+</div>
+
 
     <!-- NEW: Account 360° slide-in panel -->
     <div id="account360Panel" class="slide-panel hidden"></div>
@@ -1800,6 +1810,9 @@ function prettyStatus(key) {
 }
 
 
+
+
+
 function renderListTable(rows, baseRows) {
 
   const thead = $('#leadThead');
@@ -1995,7 +2008,7 @@ const statusEmoji = prettyStatus(rawStatus).split(' ')[0];        // 🏆 / 🔥
 
     tbody.innerHTML = html;
 
-    count.textContent = `${rows.length} lead${rows.length===1?'':'s'}`;
+ 
 
     // 🔥 DELETE button handlers
     $$('#leadTbody .list-delete-btn').forEach(btn => {
