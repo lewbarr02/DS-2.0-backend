@@ -1,6 +1,17 @@
 // public/js/daily-queue.js
 document.addEventListener('DOMContentLoaded', () => {
-  const listEl = document.getElementById('dq-list');
+
+const activeListEl = document.getElementById('dq-active-list');
+const doneListEl = document.getElementById('dq-done-list');
+const doneWrapperEl = document.getElementById('dq-done-wrapper');
+const doneCountEl = document.getElementById('dq-done-count');
+
+const doneToggleBtn = document.getElementById('dq-done-toggle');
+const doneToggleLabelEl = document.getElementById('dq-done-toggle-label');
+const doneChevronEl = document.getElementById('dq-done-chevron');
+
+
+
   // Daily goals (Finexio targets)
   const CALL_GOAL = 50;
   const EMAIL_GOAL = 30;
@@ -41,6 +52,40 @@ document.addEventListener('DOMContentLoaded', () => {
   // ———————————————————————
   // Helpers
   // ———————————————————————
+  
+  // Done Today collapse state (remembered per session)
+const DONE_COLLAPSE_KEY = 'dq_done_collapsed';
+
+function setDoneCollapsed(collapsed) {
+  if (!doneListEl || !doneToggleBtn || !doneToggleLabelEl || !doneChevronEl) return;
+
+  doneListEl.style.display = collapsed ? 'none' : 'block';
+  doneToggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  doneToggleLabelEl.textContent = collapsed ? 'Expand' : 'Collapse';
+  doneChevronEl.textContent = collapsed ? '▸' : '▾';
+
+  try {
+    sessionStorage.setItem(DONE_COLLAPSE_KEY, collapsed ? '1' : '0');
+  } catch (_) {}
+}
+
+function getDoneCollapsed() {
+  try {
+    return sessionStorage.getItem(DONE_COLLAPSE_KEY) === '1';
+  } catch (_) {
+    return false;
+  }
+}
+
+// Toggle click
+if (doneToggleBtn) {
+  doneToggleBtn.addEventListener('click', () => {
+    const next = !getDoneCollapsed();
+    setDoneCollapsed(next);
+  });
+}
+
+  
   function setTodayText() {
     const d = new Date();
     const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -271,7 +316,7 @@ async function runApSnapshot(leadId, cardEl) {
 
   function computeIsDone(item) {
     // Prefer backend flags if present
-    if (typeof item.is_done === 'boolean') return item.is_done;
+    if (typeof item.is_done === 'boolean') return item.is_done || !!item.is_skipped;
     if (typeof item.is_completed === 'boolean') {
       // Count skipped as "done" for progress too
       return item.is_completed || !!item.is_skipped;
@@ -321,7 +366,7 @@ async function runApSnapshot(leadId, cardEl) {
   }
 
   function focusFirstActiveCard() {
-    const cards = listEl.querySelectorAll('.dq-queue-card');
+    const cards = activeListEl.querySelectorAll('.dq-queue-card');
     let firstActive = null;
 
     cards.forEach((card) => {
@@ -380,28 +425,51 @@ async function runApSnapshot(leadId, cardEl) {
   // ———————————————————————
   // Render
   // ———————————————————————
-  function renderBatch() {
-    const total = items.length;
+function renderBatch() {
+  const total = items.length;
 
-    if (!total) {
-      listEl.innerHTML = '';
-      emptyEl.style.display = 'block';
-      if (finishedEl) finishedEl.style.display = 'none';
-      updateProgress();
-      return;
-    }
+  if (!total) {
+    activeListEl.innerHTML = '';
+    doneListEl.innerHTML = '';
+    emptyEl.style.display = 'block';
+    if (finishedEl) finishedEl.style.display = 'none';
 
-    emptyEl.style.display = 'none';
-    listEl.innerHTML = '';
-
-    items.forEach((item) => {
-      const cardEl = renderCard(item);
-      listEl.appendChild(cardEl);
-    });
+    doneWrapperEl.style.display = 'none';
+    doneCountEl.textContent = '0';
 
     updateProgress();
-    focusFirstActiveCard();
+    return;
   }
+
+  emptyEl.style.display = 'none';
+
+  activeListEl.innerHTML = '';
+  doneListEl.innerHTML = '';
+
+  const activeItems = items.filter(i => !computeIsDone(i));
+  const doneItems = items.filter(i => computeIsDone(i));
+
+  activeItems.forEach(item => activeListEl.appendChild(renderCard(item)));
+  doneItems.forEach(item => doneListEl.appendChild(renderCard(item)));
+
+if (doneItems.length > 0) {
+  doneWrapperEl.style.display = 'block';
+  doneCountEl.textContent = String(doneItems.length);
+
+  // Respect saved collapse state
+  setDoneCollapsed(getDoneCollapsed());
+} else {
+  doneWrapperEl.style.display = 'none';
+  doneCountEl.textContent = '0';
+}
+
+
+  updateProgress();
+  focusFirstActiveCard();
+}
+
+
+
 
   // Handle clicks inside a card (activate card + Done/Skip buttons)
   function onCardClick(event) {
@@ -460,7 +528,7 @@ if (action === 'ap-snapshot') {
     }
 
     // Otherwise, just set this card as the active card
-    const cards = listEl.querySelectorAll('.dq-queue-card');
+    const cards = activeListEl.querySelectorAll('.dq-queue-card');
     cards.forEach((c) => c.classList.remove('dq-queue-card--active'));
     cardEl.classList.add('dq-queue-card--active');
   }
@@ -788,11 +856,23 @@ if (action === 'ap-snapshot') {
       cardEl.classList.add('dq-queue-card--done');
 
       // …then animate collapse, and only after that move it to the bottom
-      animateCardDone(cardEl, () => {
-        listEl.appendChild(cardEl);
-        updateProgress();
-        focusFirstActiveCard();
-      });
+animateCardDone(cardEl, () => {
+  // Move into Done Today section
+  doneListEl.appendChild(cardEl);
+
+  // Make sure the Done Today header is visible + count is correct
+doneWrapperEl.style.display = 'block';
+const doneNow = items.filter((i) => computeIsDone(i)).length;
+doneCountEl.textContent = String(doneNow);
+
+// 🔹 Re-apply collapse preference immediately
+setDoneCollapsed(getDoneCollapsed());
+
+updateProgress();
+focusFirstActiveCard();
+
+});
+
     } catch (err) {
       console.error('Error marking done', err);
       alert('Error reaching the server while marking this item as done.');
@@ -824,11 +904,23 @@ if (action === 'ap-snapshot') {
       }
 
       // Grey it out + move to bottom
-      cardEl.classList.add('dq-queue-card--done');
-      listEl.appendChild(cardEl);
+cardEl.classList.add('dq-queue-card--done');
 
-      updateProgress();
-      focusFirstActiveCard();
+// Move into Done Today section
+doneListEl.appendChild(cardEl);
+
+// Make sure the Done Today header is visible + count is correct
+doneWrapperEl.style.display = 'block';
+const doneNow = items.filter((i) => computeIsDone(i)).length;
+doneCountEl.textContent = String(doneNow);
+
+// 🔹 Re-apply collapse preference immediately
+setDoneCollapsed(getDoneCollapsed());
+
+updateProgress();
+focusFirstActiveCard();
+
+
     } catch (err) {
       console.error('Error skipping item', err);
       alert('Error reaching the server while skipping this item.');
@@ -838,10 +930,11 @@ if (action === 'ap-snapshot') {
   // ———————————————————————
   // Keyboard navigation helpers
   // ———————————————————————
-  function getQueueCards() {
-    if (!listEl) return [];
-    return Array.from(listEl.querySelectorAll('.dq-queue-card'));
-  }
+function getQueueCards() {
+  if (!activeListEl) return [];
+  return Array.from(activeListEl.querySelectorAll('.dq-queue-card'));
+}
+
 
   function getActiveCardInfo() {
     const cards = getQueueCards();

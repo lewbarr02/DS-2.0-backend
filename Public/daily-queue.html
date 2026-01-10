@@ -790,7 +790,29 @@
           </div>
         </div>
 
-        <div id="dq-list"></div>
+    <div id="dq-active-list"></div>
+
+<div id="dq-done-wrapper" style="display:none; margin-top:24px;">
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;">
+    <h3 style="font-size:14px; font-weight:700; color:#374151; margin:0;">
+      Done Today (<span id="dq-done-count">0</span>)
+    </h3>
+
+    <button
+      id="dq-done-toggle"
+      type="button"
+      style="border:1px solid #d1d5db; background:#ffffff; border-radius:999px; padding:6px 10px; font-size:12px; font-weight:700; cursor:pointer;"
+      aria-expanded="true"
+      aria-controls="dq-done-list">
+      <span id="dq-done-toggle-label">Collapse</span> <span id="dq-done-chevron">▾</span>
+    </button>
+  </div>
+
+  <div id="dq-done-list"></div>
+</div>
+
+
+
       </section>
     </main>
   </div>
