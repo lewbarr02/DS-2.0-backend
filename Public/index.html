@@ -2296,6 +2296,23 @@ $$('#leadTbody .preview-btn').forEach(btn => {
   // 🧱 Account 360 Panel (List View Option B — panel-only editing)
   const account360Panel = document.getElementById('account360Panel');
 
+  // ✅ Helper: find lead by id from DS memory (rawRows preferred)
+  function findLeadById(id) {
+    const DS = window.DS || {};
+    const st = DS.state || {};
+    const rows = (st.rawRows || st.filtered || []);
+    if (!Array.isArray(rows)) return null;
+
+    const target = String(id);
+    return rows.find(r => {
+      const rid = r.id ?? r.ID ?? r.lead_id ?? r.uuid;
+      return rid != null && String(rid) === target;
+    }) || null;
+  }
+  
+  window.findLeadById = findLeadById;
+
+
   function toNumShort(v) {
     if (v == null) return null;
     let s = String(v).trim();
@@ -2315,22 +2332,18 @@ $$('#leadTbody .preview-btn').forEach(btn => {
     return num;
   }
 
-function closeAccount360() {
-  if (!account360Panel) return;
+  function closeAccount360() {
+    if (!account360Panel) return;
 
-  account360Panel.classList.add('hidden');
-  account360Panel.innerHTML = '';
+    account360Panel.classList.add('hidden');
+    account360Panel.innerHTML = '';
 
-  // ✅ Option A: un-push the list when panel closes
-  document.getElementById('listView')?.classList.remove('with-panel');
-  
+    // ✅ Option A: un-push the list when panel closes
+    document.getElementById('listView')?.classList.remove('with-panel');
+
+    // ✅ remove row highlight
     $$('#leadTbody tr.lead-row.is-selected').forEach(tr => tr.classList.remove('is-selected'));
-
-}
-
-
-
-
+  }
 
   function renderAccount360Panel(lead) {
     const esc = (s='') => String(s ?? '').replace(/[&<>"']/g, c => ({
@@ -2448,75 +2461,54 @@ function closeAccount360() {
       </div>
     `;
   }
-  
+
   function setSelectedLeadRowById(id) {
-  // remove existing selection
-  $$('#leadTbody tr.lead-row.is-selected').forEach(tr => tr.classList.remove('is-selected'));
-
-  // add selection to the row matching this id
-  const row = document.querySelector(`#leadTbody tr.lead-row[data-id="${CSS.escape(String(id))}"]`);
-  if (row) row.classList.add('is-selected');
-}
-
-
-function openAccount360(id) {
-  if (!account360Panel) return;
-
-  const lead = findLeadById(id);
-  if (!lead) {
-    alert('Could not find that lead in memory. Try Refresh.');
-    return;
+    $$('#leadTbody tr.lead-row.is-selected').forEach(tr => tr.classList.remove('is-selected'));
+    const row = document.querySelector(`#leadTbody tr.lead-row[data-id="${CSS.escape(String(id))}"]`);
+    if (row) row.classList.add('is-selected');
   }
 
-  try {
+  function openAccount360(id) {
+    if (!account360Panel) return;
+
+    const lead = window.findLeadById ? window.findLeadById(id) : null;
+
+    if (!lead) {
+      alert('Could not find that lead in memory. Try Refresh.');
+      return;
+    }
+
+    // ✅ render + SHOW the panel
     account360Panel.innerHTML = renderAccount360Panel(lead);
-  } catch (err) {
-    console.error('Account 360 render error:', err);
-    account360Panel.innerHTML = `
-      <div style="padding:12px;">
-        <div style="font-weight:700;margin-bottom:6px;">Account 360 failed to render</div>
-        <div style="font-size:12px;color:#666;">
-          Open DevTools → Console to see the exact error.
-        </div>
-      </div>
-    `;
+    account360Panel.classList.remove('hidden');
+
+    // ✅ Option A: push list view over
+    document.getElementById('listView')?.classList.add('with-panel');
+
+    // ✅ highlight row
+    setSelectedLeadRowById(id);
   }
 
-  // show panel
-  account360Panel.classList.remove('hidden');
+  // ✅ Account 360 open handlers (event delegation — survives re-renders)
+  document.addEventListener('click', (e) => {
+    // Row click (ignore controls)
+    const row = e.target.closest('#leadTbody tr.lead-row');
+    if (row && !e.target.closest('button, a, input, select, textarea')) {
+      const id = row.dataset.id;
+      if (id) openAccount360(id);
+      return;
+    }
 
-  // ✅ Option A: push the list to make room
-  document.getElementById('listView')?.classList.add('with-panel');
-
-  // ✅ Option A: highlight the selected row
-  setSelectedLeadRowById(id);
-
-}
-
-
-
-
-// ✅ Account 360 open handlers (event delegation — survives re-renders)
-document.addEventListener('click', (e) => {
-  // Row click (ignore controls)
-  const row = e.target.closest('#leadTbody tr.lead-row');
-  if (row && !e.target.closest('button, a, input, select, textarea')) {
-    const id = row.dataset.id;
-    if (id) openAccount360(id);
-    return;
-  }
-
-  // Edit button
-  const editBtn = e.target.closest('#leadTbody .row-edit-btn');
-  if (editBtn) {
-    e.preventDefault();
-    e.stopPropagation();
-    const id = editBtn.dataset.id || editBtn.closest('tr')?.dataset?.id;
-    if (id) openAccount360(id);
-    return;
-  }
-});
-
+    // Edit button
+    const editBtn = e.target.closest('#leadTbody .row-edit-btn');
+    if (editBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = editBtn.dataset.id || editBtn.closest('tr')?.dataset?.id;
+      if (id) openAccount360(id);
+      return;
+    }
+  });
 
   // Panel close + save + delete
   if (account360Panel && !account360Panel.dataset.bound) {
@@ -2603,14 +2595,15 @@ document.addEventListener('click', (e) => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || `Save failed (${res.status})`);
 
-        // Patch local memory (no filter reset)
-        if (typeof window.patchLeadInState === 'function') {
-          window.patchLeadInState(id, { ...payload, ...(data.lead || data || {}) });
+        // ✅ update DS memory if your helper exists, otherwise just refresh
+        if (typeof patchLeadInState === 'function') {
+          patchLeadInState(id, { ...payload, ...(data.lead || data || {}) });
         }
 
-        // Keep panel open but refresh its content
+        // re-render panel with fresh memory
         const fresh = findLeadById(id) || {};
         account360Panel.innerHTML = renderAccount360Panel(fresh);
+        account360Panel.classList.remove('hidden');
 
         if (window.refreshLeads) await window.refreshLeads();
       } catch (err) {
@@ -2624,6 +2617,7 @@ document.addEventListener('click', (e) => {
       }
     });
   }
+
 
 function getFilteredRows() {
   const DS = window.DS || {};
