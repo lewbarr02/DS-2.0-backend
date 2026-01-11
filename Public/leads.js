@@ -178,6 +178,22 @@ function leadKey(val) {
   return String(val);
 }
 
+// ✅ Used by Account 360 panel (index.html)
+window.findLeadById = function findLeadById(id) {
+  const key = leadKey(id);
+  if (!key) return null;
+
+  const rows = (window.DS && DS.state && Array.isArray(DS.state.rawRows))
+    ? DS.state.rawRows
+    : [];
+
+  return rows.find(r => {
+    const rid = r?.id ?? r?.lead_id ?? r?.uuid;
+    return leadKey(rid) === key;
+  }) || null;
+};
+
+
 // Normalize state names / codes into a single, clean label
 function normalizeStateLabel(raw) {
   if (!raw) return '';
@@ -1086,7 +1102,7 @@ if (node.classList?.contains("ds-btn-add-to-queue")) {
     node.textContent = "✅ Added";
 
     // Replace entire container so button becomes disabled permanently
-    const container = document.querySelector('.ds-add-to-queue-container');
+    const container = document.querySelector('.ds-btn-add-to-queue-container');
     if (container) {
       container.innerHTML = `
         <button class="ds-btn-add-to-queue" disabled

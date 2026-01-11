@@ -880,7 +880,7 @@ html, body {
         <button id="resetFilters">Reset Filters</button>
       </div>
 <div>
-  <button id="openSummaryBtn" onclick="location.href='summary.html?range=today'">📊 Open Today’s Summary</button>
+  <button id="openSummaryBtn">📊 Open Today’s Summary</button>
   <button id="startMyDayBtn">🚀 Start My Day (20)</button>
   <button id="startMyDayEventBtn">🎯 Start My Day (Event Mode)</button>
 
@@ -1187,14 +1187,15 @@ html, body {
     style="margin-left:8px; min-width:160px; padding:6px 10px; font-size:14px; border:1px solid #ddd; border-radius:6px;"
   />
 
-  <!-- Status chips -->
-  <button class="chip" data-status="Converted">🏆 Converted</button>
-  <button class="chip" data-status="Hot">🔥 Hot</button>
-  <button class="chip" data-status="Warm">🌞 Warm</button>
-  <button class="chip" data-status="Cold">🧊 Cold</button>
-  <button class="chip" data-status="Follow-Up">⏳ Follow-Up</button>
-  <button class="chip" data-status="Research">🔍 Research</button>
-  <button class="chip" data-status="Unspecified">⚪ Unspecified</button>
+  <!-- Status chips (normalized keys) -->
+  <button class="chip" data-status="converted">🏆 Converted</button>
+  <button class="chip" data-status="hot">🔥 Hot</button>
+  <button class="chip" data-status="warm">🌞 Warm</button>
+  <button class="chip" data-status="cold">🧊 Cold</button>
+  <button class="chip" data-status="follow-up">⏳ Follow-Up</button>
+  <button class="chip" data-status="research">🔍 Research</button>
+  <button class="chip" data-status="unspecified">⚪ Unspecified</button>
+
 
   <button id="listReset" class="chip" style="margin-left:8px;">Reset</button>
 
@@ -1483,6 +1484,16 @@ if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
 <!-- ✅ ADD THIS BLOCK RIGHT BELOW THE TWO LINES ABOVE -->
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+
+const openSummaryBtn = document.getElementById('openSummaryBtn');
+if (openSummaryBtn) {
+  openSummaryBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    window.location.href = 'summary.html?range=today';
+  });
+}
+
+
   const mapView   = document.getElementById('mapView');
   const listView  = document.getElementById('listView');
   const dash      = document.getElementById('dashboard');
@@ -2290,7 +2301,7 @@ $$('#leadTbody .preview-btn').forEach(btn => {
       });
     });
 	
-	}
+	
 
 
   // 🧱 Account 360 Panel (List View Option B — panel-only editing)
@@ -2310,7 +2321,48 @@ $$('#leadTbody .preview-btn').forEach(btn => {
     }) || null;
   }
   
-  window.findLeadById = findLeadById;
+window.findLeadById = findLeadById;
+
+// ✅ Restore selected lead after any refreshLeads() call
+// (We wait until leads.js has created window.refreshLeads)
+(function attachRefreshRestoreWrapper() {
+  function tryAttach() {
+    if (!window.refreshLeads) return false;
+    if (window.refreshLeads.__restoresSelected) return true;
+
+    const _origRefreshLeads = window.refreshLeads;
+
+    window.refreshLeads = async function (...args) {
+      const res = await _origRefreshLeads.apply(this, args);
+
+      // Let the list DOM finish rendering, then restore selection
+      setTimeout(() => {
+        try {
+          if (typeof restoreSelectedLeadIfAny === 'function') {
+            restoreSelectedLeadIfAny();
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }, 0);
+
+      return res;
+    };
+
+    window.refreshLeads.__restoresSelected = true;
+    return true;
+  }
+
+  // Try now, and keep trying briefly until leads.js is ready
+  if (tryAttach()) return;
+
+  let tries = 0;
+  const t = setInterval(() => {
+    tries += 1;
+    if (tryAttach() || tries > 50) clearInterval(t); // ~5 seconds max
+  }, 100);
+})();
+
 
 
   function toNumShort(v) {
@@ -2332,18 +2384,22 @@ $$('#leadTbody .preview-btn').forEach(btn => {
     return num;
   }
 
-  function closeAccount360() {
-    if (!account360Panel) return;
+function closeAccount360() {
+  if (!account360Panel) return;
 
-    account360Panel.classList.add('hidden');
-    account360Panel.innerHTML = '';
+  account360Panel.classList.add('hidden');
+  account360Panel.innerHTML = '';
 
-    // ✅ Option A: un-push the list when panel closes
-    document.getElementById('listView')?.classList.remove('with-panel');
+  // ✅ Option A: un-push the list when panel closes
+  document.getElementById('listView')?.classList.remove('with-panel');
 
-    // ✅ remove row highlight
-    $$('#leadTbody tr.lead-row.is-selected').forEach(tr => tr.classList.remove('is-selected'));
-  }
+  // ✅ Clear the row highlight
+  $$('#leadTbody tr.lead-row.is-selected').forEach(tr => tr.classList.remove('is-selected'));
+
+  // ✅ Stop “restore selection” from re-opening the panel after close
+  forgetSelectedLead();
+}
+
 
   function renderAccount360Panel(lead) {
     const esc = (s='') => String(s ?? '').replace(/[&<>"']/g, c => ({
@@ -2400,15 +2456,16 @@ $$('#leadTbody .preview-btn').forEach(btn => {
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
             <div style="display:grid;gap:6px;">
               <label style="font-size:12px;color:#555;">Status</label>
-              <select name="status">
-                ${statusOpt('converted','🏆 Converted')}
-                ${statusOpt('hot','🔥 Hot')}
-                ${statusOpt('warm','🌞 Warm')}
-                ${statusOpt('follow-up','⏳ Follow-Up')}
-                ${statusOpt('cold','🧊 Cold')}
-                ${statusOpt('research','🔍 Research')}
-                <option value="unspecified" ${statusVal.includes('unspecified')?'selected':''}>⚪ Unspecified</option>
-              </select>
+<select name="status">
+  <option value="Converted"   ${statusVal.includes('convert') ? 'selected' : ''}>🏆 Converted</option>
+  <option value="Hot"         ${statusVal.includes('hot') ? 'selected' : ''}>🔥 Hot</option>
+  <option value="Warm"        ${statusVal.includes('warm') ? 'selected' : ''}>🌞 Warm</option>
+  <option value="Follow-Up"   ${statusVal.includes('follow') ? 'selected' : ''}>⏳ Follow-Up</option>
+  <option value="Cold"        ${statusVal.includes('cold') ? 'selected' : ''}>🧊 Cold</option>
+  <option value="Research"    ${statusVal.includes('research') ? 'selected' : ''}>🔍 Research</option>
+  <option value="Unspecified" ${statusVal.includes('unspecified') ? 'selected' : ''}>⚪ Unspecified</option>
+</select>
+
             </div>
             <div style="display:grid;gap:6px;">
               <label style="font-size:12px;color:#555;">Industry</label>
@@ -2467,6 +2524,52 @@ $$('#leadTbody .preview-btn').forEach(btn => {
     const row = document.querySelector(`#leadTbody tr.lead-row[data-id="${CSS.escape(String(id))}"]`);
     if (row) row.classList.add('is-selected');
   }
+  
+ // ✅ Persist selected lead while Account 360 is open
+const DS_SELECTED_LEAD_KEY = 'deli_selected_lead_id';
+
+function rememberSelectedLead(id) {
+  const v = String(id || '');
+  if (!v) return;
+  sessionStorage.setItem(DS_SELECTED_LEAD_KEY, v);
+}
+
+function forgetSelectedLead() {
+  sessionStorage.removeItem(DS_SELECTED_LEAD_KEY);
+}
+
+function getRememberedSelectedLeadId() {
+  return sessionStorage.getItem(DS_SELECTED_LEAD_KEY);
+}
+
+// Re-open / re-render the selected lead after list refresh/filter re-render
+function restoreSelectedLeadIfAny() {
+  const id = getRememberedSelectedLeadId();
+  if (!id) return;
+
+  // If the lead no longer exists in memory (filtered out or removed), clear it
+  const lead = (window.findLeadById && typeof window.findLeadById === 'function')
+    ? window.findLeadById(id)
+    : null;
+
+  if (!lead) {
+    forgetSelectedLead();
+    return;
+  }
+
+  // Keep the row highlight in sync
+  setSelectedLeadRowById(id);
+  rememberSelectedLead(id);
+
+
+// If panel is open, re-render it with latest memory
+const panelIsOpen = account360Panel && !account360Panel.classList.contains('hidden');
+if (panelIsOpen && typeof openAccount360 === 'function') {
+  openAccount360(id);
+}
+
+}
+ 
 
   function openAccount360(id) {
     if (!account360Panel) return;
@@ -2486,6 +2589,7 @@ $$('#leadTbody .preview-btn').forEach(btn => {
     document.getElementById('listView')?.classList.add('with-panel');
 
     // ✅ highlight row
+	rememberSelectedLead(id);
     setSelectedLeadRowById(id);
   }
 
@@ -2548,6 +2652,9 @@ $$('#leadTbody .preview-btn').forEach(btn => {
           delBtn.disabled = false;
           delBtn.textContent = 'Delete';
         }
+		
+
+		
       }
     });
 
@@ -2643,13 +2750,15 @@ function computeListFilteredAndSorted() {
 rows = Array.isArray(rows) ? rows : [];
 
 
-  // Status chip filter
+  // Status chip filter (normalized)
   if (activeStatuses.length) {
     rows = rows.filter(r => {
-      const s = String(getCI(r, 'status')).toLowerCase();
-      return activeStatuses.some(a => s.includes(a) || a === s);
+      const s = statusKey(getCI(r, 'status'));
+      return activeStatuses.includes(s);
     });
   }
+
+
 
   // Global search (name, company, city, state, tags, etc.)
   if (q) {
@@ -2745,6 +2854,12 @@ window.renderListView = function renderListView() {
 
 renderListTable(rows, getFilteredRows());
 
+setTimeout(() => {
+  try { restoreSelectedLeadIfAny(); } catch (e) { console.error(e); }
+}, 0);
+
+
+
 };
 
 
@@ -2830,7 +2945,7 @@ renderListTable(rows, getFilteredRows());
     }
   });
   
-  document.addEventListener('click', async (e) => {
+document.addEventListener('click', async (e) => {
   const btn = e.target.closest('.ds-btn-add-to-queue');
   if (!btn) return;
 
@@ -2855,12 +2970,10 @@ renderListTable(rows, getFilteredRows());
       throw new Error(data.error || `HTTP ${res.status}`);
     }
 
-    // Lock button permanently for this render cycle
     btn.textContent = '✓ In Queue';
     btn.style.background = '#e8e8e8';
     btn.style.borderColor = '#ccc';
     btn.style.cursor = 'not-allowed';
-
   } catch (err) {
     console.error('Add-to-Queue failed:', err);
     alert('Could not add to Daily Queue.');
@@ -2868,6 +2981,7 @@ renderListTable(rows, getFilteredRows());
     btn.textContent = original;
   }
 });
+
 
   
 </script>
@@ -3538,56 +3652,59 @@ async function loadPresentationBandNotesFromSummary() {
 
   // 👉 When you click a funnel band, we close Presentation Mode,
   //    jump to List View, and auto-filter to that status.
-  function drillDownToStatus(statusLabel) {
-    // 1) Switch to List View (re-uses existing showList wiring)
-    const listBtn = document.getElementById('btnListView');
-    if (listBtn) {
-      listBtn.click();
+function drillDownToStatus(statusLabel) {
+  // 1) Switch to List View
+  const listBtn = document.getElementById('btnListView');
+  if (listBtn) listBtn.click();
+
+  // 2) After List View is visible, activate the right status chips
+  setTimeout(() => {
+    // Clear active chips
+    document
+      .querySelectorAll('#listToolbar .chip[data-status]')
+      .forEach((btn) => btn.classList.remove('active'));
+
+    // Normalize the funnel label → chip keys
+    const label = String(statusLabel || '').trim().toLowerCase();
+    let targets = [];
+
+    if (label === 'cold') {
+      // Cold funnel represents Cold + Research
+      targets = ['cold', 'research'];
+    } else if (label === 'follow-up' || label === 'followup' || label === 'follow up') {
+      targets = ['follow-up'];
+    } else if (label === 'warm') {
+      targets = ['warm'];
+    } else if (label === 'hot') {
+      targets = ['hot'];
+    } else if (label === 'converted') {
+      targets = ['converted'];
+    } else {
+      // fallback: try the normalized label directly
+      targets = [label];
     }
 
-    // 2) After List View is visible, toggle the status chips
-    setTimeout(() => {
-      const toolbar = document.getElementById('listToolbar');
-      if (!toolbar) return;
+    // Activate chips
+    targets.forEach((key) => {
+      const chip = document.querySelector(`#listToolbar .chip[data-status="${key}"]`);
+      if (chip) chip.classList.add('active');
+    });
 
-      // Clear all active status chips
-      document
-        .querySelectorAll('#listToolbar .chip[data-status]')
-        .forEach((btn) => {
-          btn.classList.remove('active');
-        });
+    // Clear search box so we see the full slice
+    const search = document.getElementById('listSearch');
+    if (search) search.value = '';
 
-      // Decide which statuses to activate
-      let targets = [statusLabel];
-      // Special case: Cold funnel also represents Research in your funnel math
-      if (statusLabel === 'Cold') {
-        targets = ['Cold', 'Research'];
-      }
+    // Re-render
+    if (typeof window.renderListView === 'function') {
+      window.renderListView();
+    }
 
-      // Activate the matching chips
-      targets.forEach((label) => {
-        const chip = document.querySelector(
-          `#listToolbar .chip[data-status="${label}"]`
-        );
-        if (chip) {
-          chip.classList.add('active');
-        }
-      });
+    // Scroll table to top
+    const wrap = document.getElementById('leadTableWrap');
+    if (wrap) wrap.scrollTop = 0;
+  }, 60);
+}
 
-      // Clear search box so we see full filtered set
-      const search = document.getElementById('listSearch');
-      if (search) search.value = '';
-
-      // Re-render list with new filters
-      if (typeof window.renderListView === 'function') {
-        window.renderListView();
-      }
-
-      // Scroll table to the top
-      const wrap = document.getElementById('leadTableWrap');
-      if (wrap) wrap.scrollTop = 0;
-    }, 60);
-  }
 
 
   document.addEventListener('DOMContentLoaded', () => {
