@@ -612,11 +612,26 @@ html, body {
       }
       #viewSwitcher button.active { background: #222; color: #fff; }
 
-      /* --- LIST VIEW --- */
-      #listView {
-        position: absolute; inset: 0; display: none; background: #f7f8fb;
-      }
-      #listView.show { display: block; }
+/* --- LIST VIEW --- */
+#listView {
+  position: absolute;
+  inset: 0;
+  display: none;
+  background: #f7f8fb;
+
+  /* ✅ Option A: push layout when panel opens */
+  margin-right: 0;
+  transition: margin-right 0.18s ease;
+  box-sizing: border-box;
+}
+
+#listView.show { display: block; }
+
+/* ✅ When Account 360 is open, shrink the list area */
+#listView.with-panel {
+  margin-right: 400px; /* must match the panel width */
+}
+
       #listToolbar {
         position: sticky; top: 0; z-index: 5;
         display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
@@ -707,6 +722,7 @@ html, body {
         overflow-y: auto;
         padding: 1rem;
         z-index: 3000; /* above logo (2000) and overlays */
+		box-sizing: border-box;
       }
       .slide-panel.hidden { display: none; }
       .slide-panel .close-btn {
@@ -2302,11 +2318,17 @@ $$('#leadTbody .preview-btn').forEach(btn => {
     return num;
   }
 
-  function closeAccount360() {
-    if (!account360Panel) return;
-    account360Panel.classList.add('hidden');
-    account360Panel.innerHTML = '';
-  }
+function closeAccount360() {
+  if (!account360Panel) return;
+
+  account360Panel.classList.add('hidden');
+  account360Panel.innerHTML = '';
+
+  // ✅ Option A: un-push the list
+  const listView = document.getElementById('listView');
+  listView?.classList.remove('with-panel');
+}
+
 
   function findLeadById(id) {
     const DS = window.DS;
@@ -2436,16 +2458,23 @@ $$('#leadTbody .preview-btn').forEach(btn => {
     `;
   }
 
-  function openAccount360(id) {
-    if (!account360Panel) return;
-    const lead = findLeadById(id);
-    if (!lead) {
-      alert('Could not find that lead in memory. Try Refresh.');
-      return;
-    }
-    account360Panel.innerHTML = renderAccount360Panel(lead);
-    account360Panel.classList.remove('hidden');
+function openAccount360(id) {
+  if (!account360Panel) return;
+
+  const lead = findLeadById(id);
+  if (!lead) {
+    alert('Could not find that lead in memory. Try Refresh.');
+    return;
   }
+
+  account360Panel.innerHTML = renderAccount360Panel(lead);
+  account360Panel.classList.remove('hidden');
+
+  // ✅ Option A: push the list to make room
+  const listView = document.getElementById('listView');
+  listView?.classList.add('with-panel');
+}
+
 
   // Open panel on row click (but ignore clicks on buttons/links/inputs)
   function wireRowClickToPanel() {
