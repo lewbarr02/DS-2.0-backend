@@ -29,17 +29,25 @@ async function loadMapData() {
 
 window.refreshLeads = async function refreshLeads() {
   const payload = await loadMapData();
+
   DS.state.rawRows = unwrapData(payload);
+
+  // Rebuild dropdown options ONLY
   populateFilterOptions();
+
+  // ❌ DO NOT reset filters here
+  // ❌ DO NOT touch status checkboxes here
+
   computeFiltered();
   renderMarkers();
   updateStats();
 
-  // 🔁 Keep List View in sync whenever we reload leads
   if (typeof window.renderListView === 'function') {
     window.renderListView();
   }
 };
+
+
 
 
 
@@ -280,13 +288,22 @@ function unwrapData(payload){
   }
 
   // Generic helper used for Type / Cadence filters
-  function includesToken(fieldVal, selected){
-    if(!selected || selected === 'All') return true;
-    if(!fieldVal) return false;
-    const norm = (''+fieldVal).toLowerCase();
-    const want = (''+selected).toLowerCase();
-    return norm.split(',').map(t=>t.trim()).includes(want) || norm.includes(want);
-  }
+function includesToken(fieldVal, selected){
+  // Neutral selection → always pass
+  if (!selected || selected === 'All') return true;
+
+  // If filtering by something specific, missing field fails
+  if (!fieldVal) return false;
+
+  const norm = ('' + fieldVal).toLowerCase();
+  const want = ('' + selected).toLowerCase();
+
+  return (
+    norm.split(',').map(t => t.trim()).includes(want) ||
+    norm.includes(want)
+  );
+}
+
 
   // 🔹 Normalize tag values from DB (handles JSON-ish strings, arrays, etc.)
   function extractTags(rawVal) {
@@ -375,7 +392,11 @@ function unwrapData(payload){
       }
 
       // -------- TYPE FILTER --------
-      if (!includesToken(get('type') || get('lead_type'), typeSel)) continue;
+      // -------- TYPE FILTER --------
+if (
+  typeSel !== 'All' &&
+  !includesToken(get('type') || get('lead_type'), typeSel)
+) continue;
 
       // -------- CADENCE FILTER --------
       if (
@@ -628,6 +649,15 @@ if (els.pinCount()) {
     );
 
     setOpts(els.industryFilter(), uniqueFrom('industry'));
+	
+	  // 🔒 Force neutral defaults after options are rebuilt
+  if (els.tagFilter())      els.tagFilter().value = 'All';
+  if (els.typeFilter())     els.typeFilter().value = 'All';
+  if (els.cadenceFilter())  els.cadenceFilter().value = 'All';
+  if (els.stateFilter())    els.stateFilter().value = 'All';
+  if (els.industryFilter()) els.industryFilter().value = 'All';
+
+	
   }
 
 // ======================================================
@@ -645,6 +675,12 @@ function resetAllFiltersToZero() {
 
   // ✅ Neutral state = ALL statuses checked
   els.statusChecks().forEach(cb => cb.checked = true);
+  
+   // 🔎 Reset List View search input (prevents silent filtering)
+  const listSearch = document.querySelector(
+    'input[placeholder*="Search name"]'
+  );
+  if (listSearch) listSearch.value = ''; 
 }
 
 
@@ -1359,11 +1395,24 @@ window.focusLeadOnMap = function focusLeadOnMap(id) {
     }
 
 DS.state.rawRows = unwrapData(payload);
+
+// Build dropdown options
 populateFilterOptions();
-resetAllFiltersToZero();   // ✅ REQUIRED
+
+// 🔒 TRUE ZERO STATE (boot only)
+resetAllFiltersToZero();   // sets dropdowns = All, dates empty, ALL statuses checked
+
+// First evaluation
 computeFiltered();
 renderMarkers();
 updateStats();
+
+// Initial List View render
+if (typeof window.renderListView === 'function') {
+  window.renderListView();
+}
+
+
 
 
 

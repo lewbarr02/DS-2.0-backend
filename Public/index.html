@@ -1208,9 +1208,14 @@ html, body {
   </table>
 </div>
 
+</div> <!-- ✅ END #listView -->
+
 
     <!-- NEW: Account 360° slide-in panel -->
     <div id="account360Panel" class="slide-panel hidden"></div>
+
+
+
 
     <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
@@ -2273,165 +2278,304 @@ $$('#leadTbody .preview-btn').forEach(btn => {
     });
 
 
-  // 📝 ROW EDIT (State + Industry dropdowns)
+  // 🧱 Account 360 Panel (List View Option B — panel-only editing)
+  const account360Panel = document.getElementById('account360Panel');
+
+  function toNumShort(v) {
+    if (v == null) return null;
+    let s = String(v).trim();
+    if (!s) return null;
+    s = s.replace(/[\$,]/g, '').toLowerCase();
+    const m = s.match(/^([\d.]+)\s*(k|m{1,2}|b)?$/);
+    if (!m) {
+      const n = Number(s);
+      return Number.isFinite(n) ? n : null;
+    }
+    let num = parseFloat(m[1]);
+    if (!Number.isFinite(num)) return null;
+    const suf = m[2];
+    if (suf === 'k') num *= 1_000;
+    if (suf === 'm' || suf === 'mm') num *= 1_000_000;
+    if (suf === 'b') num *= 1_000_000_000;
+    return num;
+  }
+
+  function closeAccount360() {
+    if (!account360Panel) return;
+    account360Panel.classList.add('hidden');
+    account360Panel.innerHTML = '';
+  }
+
+  function findLeadById(id) {
+    const DS = window.DS;
+    const rows = DS?.state?.rawRows || [];
+    const key = (window.leadKey ? window.leadKey(id) : String(id));
+    return rows.find(r => {
+      const rid = (r && (r.id || r.uuid || r.lead_id)) ?? r?.ID ?? '';
+      const rkey = (window.leadKey ? window.leadKey(rid) : String(rid));
+      return rkey === key;
+    }) || null;
+  }
+
+  function renderAccount360Panel(lead) {
+    const esc = (s='') => String(s ?? '').replace(/[&<>"']/g, c => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[c]));
+
+    const id = lead.id || lead.lead_id || lead.uuid || '';
+    const website = lead.website || '';
+    const websiteUrl = website ? normalizeWebsiteUrl(website) : '';
+
+    const statusVal = (lead.status || 'unspecified').toString().toLowerCase();
+    const statusOpt = (v, label) => `<option value="${v}" ${statusVal.includes(v)?'selected':''}>${label}</option>`;
+
+    return `
+      <div style="position:relative">
+        <button type="button" class="close-btn acc360-close" aria-label="Close">✖</button>
+
+        <div style="font-weight:700;font-size:16px;margin-bottom:6px;">
+          Account 360 — ${esc(lead.company || lead.name || '(Lead)')}
+        </div>
+
+        <div style="font-size:12px;color:#666;margin-bottom:12px;">
+          ID: ${esc(id)}
+          ${websiteUrl ? ` • <a href="${websiteUrl}" target="_blank" rel="noopener noreferrer">Website</a>` : ''}
+        </div>
+
+        <form class="acc360-form" data-id="${esc(id)}" style="display:grid;gap:10px;">
+          <div style="display:grid;gap:6px;">
+            <label style="font-size:12px;color:#555;">Name</label>
+            <input name="name" value="${esc(lead.name || '')}" />
+          </div>
+
+          <div style="display:grid;gap:6px;">
+            <label style="font-size:12px;color:#555;">Company</label>
+            <input name="company" value="${esc(lead.company || '')}" />
+          </div>
+
+          <div style="display:grid;gap:6px;">
+            <label style="font-size:12px;color:#555;">Website</label>
+            <input name="website" value="${esc(lead.website || '')}" />
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 90px;gap:10px;">
+            <div style="display:grid;gap:6px;">
+              <label style="font-size:12px;color:#555;">City</label>
+              <input name="city" value="${esc(lead.city || '')}" />
+            </div>
+            <div style="display:grid;gap:6px;">
+              <label style="font-size:12px;color:#555;">State</label>
+              <input name="state" maxlength="2" style="text-transform:uppercase;text-align:center" value="${esc(lead.state || '')}" />
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div style="display:grid;gap:6px;">
+              <label style="font-size:12px;color:#555;">Status</label>
+              <select name="status">
+                ${statusOpt('converted','🏆 Converted')}
+                ${statusOpt('hot','🔥 Hot')}
+                ${statusOpt('warm','🌞 Warm')}
+                ${statusOpt('follow','⏳ Follow-Up')}
+                ${statusOpt('cold','🧊 Cold')}
+                ${statusOpt('research','🔍 Research')}
+                <option value="unspecified" ${statusVal.includes('unspecified')?'selected':''}>⚪ Unspecified</option>
+              </select>
+            </div>
+            <div style="display:grid;gap:6px;">
+              <label style="font-size:12px;color:#555;">Industry</label>
+              <input name="industry" value="${esc(lead.industry || '')}" />
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div style="display:grid;gap:6px;">
+              <label style="font-size:12px;color:#555;">ARR</label>
+              <input name="arr" placeholder="e.g. 25M" value="${esc(lead.arr ?? '')}" />
+            </div>
+            <div style="display:grid;gap:6px;">
+              <label style="font-size:12px;color:#555;">AP Spend</label>
+              <input name="ap_spend" placeholder="e.g. 50M" value="${esc(lead.ap_spend ?? '')}" />
+            </div>
+          </div>
+
+          <div style="display:grid;gap:6px;">
+            <label style="font-size:12px;color:#555;">Tags</label>
+            <input name="tags" value="${esc(lead.tags || '')}" />
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div style="display:grid;gap:6px;">
+              <label style="font-size:12px;color:#555;">Competitor</label>
+              <input name="competitor" value="${esc(lead.competitor || '')}" />
+            </div>
+            <div style="display:grid;gap:6px;">
+              <label style="font-size:12px;color:#555;">Entry Point</label>
+              <input name="entry_point" value="${esc(lead.entry_point || '')}" />
+            </div>
+          </div>
+
+          <div style="display:grid;gap:6px;">
+            <label style="font-size:12px;color:#555;">Objection</label>
+            <input name="objection" value="${esc(lead.objection || '')}" />
+          </div>
+
+          <div style="display:grid;gap:6px;">
+            <label style="font-size:12px;color:#555;">Notes</label>
+            <textarea name="notes" rows="5">${esc(lead.notes || '')}</textarea>
+          </div>
+
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
+            <button type="button" class="acc360-delete" style="border:1px solid #f5b5b5;background:#fff;color:#b00020;border-radius:8px;padding:8px 10px;cursor:pointer;">Delete</button>
+            <button type="submit" class="acc360-save" style="border:1px solid #ddd;background:#222;color:#fff;border-radius:8px;padding:8px 10px;cursor:pointer;">Save</button>
+          </div>
+        </form>
+      </div>
+    `;
+  }
+
+  function openAccount360(id) {
+    if (!account360Panel) return;
+    const lead = findLeadById(id);
+    if (!lead) {
+      alert('Could not find that lead in memory. Try Refresh.');
+      return;
+    }
+    account360Panel.innerHTML = renderAccount360Panel(lead);
+    account360Panel.classList.remove('hidden');
+  }
+
+  // Open panel on row click (but ignore clicks on buttons/links/inputs)
+  function wireRowClickToPanel() {
+    $$('#leadTbody tr').forEach(tr => {
+      tr.addEventListener('click', (e) => {
+        if (e.target.closest('button, a, input, select, textarea')) return;
+        const id = tr.dataset.id;
+        if (id) openAccount360(id);
+      });
+    });
+  }
+
+  // 📝 Edit button now opens Account 360 panel (instead of inline edit)
   $$('#leadTbody .row-edit-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-
-      const row = btn.closest('tr');
-      if (!row) return;
-      if (row.dataset.editing === '1') return; // already editing
-
-      const id = row.getAttribute('data-id') || btn.dataset.id;
-      if (!id) return;
-
-      const cells = row.querySelectorAll('td');
-      if (cells.length < 16) return;
-
-      const stateCell    = cells[5]; // State column
-      const industryCell = cells[6]; // Industry column
-      const actionsCell  = cells[15];
-
-      const currentState    = stateCell.textContent.trim();
-      const currentIndustry = industryCell.textContent.trim();
-
-      row.dataset.editing = '1';
-
-      // Pull from cached options populated in renderListTable
-      const stateOptions    = window.LIST_STATE_OPTIONS    || [];
-      const industryOptions = window.LIST_INDUSTRY_OPTIONS || [];
-
-      const stateOptionsHtml = [
-        '<option value="">--</option>',
-        ...stateOptions.map(opt => {
-          const selected = opt === currentState ? ' selected' : '';
-          return `<option value="${opt}"${selected}>${opt}</option>`;
-        })
-      ].join('');
-
-      const industryOptionsHtml = [
-        '<option value="">--</option>',
-        ...industryOptions.map(opt => {
-          const selected = opt === currentIndustry ? ' selected' : '';
-          return `<option value="${opt}"${selected}>${opt}</option>`;
-        })
-      ].join('');
-
-      stateCell.innerHTML =
-        `<select class="inline-edit-state">${stateOptionsHtml}</select>`;
-      industryCell.innerHTML =
-        `<select class="inline-edit-industry">${industryOptionsHtml}</select>`;
-
-      const originalActionsHtml = actionsCell.innerHTML;
-      actionsCell.innerHTML = `
-        <button class="btn-small btn-save-inline">Save</button>
-        <button class="btn-small btn-cancel-inline">Cancel</button>
-      `;
-
-      const saveBtn   = actionsCell.querySelector('.btn-save-inline');
-      const cancelBtn = actionsCell.querySelector('.btn-cancel-inline');
-      const stateSel  = stateCell.querySelector('.inline-edit-state');
-      const indSel    = industryCell.querySelector('.inline-edit-industry');
-
-      const restoreRow = () => {
-        row.dataset.editing = '';
-        stateCell.textContent    = currentState;
-        industryCell.textContent = currentIndustry;
-        actionsCell.innerHTML    = originalActionsHtml;
-      };
-
-      cancelBtn.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        restoreRow();
-      });
-
-      saveBtn.addEventListener('click', async (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-
-        const newState    = stateSel.value;
-        const newIndustry = indSel.value;
-
-        try {
-          const API_BASE = window.DELI_API_BASE || '';
-          const res = await fetch(
-            `${API_BASE}/update-lead/${encodeURIComponent(id)}`,
-            {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                state: newState || null,
-                industry: newIndustry || null
-              })
-            }
-          );
-
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok || (data && data.ok === false)) {
-            console.error('Inline update failed:', data);
-            alert('Save failed. Please try again.');
-            return;
-          }
-
-          // ✅ Update UI on success
-          stateCell.textContent    = newState || '';
-          industryCell.textContent = newIndustry || '';
-
-          // ✅ Patch in-memory DS.state so filters stay put
-          if (typeof patchLeadInState === 'function') {
-            patchLeadInState(id, {
-              state: newState || null,
-              industry: newIndustry || null
-            });
-          }
-
-        } catch (err) {
-          console.error('Inline update error:', err);
-          alert('Save failed (network error).');
-        } finally {
-          row.dataset.editing = '';
-          actionsCell.innerHTML = originalActionsHtml;
-        }
-      });
+      const id = btn.dataset.id || btn.closest('tr')?.dataset?.id;
+      if (id) openAccount360(id);
     });
   });
 
+  // Wire row-click open
+  wireRowClickToPanel();
 
-// 🗺️ Row click → jump to Map + open that lead’s pin
-$$('#leadTbody tr').forEach(row => {
-  row.addEventListener('click', (e) => {
+  // Panel close + save + delete
+  if (account360Panel && !account360Panel.dataset.bound) {
+    account360Panel.dataset.bound = '1';
 
-    // 🚫 Ignore clicks on interactive elements
-    if (
-  e.target.closest('button') ||
-  e.target.closest('select') ||
-  e.target.closest('input') ||
-  e.target.closest('a') ||
-  e.target.closest('.tags-cell') ||
-  e.target.closest('.actions-cell')
-) return;
+    account360Panel.addEventListener('click', async (e) => {
+      if (e.target.closest('.acc360-close')) {
+        e.preventDefault();
+        closeAccount360();
+        return;
+      }
 
+      const delBtn = e.target.closest('.acc360-delete');
+      if (delBtn) {
+        e.preventDefault();
+        const form = account360Panel.querySelector('.acc360-form');
+        const id = form?.dataset?.id;
+        if (!id) return;
 
-    // Don’t navigate when inline editing is active
-    if (row.dataset.editing === '1') return;
+        const label = (account360Panel.querySelector('div')?.textContent || 'this lead').trim();
+        if (!confirm(`Delete ${label}? This cannot be undone.`)) return;
 
-    const id = row.getAttribute('data-id');
-    if (!id) return;
+        delBtn.disabled = true;
+        delBtn.textContent = 'Deleting…';
 
-    if (typeof window.focusLeadOnMap === 'function') {
-      window.focusLeadOnMap(id);
-    } else {
-      document.getElementById('btnMapView')?.click();
-    }
-  });
-});
+        try {
+          const API_BASE = window.DELI_API_BASE || '';
+          const res = await fetch(`${API_BASE}/leads/${encodeURIComponent(id)}`, { method: 'DELETE' });
+          if (!res.ok) throw new Error(`Delete failed (${res.status})`);
 
+          closeAccount360();
+          if (window.refreshLeads) await window.refreshLeads();
+        } catch (err) {
+          console.error(err);
+          alert('Delete failed.');
+        } finally {
+          delBtn.disabled = false;
+          delBtn.textContent = 'Delete';
+        }
+      }
+    });
 
-}  // close renderListView's renderListTable
+    account360Panel.addEventListener('submit', async (e) => {
+      const form = e.target;
+      if (!form.classList.contains('acc360-form')) return;
+      e.preventDefault();
 
-  // Base rows from leads.js
+      const id = form.dataset.id;
+      if (!id) return;
+
+      const fd = new FormData(form);
+
+      const payload = {
+        name: (fd.get('name') || '').trim() || null,
+        company: (fd.get('company') || '').trim() || null,
+        website: (fd.get('website') || '').trim() || null,
+        city: (fd.get('city') || '').trim() || null,
+        state: (fd.get('state') || '').trim().toUpperCase() || null,
+        status: (fd.get('status') || 'unspecified').trim(),
+        industry: (fd.get('industry') || '').trim() || null,
+        arr: toNumShort(fd.get('arr')),
+        ap_spend: toNumShort(fd.get('ap_spend')),
+        tags: (fd.get('tags') || '').trim() || null,
+        competitor: (fd.get('competitor') || '').trim() || null,
+        objection: (fd.get('objection') || '').trim() || null,
+        entry_point: (fd.get('entry_point') || '').trim() || null,
+        notes: (fd.get('notes') || '') || null
+      };
+
+      const saveBtn = form.querySelector('.acc360-save');
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving…';
+      }
+
+      try {
+        const API_BASE = window.DELI_API_BASE || '';
+        const res = await fetch(`${API_BASE}/update-lead/${encodeURIComponent(id)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `Save failed (${res.status})`);
+
+        // Patch local memory (no filter reset)
+        if (typeof window.patchLeadInState === 'function') {
+          window.patchLeadInState(id, { ...payload, ...(data.lead || data || {}) });
+        }
+
+        // Keep panel open but refresh its content
+        const fresh = findLeadById(id) || {};
+        account360Panel.innerHTML = renderAccount360Panel(fresh);
+
+        if (window.refreshLeads) await window.refreshLeads();
+      } catch (err) {
+        console.error(err);
+        alert('Save failed.');
+      } finally {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save';
+        }
+      }
+    });
+  }
+
 function getFilteredRows() {
   const DS = window.DS || {};
   const rows = (DS.state && DS.state.filtered) || [];
