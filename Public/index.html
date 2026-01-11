@@ -632,6 +632,18 @@ html, body {
   margin-right: 400px; /* must match the panel width */
 }
 
+/* ✅ Option A: push layout when Account 360 is open */
+#listView {
+  margin-right: 0;
+  transition: margin-right 0.18s ease;
+  box-sizing: border-box;
+}
+
+#listView.with-panel {
+  margin-right: 400px; /* must match the panel width */
+}
+
+
       #listToolbar {
         position: sticky; top: 0; z-index: 5;
         display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
@@ -2323,6 +2335,10 @@ function closeAccount360() {
 
   account360Panel.classList.add('hidden');
   account360Panel.innerHTML = '';
+  
+  // ✅ Option A: un-push the list
+document.getElementById('listView')?.classList.remove('with-panel');
+
 
   // ✅ Option A: un-push the list
   const listView = document.getElementById('listView');
@@ -2474,6 +2490,10 @@ function openAccount360(id) {
   const listView = document.getElementById('listView');
   listView?.classList.add('with-panel');
 }
+
+// ✅ Option A: push the list to make room
+document.getElementById('listView')?.classList.add('with-panel');
+
 
 
   // Open panel on row click (but ignore clicks on buttons/links/inputs)
