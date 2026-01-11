@@ -667,6 +667,13 @@ html, body {
       thead th.sortable { cursor: pointer; }
       tbody td { padding: 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
       tr:hover { background: #fafafa; }
+	  /* ✅ Selected row highlight (List View Option A) */
+#leadTable tbody tr.lead-row.is-selected {
+  background: #eef6ff;            /* light blue */
+  outline: 2px solid #93c5fd;     /* soft blue border */
+  outline-offset: -2px;
+}
+
       .actions-cell button {
         margin-right: 6px; border: 1px solid #ddd; background: #fff; border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 12px;
       }
@@ -1950,15 +1957,16 @@ const statusEmoji = prettyStatus(rawStatus).split(' ')[0];        // 🏆 / 🔥
       ${statusEmoji}
     </span>
 
-    <select class="status-select" data-id="${id}">
-      <option value="converted"   ${rawStatus === 'converted' ? 'selected' : ''}>🏆 Converted</option>
-      <option value="hot"         ${rawStatus === 'hot' ? 'selected' : ''}>🔥 Hot</option>
-      <option value="warm"        ${rawStatus === 'warm' ? 'selected' : ''}>🌞 Warm</option>
-      <option value="follow-up"   ${rawStatus === 'follow-up' ? 'selected' : ''}>⏳ Follow-Up</option>
-      <option value="cold"        ${rawStatus === 'cold' ? 'selected' : ''}>🧊 Cold</option>
-      <option value="research"    ${rawStatus === 'research' ? 'selected' : ''}>🔍 Research</option>
-      <option value="unspecified" ${rawStatus === 'unspecified' ? 'selected' : ''}>⚪ Unspecified</option>
-    </select>
+<select class="status-select" data-id="${id}">
+  <option value="Converted"   ${rawStatus === 'converted' ? 'selected' : ''}>🏆 Converted</option>
+  <option value="Hot"         ${rawStatus === 'hot' ? 'selected' : ''}>🔥 Hot</option>
+  <option value="Warm"        ${rawStatus === 'warm' ? 'selected' : ''}>🌞 Warm</option>
+  <option value="Follow-Up"   ${rawStatus === 'follow-up' ? 'selected' : ''}>⏳ Follow-Up</option>
+  <option value="Cold"        ${rawStatus === 'cold' ? 'selected' : ''}>🧊 Cold</option>
+  <option value="Research"    ${rawStatus === 'research' ? 'selected' : ''}>🔍 Research</option>
+  <option value="Unspecified" ${rawStatus === 'unspecified' ? 'selected' : ''}>⚪ Unspecified</option>
+</select>
+
 
 <button class="ds-btn-add-to-queue"
         data-lead-id="${id}"
@@ -2001,10 +2009,6 @@ const statusEmoji = prettyStatus(rawStatus).split(' ')[0];        // 🏆 / 🔥
           data-id="${id}"
           title="Open Pin Preview">👁 Preview</button>
 		  
-	  <button class="ds-btn-add-to-queue"
-          data-id="${id}"
-          title="Add to Daily Queue">➕ Queue</button>
-
 
   <button class="row-edit-btn"
           data-id="${id}"
@@ -2319,20 +2323,14 @@ function closeAccount360() {
 
   // ✅ Option A: un-push the list when panel closes
   document.getElementById('listView')?.classList.remove('with-panel');
+  
+    $$('#leadTbody tr.lead-row.is-selected').forEach(tr => tr.classList.remove('is-selected'));
+
 }
 
 
 
-  function findLeadById(id) {
-    const DS = window.DS;
-    const rows = DS?.state?.rawRows || [];
-    const key = (window.leadKey ? window.leadKey(id) : String(id));
-    return rows.find(r => {
-      const rid = (r && (r.id || r.uuid || r.lead_id)) ?? r?.ID ?? '';
-      const rkey = (window.leadKey ? window.leadKey(rid) : String(rid));
-      return rkey === key;
-    }) || null;
-  }
+
 
   function renderAccount360Panel(lead) {
     const esc = (s='') => String(s ?? '').replace(/[&<>"']/g, c => ({
@@ -2393,7 +2391,7 @@ function closeAccount360() {
                 ${statusOpt('converted','🏆 Converted')}
                 ${statusOpt('hot','🔥 Hot')}
                 ${statusOpt('warm','🌞 Warm')}
-                ${statusOpt('follow','⏳ Follow-Up')}
+                ${statusOpt('follow-up','⏳ Follow-Up')}
                 ${statusOpt('cold','🧊 Cold')}
                 ${statusOpt('research','🔍 Research')}
                 <option value="unspecified" ${statusVal.includes('unspecified')?'selected':''}>⚪ Unspecified</option>
@@ -2450,6 +2448,16 @@ function closeAccount360() {
       </div>
     `;
   }
+  
+  function setSelectedLeadRowById(id) {
+  // remove existing selection
+  $$('#leadTbody tr.lead-row.is-selected').forEach(tr => tr.classList.remove('is-selected'));
+
+  // add selection to the row matching this id
+  const row = document.querySelector(`#leadTbody tr.lead-row[data-id="${CSS.escape(String(id))}"]`);
+  if (row) row.classList.add('is-selected');
+}
+
 
 function openAccount360(id) {
   if (!account360Panel) return;
@@ -2474,11 +2482,17 @@ function openAccount360(id) {
     `;
   }
 
+  // show panel
   account360Panel.classList.remove('hidden');
 
   // ✅ Option A: push the list to make room
   document.getElementById('listView')?.classList.add('with-panel');
+
+  // ✅ Option A: highlight the selected row
+  setSelectedLeadRowById(id);
+
 }
+
 
 
 
