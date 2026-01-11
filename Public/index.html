@@ -632,16 +632,6 @@ html, body {
   margin-right: 400px; /* must match the panel width */
 }
 
-/* ✅ Option A: push layout when Account 360 is open */
-#listView {
-  margin-right: 0;
-  transition: margin-right 0.18s ease;
-  box-sizing: border-box;
-}
-
-#listView.with-panel {
-  margin-right: 400px; /* must match the panel width */
-}
 
 
       #listToolbar {
@@ -1790,17 +1780,7 @@ function getCI(row, key) {
 
 
 
-  function prettyStatus(s) {
-    if (!s) return '⚪ Unspecified';
-    const k = String(s).toLowerCase();
-    if (k.includes('convert')) return '🏆 Converted';
-    if (k.includes('hot'))      return '🔥 Hot';
-    if (k.includes('warm'))     return '🌞 Warm';
-    if (k.includes('cold'))     return '🧊 Cold';
-    if (k.includes('follow'))   return '⏳ Follow-Up';
-    if (k.includes('research')) return '🔍 Research';
-    return '⚪ Unspecified';
-  }
+
 
   function statusRankVal(s) {
     const k = String(s || '').toLowerCase();
@@ -1983,6 +1963,7 @@ const statusEmoji = prettyStatus(rawStatus).split(' ')[0];        // 🏆 / 🔥
 <button class="ds-btn-add-to-queue"
         data-lead-id="${id}"
         title="Add to Daily Queue">➕ Queue</button>
+
 
   </div>
 </td>
@@ -2335,15 +2316,11 @@ function closeAccount360() {
 
   account360Panel.classList.add('hidden');
   account360Panel.innerHTML = '';
-  
-  // ✅ Option A: un-push the list
-document.getElementById('listView')?.classList.remove('with-panel');
 
-
-  // ✅ Option A: un-push the list
-  const listView = document.getElementById('listView');
-  listView?.classList.remove('with-panel');
+  // ✅ Option A: un-push the list when panel closes
+  document.getElementById('listView')?.classList.remove('with-panel');
 }
+
 
 
   function findLeadById(id) {
@@ -2483,42 +2460,49 @@ function openAccount360(id) {
     return;
   }
 
-  account360Panel.innerHTML = renderAccount360Panel(lead);
+  try {
+    account360Panel.innerHTML = renderAccount360Panel(lead);
+  } catch (err) {
+    console.error('Account 360 render error:', err);
+    account360Panel.innerHTML = `
+      <div style="padding:12px;">
+        <div style="font-weight:700;margin-bottom:6px;">Account 360 failed to render</div>
+        <div style="font-size:12px;color:#666;">
+          Open DevTools → Console to see the exact error.
+        </div>
+      </div>
+    `;
+  }
+
   account360Panel.classList.remove('hidden');
 
   // ✅ Option A: push the list to make room
-  const listView = document.getElementById('listView');
-  listView?.classList.add('with-panel');
+  document.getElementById('listView')?.classList.add('with-panel');
 }
 
-// ✅ Option A: push the list to make room
-document.getElementById('listView')?.classList.add('with-panel');
 
 
-
-  // Open panel on row click (but ignore clicks on buttons/links/inputs)
-  function wireRowClickToPanel() {
-    $$('#leadTbody tr').forEach(tr => {
-      tr.addEventListener('click', (e) => {
-        if (e.target.closest('button, a, input, select, textarea')) return;
-        const id = tr.dataset.id;
-        if (id) openAccount360(id);
-      });
-    });
+// ✅ Account 360 open handlers (event delegation — survives re-renders)
+document.addEventListener('click', (e) => {
+  // Row click (ignore controls)
+  const row = e.target.closest('#leadTbody tr.lead-row');
+  if (row && !e.target.closest('button, a, input, select, textarea')) {
+    const id = row.dataset.id;
+    if (id) openAccount360(id);
+    return;
   }
 
-  // 📝 Edit button now opens Account 360 panel (instead of inline edit)
-  $$('#leadTbody .row-edit-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const id = btn.dataset.id || btn.closest('tr')?.dataset?.id;
-      if (id) openAccount360(id);
-    });
-  });
+  // Edit button
+  const editBtn = e.target.closest('#leadTbody .row-edit-btn');
+  if (editBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const id = editBtn.dataset.id || editBtn.closest('tr')?.dataset?.id;
+    if (id) openAccount360(id);
+    return;
+  }
+});
 
-  // Wire row-click open
-  wireRowClickToPanel();
 
   // Panel close + save + delete
   if (account360Panel && !account360Panel.dataset.bound) {
