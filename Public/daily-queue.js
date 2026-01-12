@@ -347,16 +347,19 @@ async function runApSnapshot(leadId, cardEl) {
     });
   }
 
-  function mapStatusClass(statusRaw) {
-    const s = (statusRaw || '').toString().toLowerCase();
-    if (s === 'hot') return 'dq-status-hot';
-    if (s === 'warm') return 'dq-status-warm';
-    if (s === 'cold') return 'dq-status-cold';
-    if (s === 'follow-up' || s === 'follow up' || s === 'followup') return 'dq-status-followup';
-    if (s === 'converted') return 'dq-status-converted';
-    if (s === 'research') return 'dq-status-research';
-    return 'dq-status-unspecified';
-  }
+function mapStatusClass(statusRaw) {
+  const s0 = (statusRaw || '').toString().trim().toLowerCase();
+  const s = s0.replace(/_/g, '-'); // follow_up -> follow-up
+
+  if (s === 'hot') return 'dq-status-hot';
+  if (s === 'warm') return 'dq-status-warm';
+  if (s === 'cold') return 'dq-status-cold';
+  if (s === 'follow-up' || s === 'follow up' || s === 'followup') return 'dq-status-followup';
+  if (s === 'converted') return 'dq-status-converted';
+  if (s === 'research') return 'dq-status-research';
+  return 'dq-status-unspecified';
+}
+
 
   // Make a status label look nice for the pill (e.g. "follow-up" -> "Follow-Up")
   function formatStatusLabelForDisplay(raw) {
