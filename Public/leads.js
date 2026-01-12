@@ -1442,10 +1442,29 @@ if (typeof window.renderListView === 'function') {
 
 
 
-  // Auto-run boot once when the page loads
-if (!DS.leadsBootBound) {
-  document.addEventListener('DOMContentLoaded', boot);
-  DS.leadsBootBound = true;
-}
+  // Auto-run boot once when the page loads (robust against timing issues)
+  if (!DS.leadsBootBound) {
+    DS.leadsBootBound = true;
+
+    const safeBoot = () => {
+      // prevent double-execution
+      if (DS._bootRan) return;
+      DS._bootRan = true;
+
+      try {
+        boot();
+      } catch (err) {
+        console.error("DS boot failed:", err);
+      }
+    };
+
+    // If DOM is already parsed, run immediately
+    if (document.readyState === 'interactive' || document.readyState === 'complete') {
+      safeBoot();
+    } else {
+      document.addEventListener('DOMContentLoaded', safeBoot, { once: true });
+    }
+  }
 })();
+
 
