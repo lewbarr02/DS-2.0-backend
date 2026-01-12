@@ -399,14 +399,10 @@ function includesToken(fieldVal, selected){
         return hit ? r[hit] : null;
       };
 
-      // -------- STATUS FILTER --------
-      const sKey = statusKey(get('status'));
-      if (
-        !statuses.includes(sKey.charAt(0).toUpperCase() + sKey.slice(1)) &&
-        !statuses.includes(sKey)
-      ) {
-        if (!statuses.includes(sKey)) continue;
-      }
+// -------- STATUS FILTER --------
+const sKey = statusKey(get('status')); // already lowercase
+if (!statuses.includes(sKey)) continue;
+
 
       // -------- TAG FILTER (uses normalized tags) --------
       const rawTagsVal = get('tags') ?? get('tag') ?? '';
