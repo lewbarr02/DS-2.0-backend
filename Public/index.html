@@ -612,25 +612,25 @@ html, body {
       }
       #viewSwitcher button.active { background: #222; color: #fff; }
 
-/* --- LIST VIEW --- */
 #listView {
-  position: absolute;
+  position: fixed;
   inset: 0;
   display: none;
   background: #f7f8fb;
 
-  /* ✅ Option A: push layout when panel opens */
+  /* ✅ Make list view itself the scroll container */
+  overflow: auto;
+
+  /* ✅ Flex column so toolbar/table stack correctly */
+  flex-direction: column;
+
+  /* ✅ keep your existing panel push behavior */
   margin-right: 0;
   transition: margin-right 0.18s ease;
   box-sizing: border-box;
 }
 
-#listView.show { display: block; }
 
-/* ✅ When Account 360 is open, shrink the list area */
-#listView.with-panel {
-  margin-right: 400px; /* must match the panel width */
-}
 
 
 
@@ -661,8 +661,10 @@ html, body {
 
 #leadTableWrap {
   flex: 1;
-  overflow: auto;
+  overflow: visible;
+  min-height: 0;
 }
+
 
 
       table { width: 100%; border-collapse: collapse; font-size: 14px; background: #fff; }
