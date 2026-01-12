@@ -1524,131 +1524,88 @@ document.addEventListener('DOMContentLoaded', () => {
   const dashTgl = document.getElementById('dashboardToggle');
   const logo    = document.getElementById('logo');
 
-  // Map/List switcher (SAFE)
-  function showMap() {
-    const mapViewEl  = document.getElementById('mapView');
-    const listViewEl = document.getElementById('listView');
-    if (!mapViewEl) return;
+  <!-- View + Dashboard toggle wiring (clean) -->
+  <script>
+    // ---------- VIEW + DASHBOARD TOGGLE (Map/List + Hide Controls) ----------
+    const logo   = document.getElementById('logo');
+    const btnMap = document.getElementById('btnMapView');
+    const btnList = document.getElementById('btnListView');
+    const dashTgl = document.getElementById('dashboardToggle');
+    const dash    = document.getElementById('dashboard');
 
-    mapViewEl.style.display = 'block';
+    function showMap() {
+      const mapViewEl  = document.getElementById('mapView');
+      const listViewEl = document.getElementById('listView');
 
-    if (listViewEl) {
-      listViewEl.classList.remove('show');
-      listViewEl.style.display = 'none';
+      if (mapViewEl) mapViewEl.style.display = 'block';
+      if (listViewEl) {
+        listViewEl.classList.remove('show');
+        listViewEl.style.display = 'none';
+      }
+
+      if (btnMap) {
+        btnMap.classList.add('active');
+        btnMap.setAttribute('aria-selected', 'true');
+      }
+      if (btnList) {
+        btnList.classList.remove('active');
+        btnList.setAttribute('aria-selected', 'false');
+      }
+
+      if (logo) logo.style.display = '';
     }
 
-    btnMap?.classList.add('active');
-    btnList?.classList.remove('active');
-    if (logo) logo.style.display = '';
-  }
+    function showList() {
+      const mapViewEl  = document.getElementById('mapView');
+      const listViewEl = document.getElementById('listView');
 
-  function showList() {
-    const mapViewEl  = document.getElementById('mapView');
-    const listViewEl = document.getElementById('listView');
-    if (!listViewEl) return;
+      if (!listViewEl) {
+        console.warn('List view element not found (#listView). Not switching views.');
+        return;
+      }
 
-    listViewEl.style.display = 'flex';
-    listViewEl.classList.add('show');
+      listViewEl.style.display = 'flex';
+      listViewEl.classList.add('show');
+      if (mapViewEl) mapViewEl.style.display = 'none';
 
-    if (mapViewEl) mapViewEl.style.display = 'none';
+      if (btnList) {
+        btnList.classList.add('active');
+        btnList.setAttribute('aria-selected', 'true');
+      }
+      if (btnMap) {
+        btnMap.classList.remove('active');
+        btnMap.setAttribute('aria-selected', 'false');
+      }
 
-    btnList?.classList.add('active');
-    btnMap?.classList.remove('active');
-    if (logo) logo.style.display = 'none';
+      if (logo) logo.style.display = 'none';
 
-    if (typeof window.renderListView === 'function') {
-      setTimeout(() => window.renderListView(), 0);
+      // Force List View to render using current filtered state
+      if (typeof window.renderListView === 'function') {
+        setTimeout(() => window.renderListView(), 0);
+      }
     }
-  }
 
-btnMap?.addEventListener('click', showMap);
-btnList?.addEventListener('click', showList);
+    if (btnMap) btnMap.addEventListener('click', showMap);
+    if (btnList) btnList.addEventListener('click', showList);
 
-// Hide Controls toggle (forced)
-dashTgl?.addEventListener('click', () => {
-  const willHide = !dash.classList.contains('hidden');
+    // Hide/Show dashboard controls
+    if (dashTgl && dash) {
+      dashTgl.addEventListener('click', () => {
+        const isHidden = dash.classList.toggle('hidden');
+        dashTgl.textContent = isHidden ? 'Show Controls' : 'Hide Controls';
+        dashTgl.setAttribute('aria-pressed', (!isHidden).toString());
+      });
 
-  // Toggle the dashboard panel
-  dash.classList.toggle('hidden', willHide);
+      // Optional shortcut: Shift + D
+      document.addEventListener('keydown', (e) => {
+        if (e.shiftKey && e.key && e.key.toLowerCase() === 'd') {
+          e.preventDefault();
+          dashTgl.click();
+        }
+      });
+    }
+  </script>
 
-  // (Optional) also hide CSV bar if it’s visually part of “controls”
-  const csvBar = document.getElementById('csvUploadBar');
-  if (csvBar) csvBar.classList.toggle('hidden', willHide);
-
-  dashTgl.textContent = willHide ? 'Show Controls' : 'Hide Controls';
-  dashTgl.setAttribute('aria-pressed', (!willHide).toString());
-});
-
-}
-
-// ✅ Add Lead modal wiring (fixes "openAddLeadModal not found")
-const leadModal = document.getElementById('leadModal');
-const leadForm  = document.getElementById('leadForm');
-const cancelBtn = document.getElementById('cancelLead');
-
-function openAddLeadModal() {
-  if (!leadModal) return;
-
-  // clear form
-  if (leadForm) leadForm.reset();
-
-  // sensible defaults
-  const statusEl = leadForm?.querySelector('[name="status"]');
-  if (statusEl && !statusEl.value) statusEl.value = 'Unspecified';
-
-  const lastTouchedEl = leadForm?.querySelector('[name="last_touched"]');
-  if (lastTouchedEl && !lastTouchedEl.value) {
-    const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    lastTouchedEl.value = `${yyyy}-${mm}-${dd}`;
-  }
-
-  // show modal
-  leadModal.classList.remove('hidden');
-  leadModal.style.display = 'flex';
-}
-
-function closeAddLeadModal() {
-  if (!leadModal) return;
-  leadModal.classList.add('hidden');
-  leadModal.style.display = 'none';
-}
-
-// expose globally because leads.js is calling it
-window.openAddLeadModal  = openAddLeadModal;
-window.closeAddLeadModal = closeAddLeadModal;
-
-// wire BOTH buttons (dashboard + list)
-document.getElementById('addLeadBtn')?.addEventListener('click', (e) => {
-  e.preventDefault();
-  openAddLeadModal();
-});
-document.getElementById('listAddLeadBtn')?.addEventListener('click', (e) => {
-  e.preventDefault();
-  openAddLeadModal();
-});
-
-// cancel button
-cancelBtn?.addEventListener('click', (e) => {
-  e.preventDefault();
-  closeAddLeadModal();
-});
-
-// click outside modal-content closes
-leadModal?.addEventListener('click', (e) => {
-  if (e.target === leadModal) closeAddLeadModal();
-});
-
-// Esc closes
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeAddLeadModal();
-});
-
-
-});
-</script>
 
 
     <!-- 🧾 Add Lead Modal (updated with Last Touched) -->
