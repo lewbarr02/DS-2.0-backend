@@ -1564,16 +1564,21 @@ document.addEventListener('DOMContentLoaded', () => {
 btnMap?.addEventListener('click', showMap);
 btnList?.addEventListener('click', showList);
 
-// ✅ Hide Controls toggle (works even after UI changes)
-if (dashTgl) {
-  dashTgl.addEventListener('click', () => {
-    const dashEl = document.getElementById('dashboard');
-    if (!dashEl) return;
+// Hide Controls toggle (forced)
+dashTgl?.addEventListener('click', () => {
+  const willHide = !dash.classList.contains('hidden');
 
-    const isHidden = dashEl.classList.toggle('hidden');
-    dashTgl.textContent = isHidden ? 'Show Controls' : 'Hide Controls';
-    dashTgl.setAttribute('aria-pressed', (!isHidden).toString());
-  });
+  // Toggle the dashboard panel
+  dash.classList.toggle('hidden', willHide);
+
+  // (Optional) also hide CSV bar if it’s visually part of “controls”
+  const csvBar = document.getElementById('csvUploadBar');
+  if (csvBar) csvBar.classList.toggle('hidden', willHide);
+
+  dashTgl.textContent = willHide ? 'Show Controls' : 'Hide Controls';
+  dashTgl.setAttribute('aria-pressed', (!willHide).toString());
+});
+
 }
 
 // ✅ Add Lead modal wiring (fixes "openAddLeadModal not found")

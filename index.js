@@ -26,6 +26,8 @@ app.use(express.json());
 app.set('json spaces', 2);
 
 
+
+
 // === BEGIN: STATIC_FRONTEND_SERVING ===
 // ---- Static frontend serving ----
 // All your HTML/JS/images live in ./Public now
@@ -255,7 +257,117 @@ function qpCountMode(val) {
 // === END: DB_POOL_AND_QP_HELPERS ===
 
 
+
 // === BEGIN: ROUTES ===
+
+
+// =============================================
+// CREATE SINGLE LEAD (Add Lead modal)
+// POST /leads
+// =============================================
+app.post('/leads', async (req, res) => {
+  try {
+    const b = req.body || {};
+
+    // Require at least something meaningful
+    const name = (b.name || '').trim();
+    const company = (b.company || '').trim();
+
+    if (!name && !company) {
+      return res.status(400).json({ error: 'Please provide at least a Name or Company.' });
+    }
+
+    // Tags: allow "a, b, c" or ["a","b"]
+    let tags = [];
+    if (Array.isArray(b.tags)) {
+      tags = b.tags.map(t => String(t).trim()).filter(Boolean);
+    } else if (typeof b.tags === 'string') {
+      tags = b.tags.split(',').map(t => t.trim()).filter(Boolean);
+    }
+
+    const sql = `
+      INSERT INTO leads
+      (name, company, city, state, industry, cadence_name, website, status, notes,
+       arr, ap_spend, size, obstacle, net_new, self_sourced, last_contacted_at, tags,
+       created_at, updated_at)
+      VALUES
+      ($1,$2,$3,$4,$5,$6,$7,$8,$9,
+       $10,$11,$12,$13,$14,$15,$16,$17,
+       NOW(), NOW())
+      RETURNING *;
+    `;
+
+    const numOrNull = (v) => {
+      if (v === undefined || v === null) return null;
+      const s = String(v).trim();
+      if (!s) return null;
+      const n = Number(s.replace(/[$,]/g, ''));
+      return Number.isFinite(n) ? n : null;
+    };
+
+    const boolOrNull = (v) => {
+      if (v === undefined || v === null || String(v).trim() === '') return null;
+      const s = String(v).trim().toLowerCase();
+      if (['1','true','yes','y','on'].includes(s)) return true;
+      if (['0','false','no','n','off'].includes(s)) return false;
+      return null;
+    };
+
+    // NOTE: your DB stores status normalized with underscores in other places,
+    // but for Add Lead we’ll store whatever user sends (you can normalize later if desired).
+    const values = [
+      name || null,
+      company || null,
+      (b.city || '').trim() || null,
+      (b.state || '').trim() || null,
+      (b.industry || '').trim() || null,
+      (b.cadence_name || '').trim() || null,
+      (b.website || '').trim() || null,
+      (b.status || '').trim() || null,
+      (b.notes || '').trim() || null,
+      numOrNull(b.arr),
+      numOrNull(b.ap_spend),
+      (b.size || '').trim() || null,
+      (b.obstacle || '').trim() || null,
+      boolOrNull(b.net_new),
+      boolOrNull(b.self_sourced),
+      b.last_touched ? new Date(b.last_touched) : null,
+      tags
+    ];
+
+    const result = await pool.query(sql, values);
+    let lead = result.rows[0];
+
+    // ✅ Auto-geocode new lead so it appears immediately (pinned_only views)
+    try {
+      const geo = await geocodeOne({
+        company: lead.company,
+        city: lead.city,
+        state: lead.state
+      });
+
+      if (geo) {
+        const upd = await pool.query(
+          `UPDATE leads
+           SET latitude = $1, longitude = $2, updated_at = NOW()
+           WHERE id = $3
+           RETURNING *;`,
+          [geo.lat, geo.lon, lead.id]
+        );
+        lead = upd.rows[0] || lead;
+      }
+    } catch (e) {
+      console.warn('Create lead: geocode failed (non-fatal):', e.message);
+    }
+
+    return res.status(201).json({ lead });
+
+  } catch (err) {
+    console.error('POST /leads failed:', err);
+    return res.status(500).json({ error: 'Failed to create lead.' });
+  }
+});
+
 
 
 // =============================================
