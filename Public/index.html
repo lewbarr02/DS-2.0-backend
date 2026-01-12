@@ -2325,43 +2325,11 @@ window.findLeadById = findLeadById;
 
 // ✅ Restore selected lead after any refreshLeads() call
 // (We wait until leads.js has created window.refreshLeads)
-(function attachRefreshRestoreWrapper() {
-  function tryAttach() {
-    if (!window.refreshLeads) return false;
-    if (window.refreshLeads.__restoresSelected) return true;
 
-    const _origRefreshLeads = window.refreshLeads;
+// ✅ Restore selected lead after any refreshLeads() call
+// (We wait until leads.js has created window.refreshLeads)
 
-    window.refreshLeads = async function (...args) {
-      const res = await _origRefreshLeads.apply(this, args);
 
-      // Let the list DOM finish rendering, then restore selection
-      setTimeout(() => {
-        try {
-          if (typeof restoreSelectedLeadIfAny === 'function') {
-            restoreSelectedLeadIfAny();
-          }
-        } catch (e) {
-          console.error(e);
-        }
-      }, 0);
-
-      return res;
-    };
-
-    window.refreshLeads.__restoresSelected = true;
-    return true;
-  }
-
-  // Try now, and keep trying briefly until leads.js is ready
-  if (tryAttach()) return;
-
-  let tries = 0;
-  const t = setInterval(() => {
-    tries += 1;
-    if (tryAttach() || tries > 50) clearInterval(t); // ~5 seconds max
-  }, 100);
-})();
 
 
 
@@ -2556,6 +2524,8 @@ function restoreSelectedLeadIfAny() {
     forgetSelectedLead();
     return;
   }
+  
+
 
   // Keep the row highlight in sync
   setSelectedLeadRowById(id);
@@ -2569,6 +2539,36 @@ if (panelIsOpen && typeof openAccount360 === 'function') {
 }
 
 }
+
+(function attachRefreshRestoreWrapper() {
+  function tryAttach() {
+    if (!window.refreshLeads) return false;
+    if (window.refreshLeads.__restoresSelected) return true;
+
+    const _origRefreshLeads = window.refreshLeads;
+
+    window.refreshLeads = async function (...args) {
+      const res = await _origRefreshLeads.apply(this, args);
+
+      setTimeout(() => {
+        try { restoreSelectedLeadIfAny(); } catch (e) { console.error(e); }
+      }, 0);
+
+      return res;
+    };
+
+    window.refreshLeads.__restoresSelected = true;
+    return true;
+  }
+
+  if (tryAttach()) return;
+
+  let tries = 0;
+  const t = setInterval(() => {
+    tries += 1;
+    if (tryAttach() || tries > 50) clearInterval(t);
+  }, 100);
+})();
  
 
   function openAccount360(id) {
