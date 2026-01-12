@@ -1506,77 +1506,9 @@ if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
 
 
 
-<!-- ✅ ADD THIS BLOCK RIGHT BELOW THE TWO LINES ABOVE -->
-<script>
-document.addEventListener('DOMContentLoaded', () => {
 
-  const openSummaryBtn = document.getElementById('openSummaryBtn');
-  if (openSummaryBtn) {
-    openSummaryBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      window.location.href = 'summary.html?range=today';
-    });
-  }
-
-  const btnMap  = document.getElementById('btnMapView');
-  const btnList = document.getElementById('btnListView');
-  const dash    = document.getElementById('dashboard');
-  const dashTgl = document.getElementById('dashboardToggle');
-  const logo    = document.getElementById('logo');
-
-// View + Dashboard toggle wiring (clean)
-
-const btnMap   = document.getElementById('btnMapView');
-const btnList  = document.getElementById('btnListView');
-const mapView  = document.getElementById('mapView');
-const listView = document.getElementById('listView');
-const logo     = document.getElementById('logo');
-
-function showMap() {
-  if (mapView) mapView.style.display = 'block';
-  if (listView) {
-    listView.classList.remove('show');
-    listView.style.display = 'none';
-  }
-
-  btnMap?.classList.add('active');
-  btnList?.classList.remove('active');
-  logo && (logo.style.display = '');
-}
-
-function showList() {
-  if (listView) {
-    listView.style.display = 'flex';
-    listView.classList.add('show');
-  }
-  if (mapView) mapView.style.display = 'none';
-
-  btnList?.classList.add('active');
-  btnMap?.classList.remove('active');
-  logo && (logo.style.display = 'none');
-
-  if (typeof window.renderListView === 'function') {
-    setTimeout(() => window.renderListView(), 0);
-  }
-}
-
-btnMap?.addEventListener('click', showMap);
-btnList?.addEventListener('click', showList);
-
-// Dashboard toggle
-const dashTgl = document.getElementById('dashboardToggle');
-const dash    = document.getElementById('dashboard');
-
-dashTgl?.addEventListener('click', () => {
-  const hidden = dash.classList.toggle('hidden');
-  dashTgl.textContent = hidden ? 'Show Controls' : 'Hide Controls';
-});
-
-
-
-
-    <!-- 🧾 Add Lead Modal (updated with Last Touched) -->
-    <div class="modal hidden" id="leadModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: none; justify-content: center; align-items: center;">
+	
+	style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: none; justify-content: center; align-items: center;">
       <div class="modal-content" style="background: white; padding: 20px; width: 400px; max-height: 80vh; overflow-y: auto; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.2);">
         <h2>New Lead</h2>
 <form id="leadForm">
@@ -2971,27 +2903,28 @@ window.renderListView = renderListView;
     }
 
     // Back to Presentation button
-    const backBtn = document.getElementById('backToPresentation');
-    if (backBtn) {
-      backBtn.addEventListener('click', () => {
-        // 1) Manually switch back to Map view
-        const mapView = document.getElementById('mapView');
-        const listView = document.getElementById('listView');
-        const btnMap  = document.getElementById('btnMapView');
+const backBtn = document.getElementById('backToPresentation');
+if (backBtn) {
+  backBtn.addEventListener('click', () => {
+    // 1) Manually switch back to Map view
+    const mapView = document.getElementById('mapView');
+    const listView = document.getElementById('listView');
+    const btnMapEl = document.getElementById('btnMapView');
 
-        if (mapView && listView && btnMap && btnList) {
-          mapView.style.display = 'block';
-          listView.classList.remove('show');
-          btnMap.classList.add('active');
-          btnList.classList.remove('active');
-        }
-
-        // 2) Re-open Presentation Mode using current filters
-        if (typeof window.openPresentationMode === 'function') {
-          window.openPresentationMode();
-        }
-      });
+    if (mapView && listView && btnMapEl && btnList) {
+      mapView.style.display = 'block';
+      listView.classList.remove('show');
+      btnMapEl.classList.add('active');
+      btnList.classList.remove('active');
     }
+
+    // 2) Re-open Presentation Mode using current filters
+    if (typeof window.openPresentationMode === 'function') {
+      window.openPresentationMode();
+    }
+  });
+}
+
   });
   
 document.addEventListener('click', async (e) => {
