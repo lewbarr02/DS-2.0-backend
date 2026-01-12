@@ -4,25 +4,32 @@
 // ---------- API BASE ----------
 const API_BASE = window.DELI_API_BASE || '';
 
-// Centralized map loader – use /map/summary (stable) and fall back to /summary
+// Centralized map loader – prefer /leads/all, but ALWAYS fall back to "all leads"
 async function loadMapData() {
   async function fetchJson(path) {
     try {
       const res = await fetch(path, { cache: 'no-cache' });
       if (!res.ok) return null;
+
+      // If the server returns HTML (instead of JSON), this will throw and we return null
       return await res.json();
     } catch {
       return null;
     }
   }
 
-  // Primary: full lead list (all leads — pin or no pin)
+  // 1) Best option (if your backend supports it): full lead list
   let payload = await fetchJson(`${API_BASE}/leads/all`);
-  if (payload && payload.data) return payload;
+  if (payload && Array.isArray(payload.data)) return payload;
 
-  // Fallback: geocoded map-only leads
-  return await fetchJson(`${API_BASE}/map/summary`) || { data: [] };
+  // 2) Guaranteed fallback: /map/summary with pinned_only=false returns ALL leads
+  payload = await fetchJson(`${API_BASE}/map/summary?pinned_only=false`);
+  if (payload && Array.isArray(payload.data)) return payload;
+
+  // Final fallback: empty
+  return { data: [] };
 }
+
 
 
 
