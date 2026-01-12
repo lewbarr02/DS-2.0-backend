@@ -1433,6 +1433,9 @@ computeFiltered();
 renderMarkers();
 updateStats();
 
+wireDashboard();
+
+
 // Initial List View render (delay one tick so index.html list renderer is definitely ready)
 setTimeout(() => {
   if (typeof window.renderListView === 'function') {
