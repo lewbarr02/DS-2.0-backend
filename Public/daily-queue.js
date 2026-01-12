@@ -687,6 +687,49 @@ if (action === 'ap-snapshot') {
     return card;
   }
 
+  function getDqTodayIsoKey() {
+    // Used only for local UI persistence (not a server source of truth)
+    try {
+      return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    } catch (_) {
+      return 'unknown-date';
+    }
+  }
+
+  const ACTION_TYPE_STORE_PREFIX = 'dq_action_type_v1:'; // bump if schema changes
+
+  function getActionTypeStorageKey(itemId) {
+    return `${ACTION_TYPE_STORE_PREFIX}${getDqTodayIsoKey()}:${itemId}`;
+  }
+
+  function hydrateActionTypesFromStorage() {
+    // If backend doesn't return action_type for completed items yet,
+    // restore it from localStorage so the goals tracker doesn't reset.
+    try {
+      items.forEach((item) => {
+        const id = item && (item.item_id || item.id);
+        if (!id) return;
+
+        const finished = item.is_completed || item.is_done;
+        if (!finished || item.is_skipped) return;
+
+        const existingType =
+          item.activity_type ||
+          item.action_type ||
+          item.actionType ||
+          item.completed_action_type ||
+          item.completedActionType;
+
+        if (existingType) return;
+
+        const stored = localStorage.getItem(getActionTypeStorageKey(id));
+        if (stored) {
+          item.activity_type = stored;
+        }
+      });
+    } catch (_) {}
+  }
+
   function updateActivityGoals() {
     let calls = 0;
     let emails = 0;
@@ -850,6 +893,12 @@ const t = (
         item.is_skipped = false;
         item.activity_type = activity_type; // remember how we completed this
 
+        // Persist activity type locally so goals tracker survives navigation
+        try {
+          localStorage.setItem(getActionTypeStorageKey(itemId), String(activity_type || '').toLowerCase());
+        } catch (_) {}
+
+
         if (new_status) {
           item.status = new_status;
 
@@ -911,6 +960,12 @@ focusFirstActiveCard();
         item.is_skipped = true;
         item.is_completed = false;
         item.is_done = false;
+
+        // If we skip it, clear any stored activity type
+        try {
+          localStorage.removeItem(getActionTypeStorageKey(itemId));
+        } catch (_) {}
+
       }
 
       // Grey it out + move to bottom
@@ -1087,6 +1142,10 @@ function getQueueCards() {
       currentBatch = data.batch || null;
       items = data.items || [];
 
+      // Restore activity types (Call/Email/Social) for completed cards
+      hydrateActionTypesFromStorage();
+
+
       sortItemsForDisplay();
       renderBatch();
 
@@ -1124,6 +1183,10 @@ function getQueueCards() {
       const data = await res.json();
       currentBatch = data.batch || null;
       items = data.items || [];
+
+      // Restore activity types (Call/Email/Social) for completed cards
+      hydrateActionTypesFromStorage();
+
 
       // 🔹 NEW: consistent ordering for new batches too
       sortItemsForDisplay();
