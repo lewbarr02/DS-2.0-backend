@@ -1209,13 +1209,26 @@ html, body {
     📡 Geocode All Missing
   </button>
 
-  <div id="columnsMenu" style="margin-left:auto;">
-    <details>
-      <summary>Columns ▾</summary>
-      <div class="panel" id="columnsPanel"><!-- JS populates --></div>
-    </details>
+  <!-- ✅ RIGHT-SIDE ACTIONS (Top-Right of List View Header) -->
+  <div id="listActions" style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+
+    <!-- ✅ Primary Add Lead button for List View -->
+    <button id="listAddLeadBtn"
+            style="padding:6px 12px; font-size:14px; background:#222; color:#fff;
+                   border:none; border-radius:8px; cursor:pointer;">
+      ➕ Add Lead
+    </button>
+
+    <!-- Existing Columns menu (moved into the right-side cluster) -->
+    <div id="columnsMenu">
+      <details>
+        <summary>Columns ▾</summary>
+        <div class="panel" id="columnsPanel"><!-- JS populates --></div>
+      </details>
+    </div>
+
   </div>
-</div>
+
 
 
 

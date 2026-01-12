@@ -1075,9 +1075,22 @@ setTimeout(async () => {
 // ——— Attach one-time document listeners (call from boot()) ———
 function attachPopupEventDelegates() {
   // Click handlers for buttons in the popup
+  
+  
+  
   document.addEventListener("click", async (e) => {
     const node = e.target;
+	
+	// ➕ Add Lead (List View button)
+if (e.target && e.target.id === "listAddLeadBtn") {
+  e.preventDefault();
 
+  if (typeof openAddLeadModal === "function") {
+    openAddLeadModal();
+  } else {
+    console.warn("openAddLeadModal() not found");
+  }
+}
 
 	
 	    // Edit from preview → open edit form
