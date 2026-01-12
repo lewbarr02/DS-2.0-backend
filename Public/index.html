@@ -1510,13 +1510,19 @@ if (openSummaryBtn) {
     btnList.classList.remove('active');
     if (logo) logo.style.display = '';                 // 👈 NEW (show logo)
   }
-  function showList() {
-    mapView.style.display = 'none';
-    listView.classList.add('show');
-    btnList.classList.add('active');
-    btnMap.classList.remove('active');
-    if (logo) logo.style.display = 'none';             // 👈 NEW (hide logo)
+function showList() {
+  mapView.style.display = 'none';
+  listView.classList.add('show');
+  btnList.classList.add('active');
+  btnMap.classList.remove('active');
+  if (logo) logo.style.display = 'none';
+
+  // ✅ Force List View to render using current DS.state.filtered
+  if (typeof window.renderListView === 'function') {
+    setTimeout(() => window.renderListView(), 0);
   }
+}
+
   btnMap?.addEventListener('click', showMap);
   btnList?.addEventListener('click', showList);
 
@@ -2981,8 +2987,6 @@ document.addEventListener('click', async (e) => {
     btn.textContent = original;
   }
 });
-
-}
 </script>
 
 
