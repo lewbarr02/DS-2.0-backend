@@ -38,6 +38,9 @@ window.refreshLeads = async function refreshLeads() {
   const payload = await loadMapData();
 
   DS.state.rawRows = unwrapData(payload);
+  console.log("[DS] Loaded rows:", DS.state.rawRows.length, payload);
+
+  
 
   // Rebuild dropdown options ONLY
   populateFilterOptions();
@@ -716,9 +719,12 @@ function wireDashboard() {
     updateStats();
 
     // 🔁 Also refresh List View to match current filters
+  setTimeout(() => {
     if (typeof window.renderListView === 'function') {
       window.renderListView();
     }
+  }, 0);
+
   };
 
     [els.tagFilter(), els.typeFilter(), els.cadenceFilter(), els.stateFilter(),els.industryFilter(), els.startDate(), els.endDate()]
@@ -1431,20 +1437,14 @@ computeFiltered();
 renderMarkers();
 updateStats();
 
-// Initial List View render
-if (typeof window.renderListView === 'function') {
-  window.renderListView();
-}
-
-
-
-
-
-
-  // 🔁 Initial List View render once data + filters are ready
+// Initial List View render (delay one tick so index.html list renderer is definitely ready)
+setTimeout(() => {
   if (typeof window.renderListView === 'function') {
     window.renderListView();
   }
+}, 0);
+
+
 }
 
 
