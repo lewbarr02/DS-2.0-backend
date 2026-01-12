@@ -1561,17 +1561,86 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  btnMap?.addEventListener('click', showMap);
-  btnList?.addEventListener('click', showList);
+btnMap?.addEventListener('click', showMap);
+btnList?.addEventListener('click', showList);
 
-  // Hide Controls toggle (single, clean binding)
-  if (dashTgl && dash) {
-    dashTgl.addEventListener('click', () => {
-      const isHidden = dash.classList.toggle('hidden');
-      dashTgl.textContent = isHidden ? 'Show Controls' : 'Hide Controls';
-      dashTgl.setAttribute('aria-pressed', (!isHidden).toString());
-    });
+// ✅ Hide Controls toggle (works even after UI changes)
+if (dashTgl) {
+  dashTgl.addEventListener('click', () => {
+    const dashEl = document.getElementById('dashboard');
+    if (!dashEl) return;
+
+    const isHidden = dashEl.classList.toggle('hidden');
+    dashTgl.textContent = isHidden ? 'Show Controls' : 'Hide Controls';
+    dashTgl.setAttribute('aria-pressed', (!isHidden).toString());
+  });
+}
+
+// ✅ Add Lead modal wiring (fixes "openAddLeadModal not found")
+const leadModal = document.getElementById('leadModal');
+const leadForm  = document.getElementById('leadForm');
+const cancelBtn = document.getElementById('cancelLead');
+
+function openAddLeadModal() {
+  if (!leadModal) return;
+
+  // clear form
+  if (leadForm) leadForm.reset();
+
+  // sensible defaults
+  const statusEl = leadForm?.querySelector('[name="status"]');
+  if (statusEl && !statusEl.value) statusEl.value = 'Unspecified';
+
+  const lastTouchedEl = leadForm?.querySelector('[name="last_touched"]');
+  if (lastTouchedEl && !lastTouchedEl.value) {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    lastTouchedEl.value = `${yyyy}-${mm}-${dd}`;
   }
+
+  // show modal
+  leadModal.classList.remove('hidden');
+  leadModal.style.display = 'flex';
+}
+
+function closeAddLeadModal() {
+  if (!leadModal) return;
+  leadModal.classList.add('hidden');
+  leadModal.style.display = 'none';
+}
+
+// expose globally because leads.js is calling it
+window.openAddLeadModal  = openAddLeadModal;
+window.closeAddLeadModal = closeAddLeadModal;
+
+// wire BOTH buttons (dashboard + list)
+document.getElementById('addLeadBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  openAddLeadModal();
+});
+document.getElementById('listAddLeadBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  openAddLeadModal();
+});
+
+// cancel button
+cancelBtn?.addEventListener('click', (e) => {
+  e.preventDefault();
+  closeAddLeadModal();
+});
+
+// click outside modal-content closes
+leadModal?.addEventListener('click', (e) => {
+  if (e.target === leadModal) closeAddLeadModal();
+});
+
+// Esc closes
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeAddLeadModal();
+});
+
 
 });
 </script>
