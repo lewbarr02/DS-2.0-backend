@@ -2864,9 +2864,10 @@ setTimeout(() => {
   try { restoreSelectedLeadIfAny(); } catch (e) { console.error(e); }
 }, 0);
 
-
-
 };
+
+window.renderListView = renderListView;
+
 
 
   // Wire List toolbar controls
@@ -2987,7 +2988,6 @@ document.addEventListener('click', async (e) => {
     btn.textContent = original;
   }
 });
-}
 </script>
 
 
