@@ -700,7 +700,17 @@ if (action === 'ap-snapshot') {
       const finished = item.is_completed || item.is_done;
       if (!finished || item.is_skipped) return;
 
-      const t = (item.activity_type || '').toString().toLowerCase();
+      // Backend may return this as action_type (or other variants).
+const t = (
+  item.activity_type ||
+  item.action_type ||
+  item.actionType ||
+  item.completed_action_type ||
+  item.completedActionType ||
+  ''
+)
+  .toString()
+  .toLowerCase();
       if (t === 'call') calls += 1;
       else if (t === 'email') emails += 1;
       else if (t === 'social') socials += 1;
