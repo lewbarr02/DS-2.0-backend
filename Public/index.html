@@ -655,10 +655,15 @@ html, body {
       #columnsMenu .panel { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 8px; margin-top: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
       #columnsMenu .panel label { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; }
 
-      #leadTableWrap {
-  height: calc(100% - 96px); /* toolbar + counter */
+
+
+
+
+#leadTableWrap {
+  flex: 1;
   overflow: auto;
 }
+
 
       table { width: 100%; border-collapse: collapse; font-size: 14px; background: #fff; }
       thead th {
@@ -1230,8 +1235,7 @@ html, body {
   </div>
 
 
-
-
+</div> <!-- ✅ END #listToolbar -->
 
 <div id="leadCount"
      style="padding:8px 12px; font-size:12px; color:#555;">
@@ -1248,6 +1252,7 @@ html, body {
 </div>
 
 </div> <!-- ✅ END #listView -->
+
 
 
     <!-- NEW: Account 360° slide-in panel -->
