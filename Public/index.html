@@ -1524,92 +1524,54 @@ document.addEventListener('DOMContentLoaded', () => {
   const dashTgl = document.getElementById('dashboardToggle');
   const logo    = document.getElementById('logo');
 
-  <!-- View + Dashboard toggle wiring (clean) -->
-  <script>
-document.addEventListener('DOMContentLoaded', () => {
-  // ✅ Open Today's Summary
-  const openSummaryBtn = document.getElementById('openSummaryBtn');
-  if (openSummaryBtn) {
-    openSummaryBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      window.location.href = 'summary.html?range=today';
-    });
+// View + Dashboard toggle wiring (clean)
+
+const btnMap   = document.getElementById('btnMapView');
+const btnList  = document.getElementById('btnListView');
+const mapView  = document.getElementById('mapView');
+const listView = document.getElementById('listView');
+const logo     = document.getElementById('logo');
+
+function showMap() {
+  if (mapView) mapView.style.display = 'block';
+  if (listView) {
+    listView.classList.remove('show');
+    listView.style.display = 'none';
   }
 
-  // ✅ Map / List toggle
-  const btnMap   = document.getElementById('btnMapView');
-  const btnList  = document.getElementById('btnListView');
-  const mapView  = document.getElementById('mapView');
-  const listView = document.getElementById('listView');
-  const logo     = document.getElementById('logo');
+  btnMap?.classList.add('active');
+  btnList?.classList.remove('active');
+  logo && (logo.style.display = '');
+}
 
-  function showMap() {
-    if (mapView) mapView.style.display = 'block';
-    if (listView) {
-      listView.classList.remove('show');
-      listView.style.display = 'none';
-    }
-
-    if (btnMap) {
-      btnMap.classList.add('active');
-      btnMap.setAttribute('aria-selected', 'true');
-    }
-    if (btnList) {
-      btnList.classList.remove('active');
-      btnList.setAttribute('aria-selected', 'false');
-    }
-
-    if (logo) logo.style.display = '';
+function showList() {
+  if (listView) {
+    listView.style.display = 'flex';
+    listView.classList.add('show');
   }
+  if (mapView) mapView.style.display = 'none';
 
-  function showList() {
-    if (listView) {
-      listView.style.display = 'flex';
-      listView.classList.add('show');
-    }
-    if (mapView) mapView.style.display = 'none';
+  btnList?.classList.add('active');
+  btnMap?.classList.remove('active');
+  logo && (logo.style.display = 'none');
 
-    if (btnList) {
-      btnList.classList.add('active');
-      btnList.setAttribute('aria-selected', 'true');
-    }
-    if (btnMap) {
-      btnMap.classList.remove('active');
-      btnMap.setAttribute('aria-selected', 'false');
-    }
-
-    if (logo) logo.style.display = 'none';
-
-    // Render List View (if your List View renderer exists)
-    if (typeof window.renderListView === 'function') {
-      setTimeout(() => window.renderListView(), 0);
-    }
+  if (typeof window.renderListView === 'function') {
+    setTimeout(() => window.renderListView(), 0);
   }
+}
 
-  if (btnMap) btnMap.addEventListener('click', showMap);
-  if (btnList) btnList.addEventListener('click', showList);
+btnMap?.addEventListener('click', showMap);
+btnList?.addEventListener('click', showList);
 
-  // ✅ Hide Controls (dashboard toggle)
-  const dashTgl = document.getElementById('dashboardToggle');
-  const dash    = document.getElementById('dashboard');
+// Dashboard toggle
+const dashTgl = document.getElementById('dashboardToggle');
+const dash    = document.getElementById('dashboard');
 
-  if (dashTgl && dash) {
-    dashTgl.addEventListener('click', () => {
-      const isHidden = dash.classList.toggle('hidden');
-      dashTgl.textContent = isHidden ? 'Show Controls' : 'Hide Controls';
-      dashTgl.setAttribute('aria-pressed', (!isHidden).toString());
-    });
-
-    // Optional shortcut: Shift + D
-    document.addEventListener('keydown', (e) => {
-      if (e.shiftKey && e.key && e.key.toLowerCase() === 'd') {
-        e.preventDefault();
-        dashTgl.click();
-      }
-    });
-  }
+dashTgl?.addEventListener('click', () => {
+  const hidden = dash.classList.toggle('hidden');
+  dashTgl.textContent = hidden ? 'Show Controls' : 'Hide Controls';
 });
-</script>
+
 
 
 
