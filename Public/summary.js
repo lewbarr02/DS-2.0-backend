@@ -852,6 +852,13 @@ function renderStatusChanges(changes) {
     const spend = data.metrics?.ap_spend || {};
     const prevAct = prev?.metrics?.activity || {};
     const prevPip = prev?.metrics?.pipeline || {};
+	
+	// NEW: Leads added to pipeline (date-gated)
+const leadsAdded =
+  act.leads_added_window ??
+  act.leads_added ??
+  0;
+
 
 
     el("kpi_contacted").textContent = act.leads_contacted_window ?? 0;
@@ -860,6 +867,12 @@ function renderStatusChanges(changes) {
       act.leads_contacted_window ?? 0,
       prevAct.leads_contacted_window ?? 0
     );
+	
+	const addedEl = el("kpi_added");
+if (addedEl) {
+  addedEl.textContent = leadsAdded;
+}
+
 
 
     const touches = act.total_touches ?? 0;

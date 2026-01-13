@@ -313,6 +313,41 @@ function unwrapData(payload){
     }
     return true;
   }
+  
+  // ===============================
+// 📈 Leads Added (created_at only)
+// ===============================
+function countLeadsAddedInRange(rows, startStr, endStr) {
+  if (!startStr && !endStr) return null;
+
+  let count = 0;
+
+  for (const r of rows) {
+    const created =
+      r.created_at ||
+      r.createdAt ||
+      r.Created_At ||
+      null;
+
+    if (!created) continue;
+
+    const d = new Date(created);
+    if (isNaN(d)) continue;
+
+    if (startStr && d < new Date(startStr)) continue;
+
+    if (endStr) {
+      const e = new Date(endStr);
+      e.setHours(23, 59, 59, 999);
+      if (d > e) continue;
+    }
+
+    count++;
+  }
+
+  return count;
+}
+
 
   // Generic helper used for Type / Cadence filters
 function includesToken(fieldVal, selected){
@@ -514,6 +549,18 @@ function renderMarkers() {
 
 
   function updateStats() {
+	  
+	  
+	 const startStr = els.startDate()?.value || '';
+const endStr   = els.endDate()?.value || '';
+
+const leadsAdded = countLeadsAddedInRange(
+  DS.state.rawRows || [],
+  startStr,
+  endStr
+);
+ 
+	  
     const allRows = DS.state.rawRows || [];
     const filtered = DS.state.filtered || [];
 
