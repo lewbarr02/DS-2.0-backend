@@ -3365,14 +3365,13 @@ document.addEventListener('click', async (e) => {
       line1El.textContent = `🎯 ${touched} leads touched this cycle`;
     }
 
-        const leadsAdded =
-      pip.leads_added ??
-      pip.leads_added_window ??
-      act.leads_added_window ??
-      act.leads_added ??
-      data.leads_added ??
-      data.accounts_added ?? // fallback if backend uses this name
-      0;
+const range = data.range || {};
+const leadsAdded = countLeadsAdded(
+  data.leads || [],
+  range.from,
+  range.to
+);
+
 
     line2El.textContent = `➕ ${leadsAdded} leads added | 📈 ${upgrades} upgrades | 📉 ${downgrades} downgrades`;
 
@@ -3605,6 +3604,20 @@ async function loadPresentationBandNotesFromSummary() {
     console.error('[Presentation AI notes/summary failed]:', err);
   }
 }  
+
+function countLeadsAdded(leads, from, to) {
+  if (!Array.isArray(leads)) return 0;
+
+  const start = new Date(from + "T00:00:00");
+  const end   = new Date(to   + "T23:59:59");
+
+  return leads.filter(l => {
+    if (!l.created_at) return false;
+    const d = new Date(l.created_at);
+    return d >= start && d <= end;
+  }).length;
+}
+
 
 
 
