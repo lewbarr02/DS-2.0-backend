@@ -124,7 +124,8 @@ html, body {
       }
 
       /* Logo (existing) */
-      #logo { position: absolute; top: -122px; left: 10px; height: 400px; z-index: 2000; }
+      #logo { position: absolute; top: -122px; left: 10px; height: 400px; z-index: 2000; pointer-events: none; }
+
 
 /* Overlay container – dark mode */
 .presentation-overlay {
@@ -143,6 +144,10 @@ html, body {
   /* full-screen dark glass */
   background: rgba(2, 6, 23, 0.92);
 }
+
+/* Hide the Deli logo during Presentation Mode */
+body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
+
 
 
 .presentation-overlay.hidden {
@@ -837,7 +842,7 @@ html, body {
     </style>
   </head>
   <body>
-    <img alt="Deli Sandwich Logo" id="logo" src="images/Deli_Sandwich_Logo_Large.png"/>
+   
 
     <!-- Existing dashboard toggle -->
     <button id="dashboardToggle" title="Toggle Dashboard (Shift+D)" aria-pressed="true">Hide Controls</button>
@@ -973,6 +978,7 @@ html, body {
 
     <!-- MAP VIEW (wrapped) -->
     <div id="mapView">
+	<img alt="Deli Sandwich Logo" id="logo" src="images/Deli_Sandwich_Logo_Large.png"/>
       <div id="map"></div>
 
          <!-- Presentation Mode Funnel Overlay -->
@@ -3826,6 +3832,24 @@ function drillDownToStatus(statusLabel) {
 console.log("✅ index.html script fully loaded");
 </script>
 
+<script>
+  // Fallback: hide the logo while Presentation Mode is open
+  (function () {
+    const logo = document.getElementById('logo');
+    const overlay = document.getElementById('presentation-overlay');
+    if (!logo || !overlay) return;
+
+    const sync = () => {
+      const isOpen = !overlay.classList.contains('hidden');
+      logo.style.display = isOpen ? 'none' : '';
+    };
+
+    sync();
+
+    const mo = new MutationObserver(sync);
+    mo.observe(overlay, { attributes: true, attributeFilter: ['class'] });
+  })();
+</script>
 
 
 </body>
