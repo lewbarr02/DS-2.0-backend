@@ -559,6 +559,13 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
   color: #9ca3af;
 }
 
+.icp-share {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+
 /* Responsive: stack tiles nicely on small screens */
 @media (max-width: 960px) {
   .icp-tile {
@@ -3250,17 +3257,26 @@ document.addEventListener('click', async (e) => {
       'Other'
     ];
 
-    return order.map((name) => {
-      const b = buckets[name];
-      const pct = b.total > 0
-        ? Math.round((b.converted / b.total) * 100)
-        : 0;
-      return {
-        name,
-        percent: pct,
-        leads: b.total
-      };
-    });
+const grandTotal = Object.values(buckets).reduce((sum, b) => sum + (b.total || 0), 0);
+
+return order.map((name) => {
+  const b = buckets[name];
+  const pct = b.total > 0
+    ? Math.round((b.converted / b.total) * 100)
+    : 0;
+
+  const share = grandTotal > 0
+    ? Math.round((b.total / grandTotal) * 100)
+    : 0;
+
+  return {
+    name,
+    percent: pct,   // conversion rate within vertical
+    leads: b.total, // count in vertical
+    share           // % of total pipeline
+  };
+});
+
   }
 
   function renderIcpBreakdown(rows) {
@@ -3275,11 +3291,13 @@ document.addEventListener('click', async (e) => {
 
       const label = row.leads === 1 ? '1 lead' : `${row.leads} leads`;
 
-      tile.innerHTML = `
-        <div class="icp-name">${row.name.toUpperCase()}</div>
-        <div class="icp-percent">${row.percent}%</div>
-        <div class="icp-count">${label}</div>
-      `;
+tile.innerHTML = `
+  <div class="icp-name">${row.name.toUpperCase()}</div>
+  <div class="icp-percent">${row.percent}%</div>
+  <div class="icp-count">${label}</div>
+  <div class="icp-share">${row.share}% of pipeline</div>
+`;
+
 
       container.appendChild(tile);
     });
