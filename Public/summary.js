@@ -454,21 +454,38 @@ const buckets = {
       b.leads += leads;
       b.convLeads += (convPct / 100) * leads; // approximate # converted
     }
+	
+	const totalPipelineLeads = Object.values(buckets).reduce(
+  (sum, b) => sum + Number(b.leads || 0),
+  0
+);
 
-    const setTile = (prefix, data) => {
-      const leads = data.leads || 0;
-      const convPct = leads ? Math.round((100 * data.convLeads) / leads) : 0;
 
-      const convEl  = el(`ind_${prefix}_conv`);
-      const leadsEl = el(`ind_${prefix}_leads`);
+const setTile = (prefix, data) => {
+  const leads = data.leads || 0;
+  const convPct = leads ? Math.round((100 * data.convLeads) / leads) : 0;
 
-      if (convEl) {
-        convEl.textContent = leads ? `${convPct}%` : "—";
-      }
-      if (leadsEl) {
-        leadsEl.textContent = leads ? `${leads} leads` : "No data";
-      }
-    };
+  const sharePct = totalPipelineLeads
+    ? Math.round((100 * leads) / totalPipelineLeads)
+    : 0;
+
+  const convEl  = el(`ind_${prefix}_conv`);
+  const leadsEl = el(`ind_${prefix}_leads`);
+  const shareEl = el(`ind_${prefix}_share`);
+
+  if (convEl) {
+    convEl.textContent = leads ? `${convPct}%` : "—";
+  }
+  if (leadsEl) {
+    leadsEl.textContent = leads ? `${leads} leads` : "No data";
+  }
+  if (shareEl) {
+    shareEl.textContent = leads ? `${sharePct}% of pipeline` : "—";
+  }
+};
+
+	
+	
 
 setTile("education",      buckets.Education);
 setTile("healthcare",     buckets.Healthcare);
