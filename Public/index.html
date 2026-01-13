@@ -23,15 +23,19 @@ html, body {
 
 /* --- MAP AREA (final, full-bleed) --- */
 #mapView {               /* wrapper becomes neutral */
-  position: static;
+  position: relative;    /* ✅ create a predictable stacking context */
+  z-index: 0;
 }
+
 
 #map {                   /* the map itself owns the viewport */
   position: fixed;
   inset: 0;              /* top:0; right:0; bottom:0; left:0 */
   height: 100vh;
   width: 100vw;
+  z-index: 0;            /* ✅ keep map behind UI */
 }
+
 
 #mapView.hidden { display: none; }
 
@@ -1457,6 +1461,74 @@ html, body {
 <!-- your app scripts -->
 <script src="leads.js" defer></script>
 
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  // Elements
+  const mapView  = document.getElementById('mapView');
+  const listView = document.getElementById('listView');
+  const btnMap   = document.getElementById('btnMapView');
+  const btnList  = document.getElementById('btnListView');
+
+  const dashboard = document.getElementById('dashboard');
+  const dashBtn   = document.getElementById('dashboardToggle');
+
+  // --- Map/List switching ---
+  function showMap() {
+    if (mapView) mapView.classList.remove('hidden');
+    if (listView) listView.classList.remove('show');
+
+    btnMap?.classList.add('active');
+    btnList?.classList.remove('active');
+
+    btnMap?.setAttribute('aria-selected', 'true');
+    btnList?.setAttribute('aria-selected', 'false');
+  }
+
+  function showList() {
+    if (mapView) mapView.classList.add('hidden');
+    if (listView) listView.classList.add('show');
+
+    btnList?.classList.add('active');
+    btnMap?.classList.remove('active');
+
+    btnList?.setAttribute('aria-selected', 'true');
+    btnMap?.setAttribute('aria-selected', 'false');
+
+    // Render list if available
+    if (typeof window.renderListView === 'function') {
+      setTimeout(() => window.renderListView(), 0);
+    }
+  }
+
+  btnMap?.addEventListener('click', (e) => { e.preventDefault(); showMap(); });
+  btnList?.addEventListener('click', (e) => { e.preventDefault(); showList(); });
+
+  // --- Hide Controls toggle ---
+  function setDashboardHidden(hidden) {
+    if (!dashboard || !dashBtn) return;
+
+    dashboard.classList.toggle('hidden', hidden);
+
+    // aria + label
+    dashBtn.setAttribute('aria-pressed', String(!hidden));
+    dashBtn.textContent = hidden ? 'Show Controls' : 'Hide Controls';
+  }
+
+  dashBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    const isHidden = dashboard?.classList.contains('hidden');
+    setDashboardHidden(!isHidden);
+  });
+
+  // Ensure initial state matches current DOM
+  if (dashboard && dashBtn) {
+    setDashboardHidden(dashboard.classList.contains('hidden'));
+  }
+});
+</script>
+
+
+
 
 
 <!-- ✅ Auto-geocode helper (place near the end of <body>) -->
@@ -1508,92 +1580,91 @@ if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
 
 
 	
-	style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: none; justify-content: center; align-items: center;">
-      <div class="modal-content" style="background: white; padding: 20px; width: 400px; max-height: 80vh; overflow-y: auto; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.2);">
-        <h2>New Lead</h2>
-<form id="leadForm">
-  <input type="hidden" name="id" />
+<!-- ✅ Add Lead Modal (fixed wrapper) -->
+<div id="leadModal" class="modal hidden"
+     style="position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); z-index: 9999; display: none;
+            justify-content: center; align-items: center;">
 
-  <input name="name" placeholder="Name" required
-         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+  <div class="modal-content"
+       style="background: white; padding: 20px; width: 400px; max-height: 80vh;
+              overflow-y: auto; border-radius: 10px; box-shadow: 0 0 20px rgba(0,0,0,0.2);">
 
-  <input name="company" placeholder="Company"
-         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+    <h2>New Lead</h2>
 
-  <input name="city" placeholder="City"
-         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+    <form id="leadForm">
+      <input type="hidden" name="id" />
 
-  <input name="state" placeholder="State"
-         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+      <input name="name" placeholder="Name" required
+             style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
 
-  <!-- NEW FIELD -->
-  <input name="industry" placeholder="Industry"
-         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+      <input name="company" placeholder="Company"
+             style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
 
-  <input name="tags" placeholder="Tags (comma-separated)"
-         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+      <input name="city" placeholder="City"
+             style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
 
-  <input name="cadence_name" placeholder="Cadence Name"
-         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+      <input name="state" placeholder="State"
+             style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
 
-  <input name="website" placeholder="Website"
-         style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+      <input name="industry" placeholder="Industry"
+             style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
 
-  <select name="status"
-          style="width: 100%; margin-bottom: 10px; padding: 8px;">
-    <option value="">Select Status</option>
-    <option value="Unspecified">Unspecified ⚪</option>
-    <option value="Converted">Converted 🏆</option>
-    <option value="Hot">Hot 🔥</option>
-    <option value="Warm">Warm 🌞</option>
-    <option value="Cold">Cold 🧊</option>
-    <option value="Follow-Up">Follow-Up ⏳</option>
-    <option value="Research">Research 🔍</option>
-  </select>
+      <input name="tags" placeholder="Tags (comma-separated)"
+             style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
 
-  <label style="display:block; font-weight:600; margin-top:6px;">
-    Last Touched
-  </label>
-  <input name="last_touched" type="date"
-         style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+      <input name="cadence_name" placeholder="Cadence Name"
+             style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
 
-  <input name="net_new" placeholder="Net New (true/false)"
-         style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+      <input name="website" placeholder="Website"
+             style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
 
-  <!-- ARR + AP Spend (Finexio-style shorthand like 25M or 2.5B) -->
-  <div style="display:flex; gap:8px; margin-bottom: 10px;">
-    <input
-      name="arr"
-      placeholder="ARR (e.g. 25M)"
-      style="flex: 1; padding: 8px;"
-    />
+      <select name="status"
+              style="width: 100%; margin-bottom: 10px; padding: 8px;">
+        <option value="">Select Status</option>
+        <option value="Unspecified">Unspecified ⚪</option>
+        <option value="Converted">Converted 🏆</option>
+        <option value="Hot">Hot 🔥</option>
+        <option value="Warm">Warm 🌞</option>
+        <option value="Cold">Cold 🧊</option>
+        <option value="Follow-Up">Follow-Up ⏳</option>
+        <option value="Research">Research 🔍</option>
+      </select>
 
-    <input
-      name="ap_spend"
-      placeholder="AP Spend (e.g. 10M)"
-      style="flex: 1; padding: 8px;"
-    />
-  </div>
+      <label style="display:block; font-weight:600; margin-top:6px;">
+        Last Touched
+      </label>
+      <input name="last_touched" type="date"
+             style="width: 100%; margin-bottom: 10px; padding: 8px;" />
 
-  <input name="obstacle" placeholder="Obstacle"
-         style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+      <input name="net_new" placeholder="Net New (true/false)"
+             style="width: 100%; margin-bottom: 10px; padding: 8px;" />
 
-
-  <input name="self_sourced" placeholder="Self Sourced (true/false)"
-         style="width: 100%; margin-bottom: 10px; padding: 8px;" />
-
-  <textarea name="notes" placeholder="Notes..."
-            style="width: 100%; margin-bottom: 10px; padding: 8px;"></textarea>
-
-  <div class="modal-buttons"
-       style="display: flex; justify-content: flex-end; gap: 10px;">
-    <button id="cancelLead" type="button">Cancel</button>
-    <button type="submit">Save Lead</button>
-  </div>
-</form>
-
+      <div style="display:flex; gap:8px; margin-bottom: 10px;">
+        <input name="arr" placeholder="ARR (e.g. 25M)" style="flex: 1; padding: 8px;" />
+        <input name="ap_spend" placeholder="AP Spend (e.g. 10M)" style="flex: 1; padding: 8px;" />
       </div>
-    </div>
+
+      <input name="obstacle" placeholder="Obstacle"
+             style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+
+      <input name="self_sourced" placeholder="Self Sourced (true/false)"
+             style="width: 100%; margin-bottom: 10px; padding: 8px;" />
+
+      <textarea name="notes" placeholder="Notes..."
+                style="width: 100%; margin-bottom: 10px; padding: 8px;"></textarea>
+
+      <div class="modal-buttons"
+           style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button id="cancelLead" type="button">Cancel</button>
+        <button type="submit">Save Lead</button>
+      </div>
+    </form>
+
+  </div>
+</div>
+
+	
 <script>
 /* ---------- List View wiring + sorting ---------- */
 
