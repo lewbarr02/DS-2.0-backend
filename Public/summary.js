@@ -479,10 +479,14 @@ const setTile = (prefix, data) => {
   if (leadsEl) {
     leadsEl.textContent = leads ? `${leads} leads` : "No data";
   }
-  if (shareEl) {
-    shareEl.textContent = leads ? `${sharePct}% of pipeline` : "—";
-  }
-};
+if (shareEl) {
+  shareEl.textContent = leads
+    ? `${sharePct}% of pipeline`
+    : "—";
+
+  shareEl.classList.add("icp-accent");
+}
+
 
 	
 	
