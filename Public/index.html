@@ -1730,9 +1730,9 @@ function getTimezoneByState(state) {
   }
   return "UNKNOWN";
 }
-</script>
 
 /* ---------- List View wiring + sorting ---------- */
+
 
   // Helpers
   const $  = (sel) => document.querySelector(sel);
@@ -1962,7 +1962,6 @@ function prettyStatus(key) {
 
 function renderListTable(rows, baseRows) {
 
-const tz = getTimezoneByState(getCI(r,'state'));
 
 
   const thead = $('#leadThead');
@@ -2046,7 +2045,6 @@ window.LIST_STATUS_OPTIONS = [
   { value: "Unspecified", label: "⚪ Unspecified" }
 ];
 
-	
 
     // update global caches for the inline row editor
     window.LIST_STATE_OPTIONS    = stateOptions;
@@ -2056,7 +2054,8 @@ window.LIST_STATUS_OPTIONS = [
     // Rows
     const html = rows.map(r => {
 	  const rawStatus = statusKey(getCI(r, 'status') || 'unspecified'); // ALWAYS normalized (follow_up → follow-up)
-const statusEmoji = prettyStatus(rawStatus).split(' ')[0];        // 🏆 / 🔥 / 🌞 / ⏳ / 🧊 / 🔍 / ⚪
+	  const tz = getTimezoneByState(getCI(r,'state'));
+      const statusEmoji = prettyStatus(rawStatus).split(' ')[0];        // 🏆 / 🔥 / 🌞 / ⏳ / 🧊 / 🔍 / ⚪
       const t = (v) => (v == null || v === '') ? '' : String(v);
       const website = getCI(r,'website');
       const websiteUrl = website ? normalizeWebsiteUrl(website) : '';
