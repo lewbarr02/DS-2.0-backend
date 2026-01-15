@@ -53,6 +53,52 @@ const doneChevronEl = document.getElementById('dq-done-chevron');
   // Helpers
   // ———————————————————————
   
+  // ------------------------------
+// TIME ZONE HELPERS (Daily Queue)
+// ------------------------------
+const DQ_TIMEZONE_MAP = {
+  ET: ["ME","NH","VT","MA","RI","CT","NY","NJ","PA","DE","MD","DC","VA","WV","NC","SC","GA","FL","OH","MI","IN","KY","TN"],
+  CT: ["AL","AR","IA","IL","KS","LA","MN","MO","MS","ND","NE","OK","SD","TX","WI"],
+  MT: ["AZ","CO","ID","MT","NM","UT","WY"],
+  PT: ["CA","NV","OR","WA"]
+};
+
+function getTimezoneByState(state) {
+  if (!state) return "UNKNOWN";
+  const s = String(state).trim().toUpperCase();
+  for (const zone in DQ_TIMEZONE_MAP) {
+    if (DQ_TIMEZONE_MAP[zone].includes(s)) return zone;
+  }
+  return "UNKNOWN";
+}
+
+function getLocationParts(item) {
+  return {
+    city: item.city || item.City || '',
+    state: item.state || item.State || ''
+  };
+}
+
+// Returns SAFE HTML (we escape user data)
+function renderLocationHtml(item) {
+  const { city, state } = getLocationParts(item);
+
+  const citySafe = city ? escapeHtml(city) : '';
+  const stateSafe = state ? escapeHtml(state) : '';
+
+  if (!citySafe && !stateSafe) return 'Location N/A';
+
+  if (stateSafe) {
+    const zone = getTimezoneByState(stateSafe);
+    const pill = `<span class="dq-state-pill dq-tz-${zone}">${stateSafe}</span>`;
+    if (citySafe) return `${citySafe}, ${pill}`;
+    return pill;
+  }
+
+  return citySafe;
+}
+
+  
   // Done Today collapse state (remembered per session)
 const DONE_COLLAPSE_KEY = 'dq_done_collapsed';
 
@@ -554,6 +600,12 @@ if (action === 'ap-snapshot') {
 
     const card = document.createElement('div');
     card.className = 'dq-queue-card' + (isDone ? ' dq-queue-card--done' : '');
+
+// Timezone class (for left-border accent)
+const { state: _dqState } = getLocationParts(item);
+const _dqTz = getTimezoneByState(_dqState);
+card.classList.add(`dq-tzcard-${_dqTz}`);
+
     card.dataset.itemId = item.item_id || item.id || '';
 	
 	card.dataset.leadId =
@@ -580,7 +632,7 @@ if (action === 'ap-snapshot') {
 
 <div class="dq-card-body">
   <div class="dq-meta-line">
-    <span>📍 ${escapeHtml(formatLocation(item))}</span>
+    <span>📍 ${renderLocationHtml(item)}</span>
     <span>🏷️ ${escapeHtml(item.industry || item.Industry || 'No industry')}</span>
   </div>
 

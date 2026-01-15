@@ -846,6 +846,36 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
         color: #111827;
         font-size: 12px;
       }
+	  
+	  /* ===============================
+   TIME ZONE STATE PILLS
+   =============================== */
+
+.state-pill {
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 11px;
+  display: inline-block;
+}
+
+.tz-ET { background: #e6f7ec; color: #1e7f43; }
+.tz-CT { background: #fff7e6; color: #a16207; }
+.tz-MT { background: #fff0e6; color: #c2410c; }
+.tz-PT { background: #e6f0ff; color: #1d4ed8; }
+
+/* Row accent (quick scan by timezone) */
+.lead-row.tzrow-ET { border-left: 6px solid #1e7f43; }
+.lead-row.tzrow-CT { border-left: 6px solid #a16207; }
+.lead-row.tzrow-MT { border-left: 6px solid #c2410c; }
+.lead-row.tzrow-PT { border-left: 6px solid #1d4ed8; }
+.lead-row.tzrow-UNKNOWN { border-left: 6px solid #9ca3af; }
+
+
+
+
+	  
+	  
     </style>
   </head>
   <body>
@@ -1679,6 +1709,29 @@ if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
 
 	
 <script>
+
+<script>
+/* ===============================
+   TIME ZONE HELPERS (GLOBAL)
+   =============================== */
+
+const TIMEZONE_MAP = {
+  ET: ["ME","NH","VT","MA","RI","CT","NY","NJ","PA","DE","MD","DC","VA","WV","NC","SC","GA","FL","OH","MI","IN","KY","TN"],
+  CT: ["AL","AR","IA","IL","KS","LA","MN","MO","MS","ND","NE","OK","SD","TX","WI"],
+  MT: ["AZ","CO","ID","MT","NM","UT","WY"],
+  PT: ["CA","NV","OR","WA"]
+};
+
+function getTimezoneByState(state) {
+  if (!state) return "UNKNOWN";
+  const s = String(state).trim().toUpperCase();
+  for (const zone in TIMEZONE_MAP) {
+    if (TIMEZONE_MAP[zone].includes(s)) return zone;
+  }
+  return "UNKNOWN";
+}
+</script>
+
 /* ---------- List View wiring + sorting ---------- */
 
   // Helpers
@@ -1909,6 +1962,9 @@ function prettyStatus(key) {
 
 function renderListTable(rows, baseRows) {
 
+const tz = getTimezoneByState(getCI(r,'state'));
+
+
   const thead = $('#leadThead');
   const tbody = $('#leadTbody');
   const count = $('#leadCount');
@@ -2020,7 +2076,8 @@ const statusEmoji = prettyStatus(rawStatus).split(' ')[0];        // 🏆 / 🔥
       // Tags value as plain string for initial display
       const rawTags = t(getCI(r,'tags'));
 
-      return `<tr data-id="${id}" class="lead-row status-${rawStatus}">
+      return `<tr data-id="${id}" class="lead-row status-${rawStatus} tzrow-${tz}">
+
 
         
 		
@@ -2057,7 +2114,12 @@ const statusEmoji = prettyStatus(rawStatus).split(' ')[0];        // 🏆 / 🔥
         <td>${t(getCI(r,'company'))}</td>
         <td>${t(getCI(r,'name'))}</td>
         <td>${t(getCI(r,'city'))}</td>
-        <td>${t(getCI(r,'state'))}</td>
+        <td>
+  <span class="state-pill tz-${getTimezoneByState(getCI(r,'state'))}">
+    ${t(getCI(r,'state'))}
+  </span>
+</td>
+
         <td>${t(getCI(r,'industry'))}</td>
         <td>${t(getCI(r,'forecast_month'))}</td>
         <td>${t(getCI(r,'lead_type'))}</td>
