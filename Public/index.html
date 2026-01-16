@@ -848,30 +848,37 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
       }
 	  
 	  /
- * ===============================
+/* ===============================
    TIME ZONE STATE PILLS
    =============================== */
 
-.state-pill {
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 11px;
-  display: inline-block;
+.state-pill{
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:999px;
+  font-weight:600;
+  font-size:11px;
+  line-height:1.2;
+  border:1px solid #d1d5db;
+  background:#f3f4f6;       /* default visible pill */
+  color:#374151;
+  white-space:nowrap;
 }
 
-.tz-et { background: #e6f7ec; color: #1e7f43; }
-.tz-ct { background: #fff7e6; color: #a16207; }
-.tz-mt { background: #fff0e6; color: #c2410c; }
-.tz-pt { background: #e6f0ff; color: #1d4ed8; }
-
+/* Support BOTH uppercase + lowercase tz classes (bulletproof) */
+.tz-ET, .tz-et { background:#e6f7ec; color:#1e7f43; border-color:#bfe7cd; }  /* Eastern */
+.tz-CT, .tz-ct { background:#fff7e6; color:#a16207; border-color:#ffe0b3; }  /* Central */
+.tz-MT, .tz-mt { background:#fff0e6; color:#c2410c; border-color:#ffd1b8; }  /* Mountain */
+.tz-PT, .tz-pt { background:#e6f0ff; color:#1d4ed8; border-color:#c6d6ff; }  /* Pacific */
+.tz-UNKNOWN, .tz-unknown { background:#f3f4f6; color:#6b7280; border-color:#d1d5db; }
 
 /* Row accent (quick scan by timezone) */
-.lead-row.tzrow-ET { border-left: 6px solid #1e7f43; }
-.lead-row.tzrow-CT { border-left: 6px solid #a16207; }
-.lead-row.tzrow-MT { border-left: 6px solid #c2410c; }
-.lead-row.tzrow-PT { border-left: 6px solid #1d4ed8; }
-.lead-row.tzrow-UNKNOWN { border-left: 6px solid #9ca3af; }
+.lead-row.tzrow-ET, .lead-row.tzrow-et { border-left:6px solid #1e7f43; }
+.lead-row.tzrow-CT, .lead-row.tzrow-ct { border-left:6px solid #a16207; }
+.lead-row.tzrow-MT, .lead-row.tzrow-mt { border-left:6px solid #c2410c; }
+.lead-row.tzrow-PT, .lead-row.tzrow-pt { border-left:6px solid #1d4ed8; }
+.lead-row.tzrow-UNKNOWN, .lead-row.tzrow-unknown { border-left:6px solid #9ca3af; }
+
 
 
 
