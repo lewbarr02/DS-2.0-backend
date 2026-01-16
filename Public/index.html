@@ -847,10 +847,23 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
         font-size: 12px;
       }
 	  
-	  /
+	  
 /* ===============================
    TIME ZONE STATE PILLS
    =============================== */
+   
+   /* ===============================
+   TIME ZONE FILTER CHIPS (List View)
+   =============================== */
+
+.chip.tz-chip { font-weight: 700; }
+
+.chip.tz-chip.active[data-tz="ET"]      { background:#e6f7ec; color:#1e7f43; border-color:#bfe7cd; }
+.chip.tz-chip.active[data-tz="CT"]      { background:#fff7e6; color:#a16207; border-color:#ffe0b3; }
+.chip.tz-chip.active[data-tz="MT"]      { background:#fff0e6; color:#c2410c; border-color:#ffd1b8; }
+.chip.tz-chip.active[data-tz="PT"]      { background:#e6f0ff; color:#1d4ed8; border-color:#c6d6ff; }
+.chip.tz-chip.active[data-tz="UNKNOWN"] { background:#f3f4f6; color:#6b7280; border-color:#d1d5db; }
+
 
 .state-pill{
   display:inline-block;
@@ -1256,6 +1269,15 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
   />
 
   <!-- Status chips (normalized keys) -->
+  <!-- ⭐ NEW: Timezone filter chips -->
+<span style="margin-left:10px; font-size:12px; color:#6b7280;">TZ:</span>
+<button class="chip tz-chip" data-tz="ET">ET</button>
+<button class="chip tz-chip" data-tz="CT">CT</button>
+<button class="chip tz-chip" data-tz="MT">MT</button>
+<button class="chip tz-chip" data-tz="PT">PT</button>
+<button class="chip tz-chip" data-tz="UNKNOWN">Unknown</button>
+
+  
   <button class="chip" data-status="converted">🏆 Converted</button>
   <button class="chip" data-status="hot">🔥 Hot</button>
   <button class="chip" data-status="warm">🌞 Warm</button>
@@ -2903,6 +2925,12 @@ function computeListFilteredAndSorted() {
 
   const activeStatuses = $$('#listToolbar .chip.active[data-status]')
     .map(el => el.dataset.status.toLowerCase());
+	
+	// ⭐ NEW: active timezone chips (ET/CT/MT/PT/UNKNOWN)
+const activeTZs = $$('#listToolbar .chip.active[data-tz]')
+  .map(el => (el.dataset.tz || '').toUpperCase())
+  .filter(Boolean);
+
 
   let rows = getFilteredRows();
   
@@ -2917,6 +2945,15 @@ rows = Array.isArray(rows) ? rows : [];
       return activeStatuses.includes(s);
     });
   }
+  
+  // ⭐ Timezone chip filter (based on State → TZ mapping)
+if (activeTZs.length) {
+  rows = rows.filter(r => {
+    const tz = getTimezoneByState(getCI(r, 'state'));
+    return activeTZs.includes(String(tz || 'UNKNOWN').toUpperCase());
+  });
+}
+
 
 
 
@@ -3039,6 +3076,15 @@ window.renderListView = renderListView;
         window.renderListView();
       });
     });
+	
+	// ⭐ Timezone chips
+$$('#listToolbar .chip[data-tz]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.classList.toggle('active');
+    window.renderListView();
+  });
+});
+
 
     // Reset: clears statuses, global search, and tag filter
     $('#listReset')?.addEventListener('click', () => {
