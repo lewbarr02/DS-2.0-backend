@@ -893,6 +893,43 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
 .lead-row.tzrow-UNKNOWN, .lead-row.tzrow-unknown { border-left:6px solid #9ca3af; }
 
 
+/* ✅ Safe top-right cluster layout (prevents overlap with Hide Controls) */
+#topRightCluster {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 1101;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+/* Force the two controls to be “in flow” inside the cluster */
+#dashboardToggle {
+  position: static !important;
+}
+
+#viewSwitcher {
+  position: static !important;
+  top: auto !important;
+  right: auto !important;
+}
+
+/* Accounts view behaves like List view (full-screen, scrollable) */
+#accountsView {
+  position: fixed;
+  inset: 0;
+  display: none;
+  background: #f7f8fb;
+  overflow: auto;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+#accountsView.show {
+  display: flex;
+}
 
 
 
@@ -903,14 +940,17 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
   <body>
    
 
-    <!-- Existing dashboard toggle -->
-    <button id="dashboardToggle" title="Toggle Dashboard (Shift+D)" aria-pressed="true">Hide Controls</button>
+<!-- Top-right controls: Hide Controls + Map/List/Accounts -->
+<div id="topRightCluster">
+  <button id="dashboardToggle" title="Toggle Dashboard (Shift+D)" aria-pressed="true">Hide Controls</button>
 
-    <!-- NEW: Map / List switcher -->
-    <div id="viewSwitcher" role="tablist" aria-label="View Switcher">
-      <button id="btnMapView" class="active" role="tab" aria-selected="true">Map</button>
-      <button id="btnListView" role="tab" aria-selected="false">List</button>
-    </div>
+  <div id="viewSwitcher" role="tablist" aria-label="View Switcher">
+    <button id="btnMapView" class="active" role="tab" aria-selected="true">Map</button>
+    <button id="btnListView" role="tab" aria-selected="false">List</button>
+    <button id="btnAccountsView" role="tab" aria-selected="false">Accounts</button>
+  </div>
+</div>
+
 
     <!-- Existing dashboard -->
     <div id="dashboard">
@@ -1338,6 +1378,21 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
 
 </div> <!-- ✅ END #listView -->
 
+<!-- ACCOUNTS VIEW -->
+<div id="accountsView" aria-label="Accounts View">
+  <div style="padding:16px 18px; font-size:14px; color:#111;">
+    <strong>Accounts</strong>
+    <div style="margin-top:6px; font-size:12px; color:#6b7280;">
+      (This is the container. Next step: we’ll render the account list here.)
+    </div>
+  </div>
+
+  <div id="accountsContent" style="padding: 0 18px 18px;">
+    <!-- JS will populate -->
+  </div>
+</div>
+
+
 
 
     <!-- NEW: Account 360° slide-in panel -->
@@ -1545,11 +1600,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const dashboard = document.getElementById('dashboard');
   const dashBtn   = document.getElementById('dashboardToggle');
+  
+  const accountsView = document.getElementById('accountsView');
+  const btnAccounts  = document.getElementById('btnAccountsView');
+
 
   // --- Map/List switching ---
   function showMap() {
     if (mapView) mapView.classList.remove('hidden');
     if (listView) listView.classList.remove('show');
+	if (accountsView) accountsView.classList.remove('show');
+
 
     btnMap?.classList.add('active');
     btnList?.classList.remove('active');
@@ -1561,6 +1622,8 @@ document.addEventListener('DOMContentLoaded', () => {
   function showList() {
     if (mapView) mapView.classList.add('hidden');
     if (listView) listView.classList.add('show');
+	if (accountsView) accountsView.classList.remove('show');
+
 
     btnList?.classList.add('active');
     btnMap?.classList.remove('active');
@@ -1573,9 +1636,33 @@ document.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => window.renderListView(), 0);
     }
   }
+  
+  function showAccounts() {
+  if (mapView) mapView.classList.add('hidden');
+  if (listView) listView.classList.remove('show');
+  if (accountsView) accountsView.classList.add('show');
+
+  btnAccounts?.classList.add('active');
+  btnMap?.classList.remove('active');
+  btnList?.classList.remove('active');
+
+  btnAccounts?.setAttribute('aria-selected', 'true');
+  btnMap?.setAttribute('aria-selected', 'false');
+  btnList?.setAttribute('aria-selected', 'false');
+
+  // Hook for later: let leads.js (or future code) populate accounts
+  window.dispatchEvent(new CustomEvent('accountsView:open'));
+}
+
 
   btnMap?.addEventListener('click', (e) => { e.preventDefault(); showMap(); });
   btnList?.addEventListener('click', (e) => { e.preventDefault(); showList(); });
+  
+  btnAccounts?.addEventListener('click', (e) => {
+  e.preventDefault();
+  showAccounts();
+});
+
 
   // --- Hide Controls toggle ---
   function setDashboardHidden(hidden) {
