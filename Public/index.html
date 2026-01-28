@@ -31,10 +31,11 @@ html, body {
 #map {                   /* the map itself owns the viewport */
   position: fixed;
   inset: 0;              /* top:0; right:0; bottom:0; left:0 */
-  height: 100vh;
-  width: 100vw;
+  height: 100%;
+  width: 100%;
   z-index: 0;            /* ✅ keep map behind UI */
 }
+
 
 
 #mapView.hidden { display: none; }
@@ -635,7 +636,9 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
   background: #f7f8fb;
 
   /* ✅ Make list view itself the scroll container */
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+
 
   /* ✅ Flex column so toolbar/table stack correctly */
   flex-direction: column;
@@ -878,6 +881,19 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
   white-space:nowrap;
 }
 
+.acct-industry{
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:999px;
+  font-weight:700;
+  font-size:11px;
+  line-height:1.2;
+  border:1px solid #e5e7eb;
+  background:#ffffff;
+  color:#111827;
+}
+
+
 /* Support BOTH uppercase + lowercase tz classes (bulletproof) */
 .tz-ET, .tz-et { background:#e6f7ec; color:#1e7f43; border-color:#bfe7cd; }  /* Eastern */
 .tz-CT, .tz-ct { background:#fff7e6; color:#a16207; border-color:#ffe0b3; }  /* Central */
@@ -917,13 +933,28 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
 }
 
 /* Accounts view behaves like List view (full-screen, scrollable) */
+:root {
+  /* Responsive drawer width that matches the reserved padding */
+--acct-drawer-w: clamp(360px, 40vw, 620px);
+}
+
 #accountsView {
   position: fixed;
   inset: 0;
   display: none;
   background: #f7f8fb;
-  overflow: auto;
+
+  /* ✅ kill the bottom horizontal scrollbar */
+  overflow-y: auto;
+  overflow-x: hidden;
+
   flex-direction: column;
+  box-sizing: border-box;
+}
+
+/* Only reserve space when drawer is open */
+#accountsView.drawer-open {
+  padding-right: calc(var(--acct-drawer-w) + 18px); /* breathing room */
   box-sizing: border-box;
 }
 
@@ -931,11 +962,248 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
   display: flex;
 }
 
+.account-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+
+  width: var(--acct-drawer-w);
+  height: 100vh;
+
+  background: #fff;
+  border-left: 1px solid #ddd;
+  z-index: 9999;
+
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+
+  overflow: hidden; /* drawer itself does not scroll */
+}
+
+.account-drawer.hidden {
+  display: none;
+}
+
+.account-drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #eee;
+  flex: 0 0 auto;
+}
+
+.account-drawer-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #eee;
+  flex: 0 0 auto;
+}
+
+/* ✅ Scrollable drawer body (and prevent "cut off" at bottom) */
+.account-drawer-content {
+  flex: 1 1 auto;
+  min-height: 0;                 /* critical for flex scroll */
+  overflow-y: auto;
+  overflow-x: hidden;            /* ✅ prevents horizontal scroll inside drawer */
+  padding-bottom: 18px;          /* ✅ ensures last row isn't visually clipped */
+  scrollbar-gutter: stable;      /* ✅ prevents header/row width shifting */
+}
+
+.account-drawer-section {
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.muted {
+  color: #666;
+  font-size: 13px;
+}
+
+/* ✅ Make the Leads table fit the drawer so columns stay aligned */
+#accountLeadsTable {
+  overflow-x: hidden;
+}
+
+#accountLeadsTable table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;           /* ✅ forces columns to obey widths */
+}
+
+#accountLeadsTable th,
+#accountLeadsTable td {
+  padding: 10px 8px;
+  vertical-align: top;
+}
+
+/* Column sizing for: Role | Name | Status | Recency */
+#accountLeadsTable th:nth-child(1),
+#accountLeadsTable td:nth-child(1) { width: 22%; }
+
+#accountLeadsTable th:nth-child(2),
+#accountLeadsTable td:nth-child(2) { width: 40%; word-break: break-word; }
+
+#accountLeadsTable th:nth-child(3),
+#accountLeadsTable td:nth-child(3) { width: 18%; white-space: nowrap; }
+
+#accountLeadsTable th:nth-child(4),
+#accountLeadsTable td:nth-child(4) { width: 20%; white-space: nowrap; text-align: right; }
+
+
+/* ✅ Account 360: clean, row-based person table (no empty role placeholders) */
+.acct-leads-wrap{
+  margin-top:10px;
+  background:#fafafa;
+  border:1px solid #e5e7eb;
+  border-radius:12px;
+  overflow:hidden;
+}
+.acct-leads-table{
+  width:100%;
+  border-collapse:collapse;
+  table-layout:fixed;
+}
+.acct-leads-table th{
+  font-size:12px;
+  color:#6b7280;
+  text-align:left;
+  padding:10px 10px;
+}
+.acct-leads-table td{
+  padding:10px 10px;
+  border-top:1px solid #e5e7eb;
+  vertical-align:top;
+  font-size:13px;
+  color:#111827;
+}
+.acct-leads-table select,
+.acct-leads-table input{
+  width:100%;
+  padding:6px 8px;
+  border:1px solid #e5e7eb;
+  border-radius:10px;
+  background:#fff;
+  font-size:12px;
+  box-sizing:border-box;
+}
+.acct-name-cell{
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+.acct-name-cell input{
+  flex:1 1 auto;
+}
+.acct-person-delete{
+  flex:0 0 auto;
+  border:1px solid #e5e7eb;
+  background:#fff;
+  border-radius:10px;
+  padding:6px 8px;
+  cursor:pointer;
+  font-size:12px;
+  line-height:1;
+}
+.acct-person-delete:hover{
+  border-color:#ef4444;
+  color:#ef4444;
+}
+
+/* Accounts: selected row highlight when drawer is open */
+.acct-row.is-selected {
+  outline: 2px solid rgba(59, 130, 246, 0.35);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+/* ============================= */
+/* Add Account Modal UI */
+/* ============================= */
+.ds-modal.hidden { display:none; }
+.ds-modal { position:fixed; inset:0; z-index:9999; }
+.ds-modal-backdrop{
+  position:absolute; inset:0;
+  background: rgba(0,0,0,.35);
+}
+.ds-modal-card{
+  position:absolute;
+  top:50%; left:50%;
+  transform: translate(-50%, -50%);
+  width: min(680px, calc(100% - 32px));
+  background:#fff;
+  border-radius:14px;
+  border:1px solid #e5e7eb;
+  box-shadow: 0 20px 60px rgba(0,0,0,.22);
+  overflow:hidden;
+  color:#111;
+}
+.ds-modal-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:12px 14px;
+  border-bottom:1px solid #e5e7eb;
+}
+.ds-modal-x{
+  border:1px solid #e5e7eb;
+  background:#fff;
+  border-radius:10px;
+  padding:6px 10px;
+  cursor:pointer;
+}
+.ds-modal-body{ padding:14px; }
+.ds-modal-foot{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  padding:12px 14px;
+  border-top:1px solid #e5e7eb;
+  background:#fafafa;
+}
+.ds-field{ margin-bottom:10px; }
+.ds-label{ display:block; font-size:12px; color:#374151; margin:0 0 6px 0; }
+.ds-input, .ds-textarea{
+  width:100%;
+  border:1px solid #e5e7eb;
+  background:#fff;
+  border-radius:10px;
+  padding:9px 10px;
+  font-size:13px;
+  outline:none;
+}
+.ds-textarea{ min-height:78px; resize:vertical; }
+.ds-input:focus, .ds-textarea:focus{ border-color:#93c5fd; box-shadow:0 0 0 3px rgba(147,197,253,.35); }
+.ds-grid2{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+.ds-grid3{ display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; }
+.ds-btn{
+  border:1px solid #e5e7eb;
+  background:#fff;
+  border-radius:10px;
+  padding:8px 10px;
+  cursor:pointer;
+  font-size:13px;
+}
+.ds-btn.primary{
+  border-color:#93c5fd;
+  background:#eff6ff;
+}
+@media (max-width: 720px){
+  .ds-grid2, .ds-grid3{ grid-template-columns:1fr; }
+}
+
+
+
+
 
 
 	  
 	  
-    </style>
+    
+/* Highlight newly added person row (Account 360) */
+.acct-person-row { transition: background 0.2s ease; }
+</style>
   </head>
   <body>
    
@@ -1295,7 +1563,7 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
   <input
     id="listSearch"
     type="search"
-    placeholder="Search name, company, city, state, tags…"
+    placeholder="Search name, title, company, city, state, tags…"
     aria-label="Search"
   />
 
@@ -1380,12 +1648,21 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
 
 <!-- ACCOUNTS VIEW -->
 <div id="accountsView" aria-label="Accounts View">
-  <div style="padding:16px 18px; font-size:14px; color:#111;">
-    <strong>Accounts</strong>
-    <div style="margin-top:6px; font-size:12px; color:#6b7280;">
-      (This is the container. Next step: we’ll render the account list here.)
+  <div style="padding:16px 18px; font-size:14px; color:#111; display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+    <div>
+      <strong>Accounts</strong>
+      <div id="accountsHeaderCount" style="margin-top:6px; font-size:12px; color:#6b7280;">
+        Showing 0 of 0 accounts
+      </div>
+    </div>
+
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button id="addAccountBtn" type="button" style="padding:8px 10px; border:1px solid #cbd5e1; background:#fff; border-radius:10px; cursor:pointer; font-size:13px;">
+        + Add Account
+      </button>
     </div>
   </div>
+
 
   <div id="accountsContent" style="padding: 0 18px 18px;">
     <!-- JS will populate -->
@@ -1584,6 +1861,65 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
   })();
 </script>
 
+<!-- END OF VIEW SWITCHING -->
+
+<script>
+/* ================================
+   Account View Drawer Controls
+   (Step 3 – UI control + open state)
+================================ */
+
+function openAccountDrawer() {
+  const drawer = document.getElementById('accountDrawer');
+  drawer?.classList.remove('hidden');
+  drawer?.classList.add('open'); // ✅ used by other logic (delete safety)
+  document.getElementById('accountsView')?.classList.add('drawer-open');
+}
+
+function closeAccountDrawer() {
+  const drawer = document.getElementById('accountDrawer');
+  drawer?.classList.add('hidden');
+  drawer?.classList.remove('open');
+  document.getElementById('accountsView')?.classList.remove('drawer-open');
+
+  // ✅ clear selected highlight (Accounts list)
+  document.querySelectorAll('#accountsList .acct-row.is-selected')
+    .forEach(r => r.classList.remove('is-selected'));
+
+  // ✅ focus returns cleanly
+  setTimeout(() => {
+    const s = document.getElementById('accountsSearch');
+    if (s && typeof s.focus === 'function') s.focus();
+    else document.getElementById('accountsList')?.focus?.();
+  }, 0);
+}
+
+// ✅ Attach listeners only after the drawer exists in the DOM
+document.addEventListener('DOMContentLoaded', () => {
+  document
+    .getElementById('closeAccountDrawer')
+    ?.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeAccountDrawer();
+    });
+});
+
+// ✅ Delegated close handler (covers edge cases)
+document.addEventListener('click', (e) => {
+  const btn = e.target && e.target.closest ? e.target.closest('#closeAccountDrawer') : null;
+  if (!btn) return;
+  e.preventDefault();
+  closeAccountDrawer();
+});
+
+// ESC key closes drawer
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeAccountDrawer();
+});
+
+</script>
+
+
 
 	
 	
@@ -1597,12 +1933,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const listView = document.getElementById('listView');
   const btnMap   = document.getElementById('btnMapView');
   const btnList  = document.getElementById('btnListView');
+  
+  const accountsView = document.getElementById('accountsView');
+  const btnAccounts  = document.getElementById('btnAccountsView');
+
 
   const dashboard = document.getElementById('dashboard');
   const dashBtn   = document.getElementById('dashboardToggle');
   
-  const accountsView = document.getElementById('accountsView');
-  const btnAccounts  = document.getElementById('btnAccountsView');
 
 
   // --- Map/List switching ---
@@ -1617,6 +1955,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnMap?.setAttribute('aria-selected', 'true');
     btnList?.setAttribute('aria-selected', 'false');
+	
+	btnAccounts?.classList.remove('active');
+    btnAccounts?.setAttribute('aria-selected', 'false');
+
   }
 
   function showList() {
@@ -1630,6 +1972,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnList?.setAttribute('aria-selected', 'true');
     btnMap?.setAttribute('aria-selected', 'false');
+	
+	btnAccounts?.classList.remove('active');
+    btnAccounts?.setAttribute('aria-selected', 'false');
+
 
     // Render list if available
     if (typeof window.renderListView === 'function') {
@@ -1650,8 +1996,12 @@ document.addEventListener('DOMContentLoaded', () => {
   btnMap?.setAttribute('aria-selected', 'false');
   btnList?.setAttribute('aria-selected', 'false');
 
-  // Hook for later: let leads.js (or future code) populate accounts
-  window.dispatchEvent(new CustomEvent('accountsView:open'));
+  // Render Accounts immediately (Option A: derived from loaded leads)
+  if (typeof window.renderAccountsView === 'function') {
+    setTimeout(() => window.renderAccountsView(), 0);
+  } else {
+    console.warn("renderAccountsView is not available yet.");
+  }
 }
 
 
@@ -1765,11 +2115,37 @@ if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
       <input name="city" placeholder="City"
              style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
 
-      <input name="state" placeholder="State"
-             style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+      <select name="state"
+              style="width: 100%; margin-bottom: 10px; padding: 8px;">
+        <option value="">Select State</option>
+        <option value="AL">AL</option><option value="AK">AK</option><option value="AZ">AZ</option><option value="AR">AR</option>
+        <option value="CA">CA</option><option value="CO">CO</option><option value="CT">CT</option><option value="DC">DC</option>
+        <option value="DE">DE</option><option value="FL">FL</option><option value="GA">GA</option><option value="HI">HI</option>
+        <option value="ID">ID</option><option value="IL">IL</option><option value="IN">IN</option><option value="IA">IA</option>
+        <option value="KS">KS</option><option value="KY">KY</option><option value="LA">LA</option><option value="ME">ME</option>
+        <option value="MD">MD</option><option value="MA">MA</option><option value="MI">MI</option><option value="MN">MN</option>
+        <option value="MS">MS</option><option value="MO">MO</option><option value="MT">MT</option><option value="NE">NE</option>
+        <option value="NV">NV</option><option value="NH">NH</option><option value="NJ">NJ</option><option value="NM">NM</option>
+        <option value="NY">NY</option><option value="NC">NC</option><option value="ND">ND</option><option value="OH">OH</option>
+        <option value="OK">OK</option><option value="OR">OR</option><option value="PA">PA</option><option value="RI">RI</option>
+        <option value="SC">SC</option><option value="SD">SD</option><option value="TN">TN</option><option value="TX">TX</option>
+        <option value="UT">UT</option><option value="VT">VT</option><option value="VA">VA</option><option value="WA">WA</option>
+        <option value="WV">WV</option><option value="WI">WI</option><option value="WY">WY</option>
+      </select>
 
-      <input name="industry" placeholder="Industry"
-             style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
+
+      <select name="industry"
+              style="width: 100%; margin-bottom: 10px; padding: 8px;">
+        <option value="">Select Industry</option>
+        <option value="Manufacturing">Manufacturing</option>
+        <option value="Healthcare">Healthcare</option>
+        <option value="Education">Education</option>
+        <option value="Hospitality">Hospitality</option>
+        <option value="Construction">Construction</option>
+        <option value="Government">Government</option>
+        <option value="Other">Other</option>
+      </select>
+
 
       <input name="tags" placeholder="Tags (comma-separated)"
              style="width: 100%; margin-bottom: 10px; padding: 8px;"/>
@@ -1833,7 +2209,7 @@ if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
    =============================== */
 
 const TIMEZONE_MAP = {
-  ET: ["ME","NH","VT","MA","RI","CT","NY","NJ","PA","DE","MD","DC","VA","WV","NC","SC","GA","FL","OH","MI","IN","KY","TN"],
+  ET: ["CT","DE","DC","FL","GA","IN","KY","MA","MD","ME","MI","NC","NH","NJ","NY","OH","PA","RI","SC","TN","VA","VT","WV"],
   CT: ["AL","AR","IA","IL","KS","LA","MN","MO","MS","ND","NE","OK","SD","TX","WI"],
   MT: ["AZ","CO","ID","MT","NM","UT","WY"],
   PT: ["CA","NV","OR","WA"]
@@ -1841,14 +2217,19 @@ const TIMEZONE_MAP = {
 
 // Supports BOTH "UT" and "Utah"
 const STATE_NAME_TO_ABBR = {
-  "ALABAMA":"AL","ALASKA":"AK","ARIZONA":"AZ","ARKANSAS":"AR","CALIFORNIA":"CA","COLORADO":"CO","CONNECTICUT":"CT","DELAWARE":"DE",
-  "FLORIDA":"FL","GEORGIA":"GA","HAWAII":"HI","IDAHO":"ID","ILLINOIS":"IL","INDIANA":"IN","IOWA":"IA","KANSAS":"KS","KENTUCKY":"KY",
-  "LOUISIANA":"LA","MAINE":"ME","MARYLAND":"MD","MASSACHUSETTS":"MA","MICHIGAN":"MI","MINNESOTA":"MN","MISSISSIPPI":"MS","MISSOURI":"MO",
-  "MONTANA":"MT","NEBRASKA":"NE","NEVADA":"NV","NEW HAMPSHIRE":"NH","NEW JERSEY":"NJ","NEW MEXICO":"NM","NEW YORK":"NY","NORTH CAROLINA":"NC",
-  "NORTH DAKOTA":"ND","OHIO":"OH","OKLAHOMA":"OK","OREGON":"OR","PENNSYLVANIA":"PA","RHODE ISLAND":"RI","SOUTH CAROLINA":"SC","SOUTH DAKOTA":"SD",
-  "TENNESSEE":"TN","TEXAS":"TX","UTAH":"UT","VERMONT":"VT","VIRGINIA":"VA","WASHINGTON":"WA","WEST VIRGINIA":"WV","WISCONSIN":"WI","WYOMING":"WY",
-  "DISTRICT OF COLUMBIA":"DC","WASHINGTON DC":"DC","WASHINGTON D.C.":"DC","D.C.":"DC","DC":"DC"
+  "ALABAMA":"AL","ALASKA":"AK","ARIZONA":"AZ","ARKANSAS":"AR","CALIFORNIA":"CA",
+  "COLORADO":"CO","CONNECTICUT":"CT","DELAWARE":"DE","DISTRICT OF COLUMBIA":"DC",
+  "FLORIDA":"FL","GEORGIA":"GA","HAWAII":"HI","IDAHO":"ID","ILLINOIS":"IL",
+  "INDIANA":"IN","IOWA":"IA","KANSAS":"KS","KENTUCKY":"KY","LOUISIANA":"LA",
+  "MAINE":"ME","MARYLAND":"MD","MASSACHUSETTS":"MA","MICHIGAN":"MI","MINNESOTA":"MN",
+  "MISSISSIPPI":"MS","MISSOURI":"MO","MONTANA":"MT","NEBRASKA":"NE","NEVADA":"NV",
+  "NEW HAMPSHIRE":"NH","NEW JERSEY":"NJ","NEW MEXICO":"NM","NEW YORK":"NY",
+  "NORTH CAROLINA":"NC","NORTH DAKOTA":"ND","OHIO":"OH","OKLAHOMA":"OK",
+  "OREGON":"OR","PENNSYLVANIA":"PA","RHODE ISLAND":"RI","SOUTH CAROLINA":"SC",
+  "SOUTH DAKOTA":"SD","TENNESSEE":"TN","TEXAS":"TX","UTAH":"UT","VERMONT":"VT",
+  "VIRGINIA":"VA","WASHINGTON":"WA","WEST VIRGINIA":"WV","WISCONSIN":"WI","WYOMING":"WY"
 };
+
 
 function normalizeStateToAbbr(state) {
   if (!state) return "";
@@ -1899,27 +2280,26 @@ function getTimezoneByState(state) {
   const SORT = { key: 'company', dir: 'asc' };
 
 
-  // Column definitions
+// Column definitions
   const COLUMNS = [
     { key:'status',         label:'Status',         sortable:true },
     { key:'pin',            label:'Pin',            sortable:true },
     { key:'company',        label:'Company',        sortable:true },
     { key:'name',           label:'Name',           sortable:true },
+    { key:'role',           label:'Role',           sortable:true },
     { key:'city',           label:'City',           sortable:true },
     { key:'state',          label:'State',          sortable:true },
     { key:'industry',       label:'Industry',       sortable:true },
     { key:'forecast_month', label:'Forecast',       sortable:true },
-    { key:'lead_type',      label:'Type',           sortable:true },
     { key:'arr',            label:'ARR',            sortable:true, numeric:true },
-    { key:'ap_spend',       label:'AP Spend',       sortable:true, numeric:true },
     { key:'tags',           label:'Tags',           sortable:false },
-    { key:'cadence_name',   label:'Cadence',        sortable:true },
     { key:'website',        label:'Website',        sortable:false },
     { key:'notes',          label:'Notes',          sortable:false },
 
     // ⭐ NEW: actions column (for delete button)
     { key:'actions',        label:'',               sortable:false },
   ];
+
 
 
   const STATUS_RANK = {
@@ -2011,7 +2391,14 @@ function getCI(row, key) {
     }
 
     const hit = Object.keys(row).find(k => k.toLowerCase() === key.toLowerCase());
-    return hit ? row[hit] ?? '' : '';
+    if (hit) return row[hit] ?? '';
+
+    // Back-compat: if UI asks for `role` but data still uses `title`
+    if (key && String(key).toLowerCase() === 'role') {
+      const hitTitle = Object.keys(row).find(k => k.toLowerCase() === 'title');
+      return hitTitle ? (row[hitTitle] ?? '') : '';
+    }
+    return '';
 }
 
   // Patch a single lead in DS.state without blowing away filters
@@ -2022,7 +2409,7 @@ function getCI(row, key) {
     const apply = (rows) => {
       if (!Array.isArray(rows)) return;
       rows.forEach((r) => {
-        const rid = r.id || r.ID || r.lead_id;
+        const rid = r.id || r.ID || r.lead_id || r.uuid;
         if (rid != null && String(rid) === String(id)) {
           Object.keys(partial).forEach((k) => {
             r[k] = partial[k];
@@ -2033,6 +2420,19 @@ function getCI(row, key) {
 
     apply(DS.state.rawRows);
     apply(DS.state.filtered);
+
+    // Persist edits (so imported rows stay edited after refresh)
+    try { dsUpsertLeadPatch(id, partial); } catch (e) {}
+
+    // ✅ Persist if this lead is manual (localStorage)
+    try {
+      const list = dsGetManualLeads();
+      const idx = list.findIndex(r => String(r.id || r.lead_id || r.uuid || '') === String(id));
+      if (idx >= 0) {
+        Object.keys(partial || {}).forEach((k) => { list[idx][k] = partial[k]; });
+        dsSetManualLeads(list);
+      }
+    } catch (e) {}
   }
   
     // Remove a single lead from DS.state (raw + filtered) without resetting filters
@@ -2043,7 +2443,7 @@ function getCI(row, key) {
     const remove = (rows) => {
       if (!Array.isArray(rows)) return;
       const idx = rows.findIndex((r) => {
-        const rid = r.id || r.ID || r.lead_id;
+        const rid = r.id || r.ID || r.lead_id || r.uuid;
         return rid != null && String(rid) === String(id);
       });
       if (idx !== -1) {
@@ -2053,6 +2453,9 @@ function getCI(row, key) {
 
     remove(DS.state.rawRows);
     remove(DS.state.filtered);
+
+    // Persist deletion (so imported rows stay deleted after refresh)
+    try { dsAddDeletedLeadId(id); } catch (e) {}
   }
 
 
@@ -2253,9 +2656,13 @@ window.LIST_STATUS_OPTIONS = [
 
 
 		
-        <td>${hasPin ? '✅' : '❌'}</td>
+<td>${hasPin ? '✅' : '❌'}</td>
         <td>${t(getCI(r,'company'))}</td>
         <td>${t(getCI(r,'name'))}</td>
+        <td class="role-cell" data-id="${id}">
+  <span class="role-text">${t(getCI(r,'role'))}</span>
+  <button class="role-edit-btn" title="Edit role">✏️</button>
+</td>
         <td>${t(getCI(r,'city'))}</td>
         <td>
   <span class="state-pill tz-${getTimezoneByState(getCI(r,'state'))}">
@@ -2264,10 +2671,8 @@ window.LIST_STATUS_OPTIONS = [
 </td>
 
         <td>${t(getCI(r,'industry'))}</td>
-        <td>${t(getCI(r,'forecast_month'))}</td>
-        <td>${t(getCI(r,'lead_type'))}</td>
+        <td>${t(getCI(r,'forecast_month') || getCI(r,'forecast'))}</td>
 <td>${arr ? ('$' + arr) : ''}</td>
-<td>${ap  ? ('$' + ap)  : ''}</td>
 
 
         <!-- ⭐ TAGS CELL EDITABLE -->
@@ -2276,11 +2681,11 @@ window.LIST_STATUS_OPTIONS = [
           <button class="tags-edit-btn" title="Edit tags">✏️</button>
         </td>
 
-        <td>${t(getCI(r,'cadence_name'))}</td>
         <td>${websiteUrl
               ? `<a class="website-link" href="${websiteUrl}" target="_blank" rel="noopener noreferrer">Visit</a>`
               : ''}</td>
         <td>${t(getCI(r,'notes'))}</td>
+
 		
 <td class="actions-cell">
   <button class="preview-btn"
@@ -2567,6 +2972,103 @@ $$('#leadTbody .preview-btn').forEach(btn => {
         }
       });
     });
+
+    // 🪪 ROLE INLINE EDIT HANDLERS (new)
+    $$('#leadTbody .role-edit-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const cell = btn.closest('.role-cell');
+        if (!cell) return;
+
+        const id = cell.dataset.id;
+        const textEl = cell.querySelector('.role-text');
+        const current = textEl ? textEl.textContent.trim() : '';
+
+        cell.innerHTML = `
+          <input class="role-input" type="text"
+                 value="${current.replace(/"/g, '&quot;')}"
+                 style="width: 70%; padding: 4px; font-size: 13px;" />
+          <button class="role-save-btn" style="margin-left:4px; font-size:12px;">Save</button>
+          <button class="role-cancel-btn" style="margin-left:4px; font-size:12px;">Cancel</button>
+        `;
+
+        const input  = cell.querySelector('.role-input');
+        const save   = cell.querySelector('.role-save-btn');
+        const cancel = cell.querySelector('.role-cancel-btn');
+
+        if (input) {
+          input.focus();
+          input.select();
+        }
+
+        const restoreView = (value) => {
+          cell.innerHTML = `
+            <span class="role-text">${value}</span>
+            <button class="role-edit-btn" title="Edit role">✏️</button>
+          `;
+        };
+
+        if (cancel) {
+          cancel.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            restoreView(current);
+          });
+        }
+
+        if (save) {
+          save.addEventListener('click', async (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+
+            if (!input || !id) return;
+            const newRole = input.value.trim();
+
+            try {
+              const API_BASE = window.DELI_API_BASE || '';
+              const res = await fetch(`${API_BASE}/update-lead/${encodeURIComponent(id)}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role: newRole, title: newRole })
+              });
+
+              if (!res.ok) {
+                console.error('Role update failed', res.status);
+                alert('Could not save role – please try again.');
+                return;
+              }
+
+              // ✅ Patch this lead in memory so filters stay put
+              if (typeof patchLeadInState === 'function') {
+                patchLeadInState(id, { role: newRole, title: newRole });
+              }
+
+              if (typeof window.renderListView === 'function') {
+                window.renderListView();
+              }
+
+            } catch (err) {
+              console.error('Error updating role', err);
+              alert('Error saving role – network or server issue.');
+            }
+          });
+        }
+
+        if (input) {
+          input.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') {
+              ev.preventDefault();
+              save?.click();
+            } else if (ev.key === 'Escape') {
+              ev.preventDefault();
+              cancel?.click();
+            }
+          });
+        }
+      });
+    });
 	
 	
 
@@ -2664,9 +3166,24 @@ function closeAccount360() {
         </div>
 
         <form class="acc360-form" data-id="${esc(id)}" style="display:grid;gap:10px;">
+            <div style="display:grid;gap:6px;">
+              <label style="font-size:12px;color:#555;">State</label>
+              <select name="state" style="text-transform:uppercase;text-align:center">
+                ${(() => {
+                  const current = String(lead.state || '').trim().toUpperCase();
+                  const opts = ['', 'AL','AK','AZ','AR','CA','CO','CT','DC','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
+                  return opts.map(ab => {
+                    const label = ab ? ab : 'Select';
+                    return `<option value="${ab}" ${ab && ab===current ? 'selected' : (!ab && !current ? 'selected' : '')}>${label}</option>`;
+                  }).join('');
+                })()}
+              </select>
+            </div>
+
+
           <div style="display:grid;gap:6px;">
-            <label style="font-size:12px;color:#555;">Name</label>
-            <input name="name" value="${esc(lead.name || '')}" />
+            <label style="font-size:12px;color:#555;">Role</label>
+            <input name="role" value="${esc((lead.role || lead.title || '') )}" />
           </div>
 
           <div style="display:grid;gap:6px;">
@@ -2704,10 +3221,20 @@ function closeAccount360() {
 </select>
 
             </div>
-            <div style="display:grid;gap:6px;">
+                        <div style="display:grid;gap:6px;">
               <label style="font-size:12px;color:#555;">Industry</label>
-              <input name="industry" value="${esc(lead.industry || '')}" />
+              <select name="industry">
+                ${(() => {
+                  const current = String(lead.industry || '').trim();
+                  const opts = ['', 'Manufacturing','Healthcare','Education','Hospitality','Construction','Government','Other'];
+                  return opts.map(v => {
+                    const label = v ? v : 'Select';
+                    return `<option value="${v}" ${v && v===current ? 'selected' : (!v && !current ? 'selected' : '')}>${label}</option>`;
+                  }).join('');
+                })()}
+              </select>
             </div>
+
           </div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
@@ -2939,6 +3466,7 @@ if (panelIsOpen && typeof openAccount360 === 'function') {
 
       const payload = {
         name: (fd.get('name') || '').trim() || null,
+        role: (fd.get('role') || fd.get('title') || '').trim() || null,
         company: (fd.get('company') || '').trim() || null,
         website: (fd.get('website') || '').trim() || null,
         city: (fd.get('city') || '').trim() || null,
@@ -2953,6 +3481,11 @@ if (panelIsOpen && typeof openAccount360 === 'function') {
         entry_point: (fd.get('entry_point') || '').trim() || null,
         notes: (fd.get('notes') || '') || null
       };
+
+      // Keep backward compatibility: some backends/store may still use `title`
+      if (payload.role && !payload.title) payload.title = payload.role;
+      if (!payload.role && payload.title) payload.role = payload.title;
+
 
       const saveBtn = form.querySelector('.acc360-save');
       if (saveBtn) {
@@ -2994,11 +3527,1142 @@ if (panelIsOpen && typeof openAccount360 === 'function') {
     });
   }
 
+// =============================
+// Manual Accounts (Account-first creation) — LocalStorage
+// =============================
+const DS_MANUAL_ACCOUNTS_KEY = 'DS_MANUAL_ACCOUNTS_V1';
+
+// =============================
+// Manual Leads (People) — LocalStorage
+// =============================
+const DS_MANUAL_LEADS_KEY = 'DS_MANUAL_LEADS_V1';
+
+
+// Lead Patches + Deletes (for editing imported rows) — LocalStorage
+const DS_LEAD_PATCHES_KEY = 'DS_LEAD_PATCHES_V1';
+const DS_DELETED_LEAD_IDS_KEY = 'DS_DELETED_LEAD_IDS_V1';
+
+function dsGetLeadPatches() {
+  try {
+    const obj = JSON.parse(localStorage.getItem(DS_LEAD_PATCHES_KEY) || '{}');
+    return (obj && typeof obj === 'object') ? obj : {};
+  } catch (e) { return {}; }
+}
+
+function dsSetLeadPatches(obj) {
+  try { localStorage.setItem(DS_LEAD_PATCHES_KEY, JSON.stringify(obj && typeof obj === 'object' ? obj : {})); }
+  catch (e) {}
+}
+
+function dsUpsertLeadPatch(id, partial) {
+  const rid = String(id || '').trim();
+  if (!rid) return;
+
+  // Only persist the fields we actually allow editing in the UI (keeps storage clean)
+  const allow = ['name','role','title','status','tags','cadence','cadence_name','notes','lastTouchAt','last_touched','last_touch_at'];
+
+  const patches = dsGetLeadPatches();
+  const prev = (patches[rid] && typeof patches[rid] === 'object') ? patches[rid] : {};
+  const next = { ...prev };
+
+  allow.forEach((k) => {
+    if (Object.prototype.hasOwnProperty.call(partial, k)) next[k] = partial[k];
+  });
+
+  patches[rid] = next;
+  dsSetLeadPatches(patches);
+}
+
+function dsGetDeletedLeadIds() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(DS_DELETED_LEAD_IDS_KEY) || '[]');
+    return Array.isArray(arr) ? arr.map(String) : [];
+  } catch (e) { return []; }
+}
+
+function dsSetDeletedLeadIds(arr) {
+  try { localStorage.setItem(DS_DELETED_LEAD_IDS_KEY, JSON.stringify(Array.isArray(arr) ? arr : [])); }
+  catch (e) {}
+}
+
+function dsAddDeletedLeadId(id) {
+  const rid = String(id || '').trim();
+  if (!rid) return;
+  const prev = dsGetDeletedLeadIds();
+  if (prev.includes(rid)) return;
+  prev.push(rid);
+  dsSetDeletedLeadIds(prev);
+}
+
+function dsGetManualLeads() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(DS_MANUAL_LEADS_KEY) || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
+
+function dsSetManualLeads(list) {
+  try { localStorage.setItem(DS_MANUAL_LEADS_KEY, JSON.stringify(Array.isArray(list) ? list : [])); }
+  catch (e) {}
+}
+
+function dsUuid() {
+  try { return crypto.randomUUID(); } catch (e) {
+    return 'id_' + Math.random().toString(16).slice(2) + '_' + Date.now().toString(16);
+  }
+}
+
+function dsParseTagsCSV(str) {
+  // Split on commas or pipes, trim, de-dupe (case-insensitive), and normalize spacing.
+  const raw = String(str || '');
+  const parts = raw.split(/[,|]/).map(s => s.trim()).filter(Boolean);
+
+  const seen = new Set();
+  const out = [];
+  for (const p of parts) {
+    const key = p.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(p.replace(/\s+/g, ' '));
+  }
+  return out.join(', ');
+}
+
+function dsNormStatus(s) {
+  const v = String(s || 'Unspecified').trim().toLowerCase();
+  if (v === 'converted') return 'Converted';
+  if (v === 'hot') return 'Hot';
+  if (v === 'warm') return 'Warm';
+  if (v === 'cold') return 'Cold';
+  if (v === 'research') return 'Research';
+  if (v === 'follow-up' || v === 'followup') return 'Follow-Up';
+  return 'Unspecified';
+}
+
+function dsTodayISO() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function dsTitleCaseName(name) {
+  // Light normalization: collapse spaces and Title-Case each word (keeps apostrophes/hyphens reasonable).
+  const s = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!s) return '';
+  return s.split(' ').map(w => w ? (w[0].toUpperCase() + w.slice(1)) : '').join(' ');
+}
+
+function dsEnumRole(role) {
+  const v = String(role || '').trim();
+  if (!v) return '';
+  const low = v.toLowerCase();
+  if (low === 'cfo') return 'CFO';
+  if (low === 'controller') return 'Controller';
+  if (low === 'finance') return 'Finance';
+  if (low === 'treasury') return 'Treasury';
+  if (low === 'ap') return 'AP';
+  return 'Finance';
+}
+
+// Merge manual leads into DS.state (idempotent)
+function dsMergeManualLeadsIntoState() {
+  const DS = window.DS || {};
+  if (!DS.state) return;
+  if (!Array.isArray(DS.state.rawRows)) DS.state.rawRows = [];
+  if (!Array.isArray(DS.state.filtered)) DS.state.filtered = DS.state.rawRows;
+
+  const rows = DS.state.rawRows;
+  const existing = new Set(rows.map(r => String(r.id || r.ID || r.lead_id || r.uuid || '')).filter(Boolean));
+  const manual = dsGetManualLeads();
+
+  manual.forEach(m => {
+    const mid = String(m.id || m.lead_id || m.uuid || '');
+    if (!mid || existing.has(mid)) return;
+    rows.push(m);
+    existing.add(mid);
+  });
+
+  // Apply persisted lead edits + deletions
+  try {
+    const deleted = new Set(dsGetDeletedLeadIds().map(s => String(s).trim()).filter(Boolean));
+    if (deleted.size) {
+      DS.state.rawRows = (DS.state.rawRows || []).filter(r => !deleted.has(String(r.id || r.ID || r.lead_id || r.uuid || '').trim()));
+      DS.state.filtered = (DS.state.filtered || []).filter(r => !deleted.has(String(r.id || r.ID || r.lead_id || r.uuid || '').trim()));
+    }
+
+    const patches = dsGetLeadPatches();
+    const applyPatches = (rows) => {
+      if (!Array.isArray(rows)) return;
+      rows.forEach(r => {
+        const rid = String(r.id || r.ID || r.lead_id || r.uuid || '').trim();
+        if (!rid) return;
+        const p = patches[rid];
+        if (!p || typeof p !== 'object') return;
+        Object.keys(p).forEach(k => { r[k] = p[k]; });
+      });
+    };
+    applyPatches(DS.state.rawRows);
+    applyPatches(DS.state.filtered);
+  } catch (e) {}
+
+}
+
+// Centralized delete (used by list + drawer)
+function dsDeleteAccountEverywhere(company) {
+  const c = String(company || '').trim();
+  if (!c) return;
+
+  // 1) Archive company (existing behavior)
+  try {
+    const key = 'DS_ARCHIVED_COMPANIES';
+    const prev = JSON.parse(localStorage.getItem(key) || '[]');
+    const set = new Set(Array.isArray(prev) ? prev.map(s => String(s||'').toLowerCase()) : []);
+    set.add(c.toLowerCase());
+    localStorage.setItem(key, JSON.stringify(Array.from(set)));
+  } catch (e) {}
+
+  // 2) Remove from manual accounts
+  try { dsDeleteManualAccount(c); } catch (e) {}
+
+  // 3) Remove manual leads belonging to this company
+  try {
+    const keep = dsGetManualLeads().filter(r => String(r.company || r.Company || '').trim().toLowerCase() !== c.toLowerCase());
+    dsSetManualLeads(keep);
+  } catch (e) {}
+
+  // 4) Remove from in-memory DS state
+  const DS = window.DS || {};
+  if (DS.state && Array.isArray(DS.state.rawRows)) {
+    DS.state.rawRows = DS.state.rawRows.filter(r => String(r.company ?? r.Company ?? '').trim().toLowerCase() !== c.toLowerCase());
+  }
+  if (DS.state && Array.isArray(DS.state.filtered)) {
+    DS.state.filtered = DS.state.filtered.filter(r => String(r.company ?? r.Company ?? '').trim().toLowerCase() !== c.toLowerCase());
+  }
+
+  // 5) Close drawer if active
+  const drawer = document.getElementById('accountDrawer');
+  if (drawer && drawer.classList.contains('open')) {
+    const activeCompany = String(document.getElementById('accountCompany')?.textContent || '').trim();
+    if (activeCompany && activeCompany.toLowerCase() === c.toLowerCase()) {
+      try { closeAccountDrawer(); } catch (e) {}
+    }
+  }
+
+  // 6) Re-render views
+  if (typeof window.renderAccountsView === 'function') window.renderAccountsView();
+  if (typeof window.renderListView === 'function') window.renderListView();
+  if (typeof window.renderMapView === 'function') window.renderMapView();
+}
+
+
+// =============================
+// Toast (frontend-only) — used for Undo
+// =============================
+function dsEnsureToast() {
+  let el = document.getElementById('dsToast');
+  if (el) return el;
+
+  el = document.createElement('div');
+  el.id = 'dsToast';
+  el.style.position = 'fixed';
+  el.style.left = '16px';
+  el.style.bottom = '16px';
+  el.style.zIndex = '9999';
+  el.style.maxWidth = '92vw';
+  el.style.background = '#111827';
+  el.style.color = '#fff';
+  el.style.padding = '10px 12px';
+  el.style.borderRadius = '12px';
+  el.style.boxShadow = '0 10px 24px rgba(0,0,0,0.25)';
+  el.style.display = 'none';
+  el.style.alignItems = 'center';
+  el.style.gap = '10px';
+  el.style.fontSize = '13px';
+  el.style.fontFamily = 'system-ui, -apple-system, Segoe UI, Roboto, Arial';
+  el.style.whiteSpace = 'nowrap';
+  el.style.overflow = 'hidden';
+  el.style.textOverflow = 'ellipsis';
+
+  el.innerHTML = '<span id="dsToastMsg"></span>' +
+                 '<button id="dsToastUndo" type="button" style="margin-left:10px; padding:6px 10px; border-radius:10px; border:1px solid rgba(255,255,255,0.25); background:transparent; color:#fff; cursor:pointer;">Undo</button>' +
+                 '<button id="dsToastClose" type="button" style="margin-left:6px; padding:6px 10px; border-radius:10px; border:1px solid rgba(255,255,255,0.25); background:transparent; color:#fff; cursor:pointer;">✕</button>';
+
+  document.body.appendChild(el);
+
+  document.getElementById('dsToastClose')?.addEventListener('click', () => {
+    el.style.display = 'none';
+    window.__DS_LAST_DELETE = null;
+  });
+
+  return el;
+}
+
+function dsShowUndoToast(message, onUndo) {
+  const toast = dsEnsureToast();
+  const msgEl = document.getElementById('dsToastMsg');
+  const undoBtn = document.getElementById('dsToastUndo');
+
+  if (msgEl) msgEl.textContent = message;
+
+  if (undoBtn) {
+    undoBtn.onclick = () => {
+      try { onUndo?.(); } catch (e) {}
+      toast.style.display = 'none';
+    };
+  }
+
+  toast.style.display = 'flex';
+  setTimeout(() => {
+    // auto-hide after 10s (if still visible)
+    if (toast.style.display !== 'none') toast.style.display = 'none';
+  }, 10000);
+}
+
+
+// =============================
+// Drawer controls + Status dropdown wiring
+// =============================
+document.addEventListener('DOMContentLoaded', () => {
+  // Ensure manual leads are present as soon as DS is ready
+  const mergeTimer = setInterval(() => {
+    const DS = window.DS || {};
+    if (DS.state && Array.isArray(DS.state.rawRows)) {
+      dsMergeManualLeadsIntoState();
+      clearInterval(mergeTimer);
+      // refresh the accounts view so manual people show up
+      if (typeof window.renderAccountsView === 'function') window.renderAccountsView();
+    }
+  }, 250);
+
+  // Drawer: Add Person
+  const addBtn = document.getElementById('drawerAddPersonBtn');
+  if (addBtn && !addBtn.dataset.wired) {
+    addBtn.dataset.wired = '1';
+    addBtn.addEventListener('click', () => {
+      const acct = window.DS_ACTIVE_ACCOUNT || {};
+      const company = String(acct.company || document.getElementById('accountCompany')?.textContent || '').trim();
+      if (!company) return;
+
+      document.getElementById('ap_company').value = company;
+      document.getElementById('ap_name').value = '';
+      document.getElementById('ap_role').value = '';
+      document.getElementById('ap_status').value = 'Unspecified';
+      document.getElementById('ap_tags').value = '';
+      document.getElementById('ap_cadence').value = '';
+      document.getElementById('ap_lastTouchAt').value = '';
+      document.getElementById('ap_notes').value = '';
+
+      const err = document.getElementById('ap_error');
+      if (err) { err.style.display = 'none'; err.textContent = ''; }
+
+      const m = document.getElementById('addPersonModal');
+      m.classList.remove('hidden');
+      m.setAttribute('aria-hidden', 'false');
+      setTimeout(() => document.getElementById('ap_name')?.focus(), 0);
+    });
+  }
+
+  // Drawer: Delete Account (with optional Undo toast)
+  const delBtn = document.getElementById('drawerDeleteAccountBtn');
+  if (delBtn && !delBtn.dataset.wired) {
+    delBtn.dataset.wired = '1';
+    delBtn.addEventListener('click', () => {
+      const company = String(document.getElementById('accountCompany')?.textContent || '').trim();
+      if (!company) return;
+
+      const ok = confirm(`Delete "${company}" from Deli?\n\nThis deletes the account and ALL associated people (local browser).`);
+      if (!ok) return;
+
+      // Snapshot for Undo (best-effort; still frontend-only)
+      const snapshot = { company };
+      try {
+        // archived set before
+        const key = 'DS_ARCHIVED_COMPANIES';
+        snapshot.archived = JSON.parse(localStorage.getItem(key) || '[]');
+      } catch (e) { snapshot.archived = []; }
+
+      try {
+        snapshot.manualAccounts = dsGetManualAccounts();
+      } catch (e) { snapshot.manualAccounts = []; }
+
+      try {
+        snapshot.manualLeads = dsGetManualLeads();
+      } catch (e) { snapshot.manualLeads = []; }
+
+      try {
+        const DS = window.DS || {};
+        snapshot.stateRaw = Array.isArray(DS.state?.rawRows) ? DS.state.rawRows.slice() : [];
+        snapshot.stateFiltered = Array.isArray(DS.state?.filtered) ? DS.state.filtered.slice() : [];
+      } catch (e) {
+        snapshot.stateRaw = [];
+        snapshot.stateFiltered = [];
+      }
+
+      window.__DS_LAST_DELETE = snapshot;
+
+      dsDeleteAccountEverywhere(company);
+
+      // Show Undo
+      dsShowUndoToast('Account deleted — Undo?', () => {
+        const snap = window.__DS_LAST_DELETE;
+        if (!snap || !snap.company) return;
+
+        const c = String(snap.company).trim();
+        if (!c) return;
+
+        // Un-archive
+        try {
+          const key = 'DS_ARCHIVED_COMPANIES';
+          const prev = Array.isArray(snap.archived) ? snap.archived : [];
+          localStorage.setItem(key, JSON.stringify(prev));
+        } catch (e) {}
+
+        // Restore manual accounts/leads (exact snapshot)
+        try { dsSetManualAccounts(Array.isArray(snap.manualAccounts) ? snap.manualAccounts : []); } catch (e) {}
+        try { dsSetManualLeads(Array.isArray(snap.manualLeads) ? snap.manualLeads : []); } catch (e) {}
+
+        // Restore DS state arrays (best effort)
+        try {
+          const DS = window.DS || {};
+          if (!DS.state) DS.state = {};
+          DS.state.rawRows = Array.isArray(snap.stateRaw) ? snap.stateRaw.slice() : [];
+          DS.state.filtered = Array.isArray(snap.stateFiltered) ? snap.stateFiltered.slice() : DS.state.rawRows;
+        } catch (e) {}
+
+        window.__DS_LAST_DELETE = null;
+
+        window.renderAccountsView?.();
+        window.renderListView?.();
+        window.renderMapView?.();
+      });
+    });
+  }
+
+  // Person row controls (Account 360 table)
+  // - Status drives heat + auto-updates lastTouchAt
+  // - Role/name editable inline
+  // - Delete per row
+  document.addEventListener('change', (e) => {
+    // Helper: refresh Account 360 drawer content in-place (keeps it open + in sync)
+    function refreshActiveDrawer() {
+      try {
+        const active = window.DS_ACTIVE_ACCOUNT || null;
+        const company = String(active?.company || document.getElementById('accountCompany')?.textContent || '').trim();
+        if (!company || typeof openDrawerForAccount !== 'function') return;
+
+        const DS = window.DS || {};
+        const rows = (DS.state && Array.isArray(DS.state.rawRows)) ? DS.state.rawRows : [];
+        const norm = (s) => String(s || '').trim().toLowerCase();
+        const leads = rows.filter(r => norm(r.company ?? r.Company ?? '') === norm(company));
+
+        // rollups (hot/warm) + latest touch
+        const statusNorm = (s) => String(s || 'Unspecified').trim().toLowerCase();
+        const hot = leads.filter(l => statusNorm(l.status ?? l.Status) === 'hot').length;
+        const warm = leads.filter(l => statusNorm(l.status ?? l.Status) === 'warm').length;
+
+        let lastMs = 0;
+        leads.forEach(l => {
+          const t = String(l.lastTouchAt ?? l.last_touch_at ?? l.last_touched ?? l.LastTouchAt ?? '').trim();
+          const ms = Date.parse(t);
+          if (!isNaN(ms) && ms > lastMs) lastMs = ms;
+        });
+
+        // Pull manual account meta if present
+        let meta = {};
+        try {
+          if (typeof dsGetManualAccounts === 'function' && typeof dsNormCompany === 'function') {
+            const list = dsGetManualAccounts();
+            meta = list.find(a => dsNormCompany(a.company) === dsNormCompany(company)) || {};
+          }
+        } catch (e) {}
+
+        const acctFresh = {
+          company,
+          website: meta.website || active?.website || '',
+          industry: meta.industry || active?.industry || '',
+          state: meta.state || active?.state || '',
+          city: meta.city || active?.city || '',
+          total: leads.length,
+          counts: { hot, warm },
+          leads,
+          lastActivityMs: lastMs
+        };
+
+        openDrawerForAccount(acctFresh);
+      } catch (err) {}
+    }
+
+    // Role dropdown
+    const roleSel = e.target && e.target.classList && e.target.classList.contains('acct-role-select') ? e.target : null;
+    if (roleSel) {
+      const id = String(roleSel.getAttribute('data-lead-id') || '').trim();
+      const nextRole = dsEnumRole(roleSel.value || '');
+      if (!id || !nextRole) return;
+
+      if (typeof patchLeadInState === 'function') {
+        // Keep "title" in sync for legacy parts of the app that still read title
+        patchLeadInState(id, { role: nextRole, title: nextRole });
+      }
+
+      window.renderAccountsView?.();
+      window.renderListView?.();
+      window.renderMapView?.();
+      refreshActiveDrawer();
+      return;
+    }
+
+    // Status dropdown (primary heat driver)
+    const statusSel = e.target && e.target.classList && e.target.classList.contains('acct-status-select') ? e.target : null;
+    if (statusSel) {
+      const id = String(statusSel.getAttribute('data-lead-id') || '').trim();
+      const next = dsNormStatus(statusSel.value || 'Unspecified');
+      if (!id) return;
+
+      const today = dsTodayISO();
+
+      if (typeof patchLeadInState === 'function') {
+        patchLeadInState(id, {
+          status: next,
+          // ✅ last touch updates when you change status
+          lastTouchAt: today,
+          last_touched: today,
+          last_touch_at: today
+        });
+      }
+
+      window.renderAccountsView?.();
+      window.renderListView?.();
+      window.renderMapView?.();
+      refreshActiveDrawer();
+      return;
+    }
+  });
+
+  // Name inline save (blur or Enter)
+  document.addEventListener('keydown', (e) => {
+    const inp = e.target && e.target.classList && e.target.classList.contains('acct-name-input') ? e.target : null;
+    if (!inp) return;
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    inp.blur();
+  });
+
+  document.addEventListener('blur', (e) => {
+    const inp = e.target && e.target.classList && e.target.classList.contains('acct-name-input') ? e.target : null;
+    if (!inp) return;
+
+    const id = String(inp.getAttribute('data-lead-id') || '').trim();
+    const nextName = dsTitleCaseName(inp.value || '');
+    if (!id) return;
+
+    inp.value = nextName;
+    patchLeadInState?.(id, { name: nextName });
+    window.renderAccountsView?.();
+    window.renderListView?.();
+    window.renderMapView?.();
+  }, true);
+
+  // Delete person
+  document.addEventListener('click', (e) => {
+    const btn = e.target && e.target.closest ? e.target.closest('.acct-person-delete') : null;
+    if (!btn) return;
+    e.preventDefault();
+
+    const id = String(btn.getAttribute('data-lead-id') || '').trim();
+    if (!id) return;
+
+    const ok = confirm('Delete this person? This cannot be undone (local browser).');
+    if (!ok) return;
+
+    // Remove from localStorage (if manual) + DS.state
+    try {
+      const keep = dsGetManualLeads().filter(r => String(r.id || r.lead_id || r.uuid || '') !== String(id));
+      dsSetManualLeads(keep);
+    } catch (e) {}
+
+    try { deleteLeadFromState?.(id); } catch (e) {}
+
+    window.renderAccountsView?.();
+    window.renderListView?.();
+    window.renderMapView?.();
+
+    // refresh drawer
+    try {
+      const active = window.DS_ACTIVE_ACCOUNT || null;
+      if (active && typeof openDrawerForAccount === 'function') {
+        // call renderAccountsView already rebuilt the list; we re-open via click simulation is overkill.
+        const company = String(active.company || '').trim();
+        if (company) {
+          // build minimal acct object from current DS state
+          const DS = window.DS || {};
+          const rows = (DS.state && Array.isArray(DS.state.rawRows)) ? DS.state.rawRows : [];
+          const leads = rows.filter(r => String(r.company ?? r.Company ?? '').trim().toLowerCase() === company.toLowerCase()).map(r => ({
+            id: r.id || r.ID || r.lead_id || r.uuid,
+            name: String(r.name ?? r.Name ?? '').trim(),
+            title: String(r.title ?? r.Title ?? '').trim(),
+            role: dsEnumRole(r.role ?? r.Role ?? r.title ?? r.Title ?? ''),
+            status: dsNormStatus(r.status ?? r.Status ?? 'Unspecified'),
+            recencyMs: getLastActivityMs?.(r) || 0,
+            recencyText: getLastTouchText?.(r) || '',
+            lastTouch: getLastTouchText?.(r) || '',
+            notes: String(r.notes ?? r.Notes ?? '').trim(),
+            state: String(r.state ?? r.State ?? '').trim(),
+            industry: String(r.industry ?? r.Industry ?? '').trim()
+          }));
+          const hot = leads.filter(l => String(l.status).toLowerCase() === 'hot').length;
+          const warm = leads.filter(l => String(l.status).toLowerCase() === 'warm').length;
+          let lastMs = 0;
+          leads.forEach(l => { if (l.recencyMs && l.recencyMs > lastMs) lastMs = l.recencyMs; });
+          openDrawerForAccount({ ...active, company, leads, total: leads.length, counts: { hot, warm }, lastActivityMs: lastMs });
+        }
+      }
+    } catch (e) {}
+  });
+
+  // Add Person modal wiring
+  const modal = document.getElementById('addPersonModal');
+  if (modal && !modal.dataset.wired) {
+    modal.dataset.wired = '1';
+
+    function close() {
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+
+    // Enter submits (except inside textarea)
+    modal.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      const tag = String(e.target?.tagName || '').toLowerCase();
+      if (tag === 'textarea') return;
+      // Allow normal behavior in selects (Enter can open/close)
+      if (tag === 'select') return;
+
+      e.preventDefault();
+      document.getElementById('addPersonSaveBtn')?.click();
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target && e.target.getAttribute && e.target.getAttribute('data-close') === '1') close();
+    });
+
+    document.getElementById('addPersonCloseBtn')?.addEventListener('click', close);
+    document.getElementById('addPersonCancelBtn')?.addEventListener('click', close);
+
+    document.getElementById('addPersonSaveBtn')?.addEventListener('click', () => {
+      const companyRaw = String(document.getElementById('ap_company')?.value || '').trim();
+      const nameRaw = String(document.getElementById('ap_name')?.value || '').trim();
+      const roleRaw = String(document.getElementById('ap_role')?.value || '').trim();
+      const statusRaw = String(document.getElementById('ap_status')?.value || 'Unspecified').trim() || 'Unspecified';
+      const tagsRaw = String(document.getElementById('ap_tags')?.value || '');
+      const cadenceRaw = String(document.getElementById('ap_cadence')?.value || '').trim();
+      const lastTouchRaw = String(document.getElementById('ap_lastTouchAt')?.value || '').trim();
+      const notesRaw = String(document.getElementById('ap_notes')?.value || '').trim();
+
+      const err = document.getElementById('ap_error');
+      const hideErr = () => { if (err) { err.textContent = ''; err.style.display = 'none'; } };
+      const showErr = (msg) => { if (err) { err.textContent = msg; err.style.display = 'block'; } };
+
+      hideErr();
+
+      const company = companyRaw;
+      const name = dsTitleCaseName(nameRaw);
+      const role = dsEnumRole(roleRaw);
+      const status = dsNormStatus(statusRaw);
+      const tags = dsParseTagsCSV(tagsRaw);
+      const cadence = cadenceRaw;
+      const lastTouchAt = lastTouchRaw || dsTodayISO();
+      const notes = notesRaw;
+
+      if (!company) return;
+      if (!name) { showErr('Name is required.'); document.getElementById('ap_name')?.focus(); return; }
+      if (!role) { showErr('Role is required.'); document.getElementById('ap_role')?.focus(); return; }
+
+      // Prevent duplicates (same company + same name + same role)
+      try {
+        const norm = (s) => String(s || '').trim().toLowerCase();
+        const DS = window.DS || {};
+        const rows = (DS.state && Array.isArray(DS.state.rawRows)) ? DS.state.rawRows : [];
+        const dup = rows.find(r =>
+          norm(r.company ?? r.Company ?? '') === norm(company) &&
+          norm(r.name ?? r.Name ?? '') === norm(name) &&
+          norm(r.role ?? r.Role ?? r.title ?? r.Title ?? '') === norm(role)
+        );
+
+        if (dup) {
+          showErr('Duplicate detected: this person already exists for this account + role.');
+          return;
+        }
+      } catch (e) {}
+
+      const acct = window.DS_ACTIVE_ACCOUNT || {};
+
+      const row = {
+        // ✅ locked storage shape (people)
+        id: dsUuid(),
+        company,
+        name,
+        role,            // locked enum
+        status,          // primary heat driver
+        tags,
+        cadence,
+        cadence_name: cadence,
+        notes,
+        lastTouchAt,
+        last_touched: lastTouchAt,
+        last_touch_at: lastTouchAt,
+
+        // keep legacy-friendly fields (harmless)
+        title: role,
+        last_touched_date: lastTouchAt,
+
+        // account meta (best effort)
+        website: String(acct.website || '').trim(),
+        city: String(acct.city || '').trim(),
+        state: String(acct.state || '').trim().toUpperCase(),
+        industry: String(acct.industry || '').trim()
+      };
+
+      // Persist manual lead
+      const manual = dsGetManualLeads();
+      manual.push(row);
+      dsSetManualLeads(manual);
+
+      // Merge into state immediately
+      const DS = window.DS || {};
+      if (!DS.state) DS.state = {};
+      if (!Array.isArray(DS.state.rawRows)) DS.state.rawRows = [];
+      if (!Array.isArray(DS.state.filtered)) DS.state.filtered = DS.state.rawRows;
+
+      DS.state.rawRows.push(row);
+      if (Array.isArray(DS.state.filtered)) DS.state.filtered.push(row);
+
+      // highlight hook
+      window.DS_LAST_ADDED_LEAD_ID = row.id;
+      setTimeout(() => { if (window.DS_LAST_ADDED_LEAD_ID === row.id) window.DS_LAST_ADDED_LEAD_ID = ''; }, 4000);
+
+      close();
+
+      // Re-render
+      window.renderAccountsView?.();
+      window.renderListView?.();
+      window.renderMapView?.();
+
+      // Re-open drawer for active account so the new person appears immediately
+      try {
+        const active = window.DS_ACTIVE_ACCOUNT || null;
+        const activeCompany =
+          (active && active.company) ? String(active.company) :
+          String(document.getElementById('accountCompany')?.textContent || '');
+        const company2 = String(activeCompany || '').trim();
+        if (company2 && typeof openDrawerForAccount === 'function') {
+          // build a fresh acct object from DS state
+          const rows = DS.state.rawRows || [];
+          const leads = rows.filter(r => String(r.company ?? r.Company ?? '').trim().toLowerCase() === company2.toLowerCase()).map(r => ({
+            id: r.id || r.ID || r.lead_id || r.uuid,
+            name: String(r.name ?? r.Name ?? '').trim(),
+            title: String(r.title ?? r.Title ?? '').trim(),
+            role: dsEnumRole(r.role ?? r.Role ?? r.title ?? r.Title ?? ''),
+            status: dsNormStatus(r.status ?? r.Status ?? 'Unspecified'),
+            recencyMs: getLastActivityMs?.(r) || 0,
+            recencyText: getLastTouchText?.(r) || '',
+            lastTouch: getLastTouchText?.(r) || '',
+            notes: String(r.notes ?? r.Notes ?? '').trim(),
+            state: String(r.state ?? r.State ?? '').trim(),
+            industry: String(r.industry ?? r.Industry ?? '').trim()
+          }));
+
+          const hot = leads.filter(l => String(l.status).toLowerCase() === 'hot').length;
+          const warm = leads.filter(l => String(l.status).toLowerCase() === 'warm').length;
+          let lastMs = 0;
+          leads.forEach(l => { if (l.recencyMs && l.recencyMs > lastMs) lastMs = l.recencyMs; });
+
+          openDrawerForAccount({
+            company: company2,
+            website: String(acct.website || '').trim(),
+            industry: String(acct.industry || '').trim(),
+            state: String(acct.state || '').trim(),
+            city: String(acct.city || '').trim(),
+            total: leads.length,
+            counts: { hot, warm },
+            leads,
+            lastActivityMs: lastMs
+          });
+
+          setTimeout(() => {
+            document.getElementById('accountLeadsTable')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+            const rowEl = document.querySelector('.acct-person-row[data-lead-id="' + row.id + '"]');
+            rowEl?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          }, 60);
+        }
+      } catch (e) {}
+    });
+
+    document.addEventListener('keydown', (evt) => {
+      if (evt.key === 'Escape' && !modal.classList.contains('hidden')) close();
+    });
+  }
+});
+
+
+function dsGetManualAccounts() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(DS_MANUAL_ACCOUNTS_KEY) || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function dsSetManualAccounts(list) {
+  try {
+    localStorage.setItem(DS_MANUAL_ACCOUNTS_KEY, JSON.stringify(Array.isArray(list) ? list : []));
+  } catch (e) {}
+}
+
+function dsNormCompany(s) {
+  return String(s || '').trim().toLowerCase();
+}
+
+function dsUpsertManualAccount(acct) {
+  const list = dsGetManualAccounts();
+  const key = dsNormCompany(acct.company);
+  const idx = list.findIndex(a => dsNormCompany(a.company) === key);
+  if (idx >= 0) list[idx] = { ...list[idx], ...acct };
+  else list.push(acct);
+  dsSetManualAccounts(list);
+}
+
+function dsDeleteManualAccount(company) {
+  const key = dsNormCompany(company);
+  const list = dsGetManualAccounts().filter(a => dsNormCompany(a.company) !== key);
+  dsSetManualAccounts(list);
+}
+
+function dsParseTags(str) {
+  return String(str || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function dsNormalizeUrl(url) {
+  const u = String(url || '').trim();
+  if (!u) return '';
+  if (u.startsWith('http://') || u.startsWith('https://')) return u;
+  return 'https://' + u;
+}
+
+// =============================
+// Add Account Modal
+// =============================
+// ================================
+// Add Account dropdown hygiene
+// ================================
+const DS_INDUSTRY_ENUM = [
+  'Healthcare',
+  'Education',
+  'Hospitality',
+  'Construction',
+  'Manufacturing',
+  'Government',
+  'Other',
+  'Unknown'
+];
+
+const DS_US_STATES = [
+  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT',
+  'NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC'
+];
+
+function dsPopulateAddAccountDropdowns() {
+  const indSel = document.getElementById('aa_industry');
+  const stSel = document.getElementById('aa_state');
+
+  // Industry options: locked base + any existing industries in dataset (to avoid losing legacy values)
+  if (indSel) {
+    const keepFirst = indSel.querySelector('option[value=""]');
+    indSel.innerHTML = '';
+    if (keepFirst) indSel.appendChild(keepFirst);
+
+    const set = new Set(DS_INDUSTRY_ENUM);
+
+    const DS = window.DS || {};
+    const accounts = (DS.state && Array.isArray(DS.state.accounts)) ? DS.state.accounts : [];
+    accounts.forEach(a => {
+      const v = String((a && a.industry) || '').trim();
+      if (v) set.add(v);
+    });
+
+    Array.from(set)
+      .sort((a,b) => a.localeCompare(b))
+      .forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v;
+        indSel.appendChild(opt);
+      });
+  }
+
+  // State options: US states + Unknown (and any existing state strings)
+  if (stSel) {
+    const keepFirst = stSel.querySelector('option[value=""]');
+    stSel.innerHTML = '';
+    if (keepFirst) stSel.appendChild(keepFirst);
+
+    const set = new Set(DS_US_STATES);
+    set.add('Unknown');
+
+    const DS = window.DS || {};
+    const accounts = (DS.state && Array.isArray(DS.state.accounts)) ? DS.state.accounts : [];
+    accounts.forEach(a => {
+      const v = String((a && a.state) || '').trim();
+      if (v) set.add(v.toUpperCase());
+    });
+
+    // Sort with DC + states first, Unknown last
+    const arr = Array.from(set).filter(Boolean);
+    arr.sort((a,b) => {
+      if (a === 'Unknown') return 1;
+      if (b === 'Unknown') return -1;
+      return a.localeCompare(b);
+    });
+
+    arr.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = v;
+      stSel.appendChild(opt);
+    });
+  }
+}
+
+
+function dsOpenAddAccountModal() {
+  const m = document.getElementById('addAccountModal');
+  if (!m) return;
+
+  // clear fields
+  const ids = ['aa_company','aa_website','aa_city','aa_state','aa_industry','aa_tags','aa_notes'];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+
+  // populate dropdowns (industry/state)
+  dsPopulateAddAccountDropdowns();
+
+  const err = document.getElementById('aa_error');
+  if (err) { err.style.display = 'none'; err.textContent = ''; }
+
+  m.classList.remove('hidden');
+  m.setAttribute('aria-hidden', 'false');
+
+  setTimeout(() => {
+    const company = document.getElementById('aa_company');
+    if (company) company.focus();
+  }, 0);
+}
+
+function dsCloseAddAccountModal() {
+  const m = document.getElementById('addAccountModal');
+  if (!m) return;
+  m.classList.add('hidden');
+  m.setAttribute('aria-hidden', 'true');
+}
+
+function dsSaveAccountFromModal() {
+  const company = String(document.getElementById('aa_company')?.value || '').trim();
+  const website = String(document.getElementById('aa_website')?.value || '').trim();
+  const city    = String(document.getElementById('aa_city')?.value || '').trim();
+  const state   = String(document.getElementById('aa_state')?.value || '').trim();
+  const industry= String(document.getElementById('aa_industry')?.value || '').trim();
+  const tagsStr = String(document.getElementById('aa_tags')?.value || '').trim();
+  const notes   = String(document.getElementById('aa_notes')?.value || '').trim();
+
+  const err = document.getElementById('aa_error');
+  function showErr(msg){
+    if (!err) return;
+    err.textContent = msg;
+    err.style.display = 'block';
+  }
+
+  if (!company) {
+    showErr('Company is required.');
+    return;
+  }
+
+  const acct = {
+    company,
+    website,
+    city,
+    state,
+    industry,
+    tags: dsParseTags(tagsStr),
+    notes,
+    createdAt: new Date().toISOString()
+  };
+
+  dsUpsertManualAccount(acct);
+
+  // refresh Accounts view
+  if (typeof window.renderAccountsView === 'function') window.renderAccountsView();
+
+  // auto-open Account 360 for this account (Option A)
+  try {
+    const fakeAcctForDrawer = {
+      company: acct.company,
+      website: acct.website || '',
+      industry: acct.industry || '',
+      state: acct.state || '',
+      city: acct.city || '',
+      total: 0,
+      counts: { hot: 0, warm: 0 },
+      leads: [],
+      lastActivityMs: 0
+    };
+
+    if (typeof openDrawerForAccount === 'function') {
+      openDrawerForAccount(fakeAcctForDrawer);
+    } else if (typeof openAccountDrawer === 'function') {
+      // fallback: open drawer shell at least
+      openAccountDrawer();
+      const companyEl = document.getElementById('accountCompany');
+      if (companyEl) companyEl.textContent = acct.company;
+    }
+  } catch (e) {}
+
+  dsCloseAddAccountModal();
+}
+
+// Wire modal events (safe to run multiple times)
+document.addEventListener('DOMContentLoaded', () => {
+  const addBtn = document.getElementById('addAccountBtn');
+  if (addBtn && !addBtn.dataset.wired) {
+    addBtn.dataset.wired = '1';
+    addBtn.addEventListener('click', dsOpenAddAccountModal);
+  }
+
+  const modal = document.getElementById('addAccountModal');
+  if (modal && !modal.dataset.wired) {
+    modal.dataset.wired = '1';
+
+    modal.addEventListener('click', (e) => {
+      if (e.target && e.target.getAttribute && e.target.getAttribute('data-close') === '1') {
+        dsCloseAddAccountModal();
+      }
+    });
+
+    const x = document.getElementById('addAccountCloseBtn');
+    if (x) x.addEventListener('click', dsCloseAddAccountModal);
+
+    const cancel = document.getElementById('addAccountCancelBtn');
+    if (cancel) cancel.addEventListener('click', dsCloseAddAccountModal);
+
+    const save = document.getElementById('addAccountSaveBtn');
+    if (save) save.addEventListener('click', dsSaveAccountFromModal);
+
+    document.addEventListener('keydown', (evt) => {
+      if (evt.key === 'Escape' && !modal.classList.contains('hidden')) dsCloseAddAccountModal();
+    });
+  }
+});
+
+
+function getArchivedCompaniesSet() {
+  try {
+    const arr = JSON.parse(localStorage.getItem('DS_ARCHIVED_COMPANIES') || '[]');
+    const norm = (Array.isArray(arr) ? arr : []).map(s => String(s || '').trim().toLowerCase()).filter(Boolean);
+    return new Set(norm);
+  } catch (e) {
+    return new Set();
+  }
+}
 
 function getFilteredRows() {
   const DS = window.DS || {};
-  const rows = (DS.state && DS.state.filtered) || [];
-  return Array.isArray(rows) ? rows : [];
+  // Base set: use current filtered if it exists, otherwise fall back to all raw rows.
+  // This prevents List View filters from "breaking" when DS.state.filtered is empty/uninitialized.
+  const base =
+    (DS.state && Array.isArray(DS.state.filtered) && DS.state.filtered.length)
+      ? DS.state.filtered
+      : ((DS.state && Array.isArray(DS.state.rawRows)) ? DS.state.rawRows : []);
+
+  const out = Array.isArray(base) ? base : [];
+  const archived = getArchivedCompaniesSet();
+  if (!archived.size) return out;
+
+  return out.filter(r => {
+    const c = String(r.company ?? r.Company ?? '').trim().toLowerCase();
+    return !archived.has(c);
+  });
+}
+
+// ================================
+// COMPANY FILTER (true global filter)
+// ================================
+function normCompany(s) {
+  return String(s || '').trim().toLowerCase();
+}
+
+function setCompanyFilter(companyName) {
+  const DS = window.DS || {};
+  if (!DS.state) DS.state = {};
+
+  const company = String(companyName || '').trim();
+  if (!company) return;
+
+  // Save the current "base filtered" set once (so we can restore later)
+  if (!Array.isArray(DS.state._filteredBase)) {
+    DS.state._filteredBase = Array.isArray(DS.state.filtered)
+      ? DS.state.filtered.slice()
+      : [];
+  }
+
+  DS.state.companyFilter = company;
+
+  const base = DS.state._filteredBase;
+  DS.state.filtered = base.filter(r => {
+    const c = r.company ?? r.Company ?? '';
+    return normCompany(c) === normCompany(company);
+  });
+
+  // Re-render List immediately (Map will reflect DS.state.filtered if it redraws from state)
+  if (typeof window.renderListView === 'function') {
+    window.renderListView();
+  }
+
+  // Best-effort Map refresh (only if one of these exists)
+  try {
+    if (typeof window.renderMapView === 'function') window.renderMapView();
+    else if (typeof window.renderMap === 'function') window.renderMap();
+    else if (typeof window.updateMap === 'function') window.updateMap();
+    else if (typeof window.refreshMap === 'function') window.refreshMap();
+  } catch (e) {}
+}
+
+function clearCompanyFilter() {
+  const DS = window.DS || {};
+  if (!DS.state) return;
+
+  DS.state.companyFilter = '';
+
+  // Restore base filtered set if we have it
+  if (Array.isArray(DS.state._filteredBase)) {
+    DS.state.filtered = DS.state._filteredBase.slice();
+  }
+
+  // Clear saved base so next filter starts fresh
+  DS.state._filteredBase = null;
+
+  if (typeof window.renderListView === 'function') {
+    window.renderListView();
+  }
+
+  try {
+    if (typeof window.renderMapView === 'function') window.renderMapView();
+    else if (typeof window.renderMap === 'function') window.renderMap();
+    else if (typeof window.updateMap === 'function') window.updateMap();
+    else if (typeof window.refreshMap === 'function') window.refreshMap();
+  } catch (e) {}
 }
 
 
@@ -3049,6 +4713,7 @@ if (activeTZs.length) {
     rows = rows.filter(r => {
       const hay = [
         getCI(r, 'name'),
+        getCI(r, 'role'),
         getCI(r, 'company'),
         getCI(r, 'city'),
         getCI(r, 'state'),
@@ -3115,167 +4780,1107 @@ if (activeTZs.length) {
 
 
   // Public render fn
-window.renderListView = function renderListView() {
+function renderListView() {
 
   // SAFETY: DS must exist
   const DS = window.DS;
   if (!DS || !DS.state) {
-    console.warn("ListView blocked → DS not initialized yet.");
+    // Don't hard-error; DS is initialized asynchronously in some flows.
     return;
   }
 
-  // SAFETY: must have rows
   const rows = computeListFilteredAndSorted();
-  
-  // 📊 List View visibility banner
+  if (!Array.isArray(rows)) return;
 
+  renderListTable(rows, getFilteredRows());
 
-  
-  if (!Array.isArray(rows)) {
-    console.warn("ListView blocked → rows missing.");
-    return;
-  }
-
-renderListTable(rows, getFilteredRows());
-
-setTimeout(() => {
-  try { restoreSelectedLeadIfAny(); } catch (e) { console.error(e); }
-}, 0);
-
-};
+  setTimeout(() => {
+    try { restoreSelectedLeadIfAny(); } catch (e) { console.error(e); }
+  }, 0);
+}
 
 window.renderListView = renderListView;
 
-
-
-  // Wire List toolbar controls
-  function wireListControls() {
-    // Global search
-    $('#listSearch')?.addEventListener('input', () => window.renderListView());
-
-    // Tag-only filter search
-    $('#listTagFilter')?.addEventListener('input', () => window.renderListView());
-
-    // Status chips
-    $$('#listToolbar .chip[data-status]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        btn.classList.toggle('active');
-        window.renderListView();
-      });
-    });
-	
-	// ⭐ Timezone chips
-$$('#listToolbar .chip[data-tz]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    btn.classList.toggle('active');
-    window.renderListView();
-  });
-});
-
-
-    // Reset: clears statuses, global search, and tag filter
-    $('#listReset')?.addEventListener('click', () => {
-      $$('#listToolbar .chip.active').forEach(b => b.classList.remove('active'));
-
-      const s = $('#listSearch');
-      if (s) s.value = '';
-
-      const t = $('#listTagFilter');
-      if (t) t.value = '';
-
-      window.renderListView();
-    });
-
-    // React to main dashboard filter changes (map filters)
-    [
-      'tagFilter',
-      'typeFilter',
-      'cadenceFilter',
-      'stateFilter',
-      'industryFilter',
-      'startDate',
-      'endDate'
-    ]
-      .map(id => document.getElementById(id))
-      .forEach(el => {
-        if (!el) return;
-        el.addEventListener('change', () => window.renderListView());
-      });
-  }
-
-  // Render on List tab click + wire Back to Presentation
-  document.addEventListener('DOMContentLoaded', () => {
-    wireListControls();
-
-    // When user clicks "List" tab, render the list
-    const btnList = document.getElementById('btnListView');
-    if (btnList) {
-      btnList.addEventListener('click', () => {
-        setTimeout(() => window.renderListView(), 0);
-      });
-    }
-
-    // Back to Presentation button
-const backBtn = document.getElementById('backToPresentation');
-if (backBtn) {
-  backBtn.addEventListener('click', () => {
-    // 1) Manually switch back to Map view
-    const mapView = document.getElementById('mapView');
-    const listView = document.getElementById('listView');
-    const btnMapEl = document.getElementById('btnMapView');
-
-    if (mapView && listView && btnMapEl && btnList) {
-      mapView.style.display = 'block';
-      listView.classList.remove('show');
-      btnMapEl.classList.add('active');
-      btnList.classList.remove('active');
-    }
-
-    // 2) Re-open Presentation Mode using current filters
-    if (typeof window.openPresentationMode === 'function') {
-      window.openPresentationMode();
-    }
-  });
+// Back-compat: some code paths still call window.renderList()
+if (typeof window.renderList !== 'function') {
+  window.renderList = renderListView;
 }
 
-  });
-  
-document.addEventListener('click', async (e) => {
-  const btn = e.target.closest('.ds-btn-add-to-queue');
-  if (!btn) return;
+// ================================
+// LIST TOOLBAR WIRING (chips + search)
+// ================================
+function wireListToolbar() {
+  const toolbar = document.getElementById('listToolbar');
+  if (!toolbar) return;
 
-  e.preventDefault();
+  // Prevent double-wiring
+  if (toolbar.dataset.wired === '1') return;
+  toolbar.dataset.wired = '1';
 
-  const leadId = btn.dataset.leadId;
-  if (!leadId) return;
+  const searchEl = document.getElementById('listSearch');
+  const tagEl    = document.getElementById('listTagFilter');
+  const resetEl  = document.getElementById('listReset');
 
-  const original = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Adding…';
+  const safeRender = () => {
+    if (typeof window.renderListView === 'function') window.renderListView();
+  };
 
-  try {
-    const res = await fetch('/api/daily-queue/add', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ lead_id: leadId })
+  // Search boxes
+  if (searchEl) searchEl.addEventListener('input', safeRender);
+  if (tagEl)    tagEl.addEventListener('input', safeRender);
+
+  // Status + TZ chips
+  toolbar
+    .querySelectorAll('button.chip[data-status], button.chip[data-tz]')
+    .forEach((btn) => {
+      btn.type = 'button';
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        btn.classList.toggle('active');
+        safeRender();
+      });
     });
 
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) {
-      throw new Error(data.error || `HTTP ${res.status}`);
+  // Reset button
+  if (resetEl) {
+    resetEl.type = 'button';
+    resetEl.addEventListener('click', (e) => {
+      e.preventDefault();
+
+      // Clear active chips
+      toolbar.querySelectorAll('.chip.active')
+        .forEach((b) => b.classList.remove('active'));
+
+      // Clear search inputs
+      if (searchEl) searchEl.value = '';
+      if (tagEl) tagEl.value = '';
+
+      safeRender();
+    });
+  }
+}
+
+// Wire once DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+  wireListToolbar();
+});
+
+// Optional: expose for debugging
+window.wireListToolbar = wireListToolbar;
+
+</script>
+
+// ================================
+// ACCOUNTS VIEW (Expandable)
+// ================================
+
+
+<script>
+
+window.renderAccountsView = function renderAccountsView() {
+  const content = document.getElementById('accountsContent');
+  if (!content) return;
+
+  const DS = window.DS || {};
+  const allRows = (DS.state && Array.isArray(DS.state.rawRows)) ? DS.state.rawRows : [];
+  const filteredRows = (DS.state && Array.isArray(DS.state.filtered)) ? DS.state.filtered : [];
+  let rows = (filteredRows && filteredRows.length) ? filteredRows : allRows;
+
+  // Exclude archived (deleted) companies from Accounts view
+  const archivedCompanies = getArchivedCompaniesSet();
+  if (archivedCompanies && archivedCompanies.size) {
+    rows = rows.filter(r => !archivedCompanies.has(String(r.company ?? r.Company ?? '').trim().toLowerCase()));
+  }
+
+  if (!rows.length) {
+    const headerCountEl = document.getElementById('accountsHeaderCount');
+    if (headerCountEl) headerCountEl.textContent = 'Showing 0 of 0 accounts';
+
+    content.innerHTML = '<div style="padding:12px; color:#6b7280; font-size:13px;">No accounts.</div>';
+    return;
+  }
+
+
+  // -------- helpers ----------
+  const STATUS_ORDER = { converted: 0, hot: 1, warm: 2, 'follow-up': 3, followup: 3, research: 4, cold: 5, unspecified: 6 };
+
+  function statusEmoji(s) {
+    const v = String(s || 'Unspecified').trim().toLowerCase();
+    if (v === 'converted') return '🏆';
+    if (v === 'hot') return '🔥';
+    if (v === 'warm') return '🌞';
+    if (v === 'cold') return '🧊';
+    if (v === 'research') return '🔍';
+    if (v === 'follow-up' || v === 'followup') return '⏳';
+    return '⚪';
+  }
+
+  function safe(x) {
+    return String(x ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  
+    function normalizeUrl(url) {
+    const u = String(url ?? '').trim();
+    if (!u) return '';
+    if (u.startsWith('http://') || u.startsWith('https://')) return u;
+    return 'https://' + u;
+  }
+
+  function hrefSafe(url) {
+    // Prevent quotes from breaking HTML attributes
+    return normalizeUrl(url).replace(/"/g, '%22').replace(/'/g, '%27');
+  }
+
+
+  function mostCommonKey(countsObj) {
+    let bestKey = '';
+    let bestVal = -1;
+    for (const [k, v] of Object.entries(countsObj || {})) {
+      if (v > bestVal) { bestVal = v; bestKey = k; }
+    }
+    return bestKey;
+  }
+
+  function getName(r) {
+    const n = r.name ?? r.Name ?? r.full_name ?? r.FullName ?? r.contact ?? r.Contact ?? '';
+    return String(n || '').trim();
+  }
+
+  function getTitle(r) {
+    const t = r.role ?? r.Role ?? r.title ?? r.Title ?? r.job_title ?? r.JobTitle ?? '';
+    return String(t || '').trim();
+  }
+
+  function getState(r) {
+    const s = r.state ?? r.State ?? r.st ?? r.ST ?? r.region_state ?? r.RegionState ?? '';
+    return String(s || '').trim();
+  }
+
+  function getIndustry(r) {
+    const v =
+      r.industry ?? r.Industry ??
+      r.vertical ?? r.Vertical ??
+      r.icp_vertical ?? r.ICPVertical ??
+      r.segment ?? r.Segment ??
+      '';
+
+    const raw = String(v || '').trim();
+    if (raw) return raw;
+
+    const tags = String(r.tags ?? r.Tags ?? '').trim();
+    if (!tags) return '';
+    const parts = tags.split(/[,|]/).map(x => x.trim()).filter(Boolean);
+
+    const ignore = new Set(['ap', 'finance', 'treasury', 'controller', 'cfo', 'follow-up', 'followup']);
+    const pick = parts.find(x => !ignore.has(x.toLowerCase()));
+    return pick || (parts[0] || '');
+  }
+
+  function getLastActivityMs(r) {
+    const d =
+      r.lastTouchAt ?? r.last_touch_at ?? r.LastTouchAt ??
+      r.last_touched ?? r.last_touch ?? r.LastTouch ??
+      r.last_touch_date ?? r.LastTouchDate ??
+      r.last_activity ?? r.LastActivity ??
+      r.last_activity_date ?? r.LastActivityDate ??
+      r.last_contacted ?? r.LastContacted ??
+      '';
+
+    const raw = String(d || '').trim();
+    if (!raw) return null;
+
+    const dt = new Date(raw);
+    if (isNaN(dt.getTime())) return null;
+
+    dt.setHours(0,0,0,0);
+    return dt.getTime();
+  }
+
+  function getLastTouchText(r) {
+    const d =
+      r.lastTouchAt ?? r.last_touch_at ?? r.LastTouchAt ??
+      r.last_touched ?? r.last_touch ?? r.LastTouch ??
+      r.last_touch_date ?? r.LastTouchDate ??
+      r.last_activity ?? r.LastActivity ??
+      r.last_activity_date ?? r.LastActivityDate ??
+      r.last_contacted ?? r.LastContacted ??
+      '';
+    const raw = String(d || '').trim();
+    if (!raw) return 'Never';
+
+    const dt = new Date(raw);
+    if (!isNaN(dt.getTime())) {
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      dt.setHours(0,0,0,0);
+      const diff = Math.round((today - dt) / 86400000);
+      if (diff <= 0) return 'Last touch: 0d';
+      return 'Last touch: ' + diff + 'd';
+    }
+    return 'Last touch: ' + raw;
+  }
+
+function normalizeRole(title) {
+  const t = String(title || '').toLowerCase().trim();
+  if (!t) return 'Finance'; // sensible default instead of “Other”
+
+  if (t.includes('chief financial') || t === 'cfo' || t.includes(' cfo')) return 'CFO';
+  if (t.includes('controller')) return 'Controller';
+  if (t.includes('treasur')) return 'Treasury';
+
+  // Any AP-ish phrasing collapses to AP
+  if (t === 'ap' || t.includes('accounts payable') || t.includes('account payable') || t.includes('a/p')) return 'AP';
+
+  // Everything else becomes Finance (keeps it clean + prevents “Other” junk)
+  return 'Finance';
+}
+
+const coreRoles = ['CFO', 'Controller', 'Finance', 'Treasury', 'AP'];
+
+
+  // -------- build accounts map ----------
+  const map = new Map();
+
+  for (const r of rows) {
+    const company = String(r.company ?? r.Company ?? '').trim();
+    if (!company) continue;
+
+    const status = String(r.status ?? r.Status ?? 'Unspecified').trim() || 'Unspecified';
+    const name = getName(r) || '—';
+    const title = getTitle(r) || '';
+    const role = normalizeRole(title);
+
+    const st = getState(r);
+    const industry = getIndustry(r);
+	const website = String(r.website ?? r.Website ?? r.url ?? r.URL ?? r.site ?? r.Site ?? '').trim();
+
+    const activityMs = getLastActivityMs(r);
+
+    if (!map.has(company)) {
+      map.set(company, {
+       company,
+       website: website || '',
+       total: 0,
+
+        counts: { hot: 0, warm: 0, cold: 0, converted: 0, research: 0, followup: 0, other: 0, unspecified: 0 },
+        leads: [],
+        lastActivityMs: null,
+        hasHotWarm: false,
+
+        stateCounts: {},
+        industryCounts: {},
+        state: '',
+        industry: '',
+        tz: 'UNKNOWN'
+      });
     }
 
-    btn.textContent = '✓ In Queue';
-    btn.style.background = '#e8e8e8';
-    btn.style.borderColor = '#ccc';
-    btn.style.cursor = 'not-allowed';
-  } catch (err) {
-    console.error('Add-to-Queue failed:', err);
-    alert('Could not add to Daily Queue.');
-    btn.disabled = false;
-    btn.textContent = original;
+    const obj = map.get(company);
+	if (website && !obj.website) obj.website = website;
+
+
+    if (st) obj.stateCounts[st] = (obj.stateCounts[st] || 0) + 1;
+    if (industry) obj.industryCounts[industry] = (obj.industryCounts[industry] || 0) + 1;
+
+    if (activityMs && (!obj.lastActivityMs || activityMs > obj.lastActivityMs)) {
+      obj.lastActivityMs = activityMs;
+    }
+
+    obj.total += 1;
+
+    const s = status.toLowerCase();
+    if (s === 'hot' || s === 'warm') obj.hasHotWarm = true;
+
+    if (s === 'hot') obj.counts.hot += 1;
+    else if (s === 'warm') obj.counts.warm += 1;
+    else if (s === 'cold') obj.counts.cold += 1;
+    else if (s === 'converted') obj.counts.converted += 1;
+    else if (s === 'research') obj.counts.research += 1;
+    else if (s === 'follow-up' || s === 'followup') obj.counts.followup += 1;
+    else if (s === 'unspecified') obj.counts.unspecified += 1;
+    else obj.counts.other += 1;
+
+    obj.leads.push({
+      id: String(r.id ?? r.ID ?? r.lead_id ?? r.leadId ?? r.uuid ?? '').trim(),
+      company: company,
+
+      name,
+      title,
+      role,
+      status,
+
+      tags: String(r.tags ?? r.Tags ?? '').trim(),
+      cadence: String(r.cadence ?? r.Cadence ?? r.cadence_name ?? r.CadenceName ?? '').trim(),
+      notes: String(r.notes ?? r.Notes ?? '').trim(),
+
+      lastTouchAt: String(r.lastTouchAt ?? r.last_touch_at ?? r.last_touched ?? r.last_touch ?? r.LastTouchAt ?? r.LastTouch ?? '').trim(),
+      lastTouch: getLastTouchText(r),
+
+      // ✅ these power the 360 drawer meta + “industry pill” reliability
+      state: st,
+      industry: industry,
+      recencyMs: activityMs || 0,
+      recencyText: getLastTouchText(r),
+      notes: String(r.notes ?? r.Notes ?? '').trim()
+    });
   }
-});
+
+  // Finalize account-level fields (state, industry, timezone)
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const todayMs = today.getTime();
+
+  for (const a of map.values()) {
+    a.state = mostCommonKey(a.stateCounts) || '';
+    a.industry = mostCommonKey(a.industryCounts) || '';
+
+    try {
+      if (a.state && typeof getTimezoneByState === 'function') {
+        a.tz = getTimezoneByState(a.state) || 'UNKNOWN';
+      } else {
+        a.tz = 'UNKNOWN';
+      }
+    } catch (e) {
+      a.tz = 'UNKNOWN';
+    }
+
+    let daysSince = 9999;
+    if (a.lastActivityMs) daysSince = Math.round((todayMs - a.lastActivityMs) / 86400000);
+    a.daysSinceActivity = daysSince;
+
+    if (daysSince >= 14) {
+      a.health = 'stalled';
+      a.healthLabel = 'Stalled';
+    } else if (a.hasHotWarm) {
+      a.health = 'healthy';
+      a.healthLabel = 'Healthy';
+    } else {
+      a.health = 'risk';
+      a.healthLabel = 'At Risk';
+    }
+
+    a.healthTooltip = a.healthLabel + ' • Last activity: ' + (daysSince >= 9999 ? 'Never' : daysSince + 'd');
+  }
+  
+    // -----------------------------
+  // Merge Manual Accounts (even if they have 0 leads)
+  // -----------------------------
+  const manual = dsGetManualAccounts();
+  for (const a of manual) {
+    const company = String(a.company || '').trim();
+    if (!company) continue;
+
+    if (!map.has(company)) {
+      map.set(company, {
+        company,
+        website: String(a.website || '').trim(),
+        city: String(a.city || '').trim(),
+        state: String(a.state || '').trim(),
+        industry: String(a.industry || '').trim(),
+        tags: Array.isArray(a.tags) ? a.tags : [],
+        notes: String(a.notes || '').trim(),
+        total: 0,
+        counts: { hot: 0, warm: 0 },
+        leads: [],
+        lastActivityMs: 0
+      });
+    } else {
+      // If derived account exists, fill missing account-level fields from manual entry
+      const existing = map.get(company);
+      if (existing) {
+        if (!existing.website && a.website) existing.website = String(a.website || '').trim();
+        if (!existing.city && a.city) existing.city = String(a.city || '').trim();
+        if (!existing.state && a.state) existing.state = String(a.state || '').trim();
+        if (!existing.industry && a.industry) existing.industry = String(a.industry || '').trim();
+        if ((!existing.tags || !existing.tags.length) && Array.isArray(a.tags) && a.tags.length) existing.tags = a.tags;
+        if (!existing.notes && a.notes) existing.notes = String(a.notes || '').trim();
+      }
+    }
+  }
+
+
+    // Sort preference (Account-first)
+  const sortPref = String(localStorage.getItem('DS_ACCOUNTS_SORT') || 'recent').toLowerCase(); // 'recent' | 'hottest'
+
+  const accounts = Array.from(map.values())
+    .sort((a, b) => {
+      if (sortPref === 'hottest') {
+        const ah = Number(a.counts?.hot || 0);
+        const aw = Number(a.counts?.warm || 0);
+        const bh = Number(b.counts?.hot || 0);
+        const bw = Number(b.counts?.warm || 0);
+
+        const aHeat = (ah * 1000) + (aw * 100) + (Number(a.total || 0));
+        const bHeat = (bh * 1000) + (bw * 100) + (Number(b.total || 0));
+        if (bHeat !== aHeat) return bHeat - aHeat;
+
+        // tie-breaker: most recent touch
+        const aMs = a.lastActivityMs || 0;
+        const bMs = b.lastActivityMs || 0;
+        if (bMs !== aMs) return bMs - aMs;
+
+        return a.company.localeCompare(b.company);
+      }
+
+      // Default: most recent touch
+      const aMs = a.lastActivityMs || 0;
+      const bMs = b.lastActivityMs || 0;
+      if (bMs !== aMs) return bMs - aMs;
+      return (b.total - a.total) || a.company.localeCompare(b.company);
+    });
+
+  
+  // Cache for re-opening drawer after edits
+  window.DS_ACCOUNTS_CACHE = accounts;
+// -------- render toolbar + list ----------
+  content.innerHTML =
+    '<div id="accountsToolbar" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px;">' +
+
+      '<input id="accountsSearch" type="search" placeholder="Search accounts…" ' +
+        'style="width:320px; max-width:70vw; padding:8px 10px; border:1px solid #e5e7eb; border-radius:10px; font-size:14px;" />' +
+
+      '<input id="accountsTagFilter" type="search" placeholder="Industry / tag…" aria-label="Filter by industry or tag" ' +
+        'style="min-width:160px; padding:8px 10px; border:1px solid #e5e7eb; border-radius:10px; font-size:14px;" />' +
+
+      '<select id="accountsSort" aria-label="Sort accounts" ' +
+        'style="padding:8px 10px; border:1px solid #e5e7eb; border-radius:10px; font-size:14px; background:#fff;">' +
+        '<option value="recent">Sort: Most recent touch</option>' +
+        '<option value="hottest">Sort: Hottest accounts</option>' +
+      '</select>' +
+
+      '<span style="margin-left:6px; font-size:12px; color:#6b7280;">TZ:</span>' +
+      '<button class="chip tz-chip" data-tz="ET">ET</button>' +
+      '<button class="chip tz-chip" data-tz="CT">CT</button>' +
+      '<button class="chip tz-chip" data-tz="MT">MT</button>' +
+      '<button class="chip tz-chip" data-tz="PT">PT</button>' +
+      '<button class="chip tz-chip" data-tz="UNKNOWN">Unknown</button>' +
+
+      '<button class="chip" data-status="converted">🏆 Converted</button>' +
+      '<button class="chip" data-status="hot">🔥 Hot</button>' +
+      '<button class="chip" data-status="warm">🌞 Warm</button>' +
+      '<button class="chip" data-status="cold">🧊 Cold</button>' +
+      '<button class="chip" data-status="follow-up">⏳ Follow-Up</button>' +
+      '<button class="chip" data-status="research">🔍 Research</button>' +
+      '<button class="chip" data-status="unspecified">⚪ Unspecified</button>' +
+
+      '<button id="accountsReset" class="chip" style="margin-left:4px;">Reset</button>' +
+
+      '<div id="accountsCount" style="margin-left:auto; font-size:12px; color:#6b7280;">Showing ' + accounts.length + ' of ' + accounts.length + ' accounts</div>' +
+    '</div>' +
+
+    '<div id="accountsList" style="display:flex; flex-direction:column; gap:8px;"></div>';
+
+  // ✅ DOM refs AFTER injection
+  let listEl   = document.getElementById('accountsList');
+  let searchEl = document.getElementById('accountsSearch');
+  let tagEl    = document.getElementById('accountsTagFilter');
+  let sortEl   = document.getElementById('accountsSort');
+  let countEl  = document.getElementById('accountsCount');
+  
+    let headerCountEl = document.getElementById('accountsHeaderCount');
+
+  // ✅ Sort toggle (persists)
+  try {
+    const pref = String(localStorage.getItem('DS_ACCOUNTS_SORT') || 'recent').toLowerCase();
+    if (sortEl) sortEl.value = (pref === 'hottest') ? 'hottest' : 'recent';
+    sortEl?.addEventListener('change', () => {
+      const v = String(sortEl.value || 'recent').toLowerCase();
+      localStorage.setItem('DS_ACCOUNTS_SORT', v === 'hottest' ? 'hottest' : 'recent');
+      window.renderAccountsView?.();
+    });
+  } catch (e) {}
+
+
+  function buildExpandedTable(accountObj) {
+    const leadsRaw = Array.isArray(accountObj.leads) ? accountObj.leads.slice() : [];
+
+    // Sort: hottest first (Converted/Hot/Warm...), then most recent touch
+    function statusOrder(status) {
+      const k = String(status || 'Unspecified').trim().toLowerCase();
+      return STATUS_ORDER[k] ?? 99;
+    }
+    function recencyMs(lead) {
+      const ms = Number(lead.recencyMs || 0);
+      if (ms) return ms;
+      // fallback to lastTouchAt strings if present
+      const t = String(lead.lastTouchAt || lead.last_touch_at || lead.last_touched || '').trim();
+      const d = Date.parse(t);
+      return isNaN(d) ? 0 : d;
+    }
+
+    const leads = leadsRaw
+      .map(l => ({
+        ...l,
+        id: (l.id || l.ID || l.lead_id || l.leadId || l.uuid) || l.lead_id || l.uuid || '',
+        role: dsEnumRole(l.role || l.Role || l.title || l.Title || ''),
+        status: dsNormStatus(l.status || l.Status || 'Unspecified'),
+        name: String(l.name || l.Name || '').trim() || '—',
+        title: String(l.title || l.Title || '').trim(),
+        lastTouch: String(l.lastTouch || l.recencyText || '').trim() || String(l.last_touch || '').trim() || '—',
+        recencyMs: recencyMs(l)
+      }))
+      .sort((a,b) => {
+        const oa = statusOrder(a.status);
+        const ob = statusOrder(b.status);
+        if (oa !== ob) return oa - ob;
+        return (b.recencyMs || 0) - (a.recencyMs || 0);
+      });
+
+    const roleOptions = coreRoles.map(r => `<option value="${r}">${r}</option>`).join('');
+    const statusOptions = ['Converted','Hot','Warm','Follow-Up','Research','Cold','Unspecified'];
+
+    let html = '';
+    html += '<div class="acct-leads-wrap">';
+    html +=   '<table class="acct-leads-table">';
+    html +=     '<thead><tr>' +
+                  '<th style="width:24%;">Role</th>' +
+                  '<th style="width:44%;">Name</th>' +
+                  '<th style="width:20%;">Status</th>' +
+                  '<th style="width:12%; text-align:right;">Recency</th>' +
+                '</tr></thead>';
+    html +=     '<tbody>';
+
+    if (!leads.length) {
+      html += '<tr><td colspan="4" class="muted" style="padding:12px 10px;">No people at this account yet.</td></tr>';
+    } else {
+      for (const lead of leads) {
+        const leadId = String(lead.id || '').trim();
+        const safeId = safe(leadId);
+        const safeName = safe(lead.name || '—');
+        const safeRecency = safe(lead.lastTouch || '—');
+        const roleVal = dsEnumRole(lead.role || '');
+        const statusVal = dsNormStatus(lead.status || 'Unspecified');
+
+        html += '<tr class="acct-person-row" data-lead-id="' + safeId + '">';
+
+        // Role (dropdown)
+        html += '<td>';
+        if (leadId) {
+          html += '<select class="acct-role-select" data-lead-id="' + safeId + '">' +
+                    `<option value="">Select role</option>` +
+                    coreRoles.map(r => `<option value="${r}" ${(r===roleVal)?'selected':''}>${r}</option>`).join('') +
+                  '</select>';
+        } else {
+          html += '<span style="font-weight:600;">' + safe(roleVal || '—') + '</span>';
+        }
+        html += '</td>';
+
+        // Name (inline editable) + small subtitle if title exists and differs
+        html += '<td>';
+        if (leadId) {
+          html += '<div class="acct-name-cell">' +
+                    '<input class="acct-name-input" data-lead-id="' + safeId + '" type="text" value="' + safe(dsTitleCaseName(lead.name || '')) + '" />' +
+                    '<button class="acct-person-delete" data-lead-id="' + safeId + '" title="Delete person" aria-label="Delete person">🗑️</button>' +
+                  '</div>';
+        } else {
+          html += '<div style="display:flex; justify-content:space-between; gap:8px; align-items:center;">' +
+                    '<span>' + safeName + '</span>' +
+                  '</div>';
+        }
+        const title = String(lead.title || '').trim();
+        if (title && title.toLowerCase() !== String(lead.name||'').toLowerCase()) {
+          html += '<div class="muted" style="margin-top:2px; font-size:12px;">' + safe(title) + '</div>';
+        }
+        html += '</td>';
+
+        // Status dropdown
+        html += '<td>';
+        if (leadId) {
+          html += '<select class="acct-status-select" data-lead-id="' + safeId + '">' +
+                    statusOptions.map(opt => `<option value="${opt}" ${(String(opt).toLowerCase()===String(statusVal).toLowerCase())?'selected':''}>${opt}</option>`).join('') +
+                  '</select>';
+        } else {
+          html += statusEmoji(statusVal) + ' ' + safe(statusVal);
+        }
+        html += '</td>';
+
+        // Recency
+        html += '<td style="text-align:right; color:#6b7280; white-space:nowrap;">' + safeRecency + '</td>';
+
+        html += '</tr>';
+      }
+    }
+
+    html +=     '</tbody>';
+    html +=   '</table>';
+    html += '</div>';
+    return html;
+  }
+
+  function rowHTML(a) {
+    const c = a.counts || {};
+    const companySafe = safe(a.company);
+
+    const industry = safe(a.industry || '');
+    const state = safe(a.state || '');
+
+    const tzRaw = String(a.tz || '').toUpperCase();
+    const tz = safe(tzRaw);
+    const tzClass = 'tz-' + (tzRaw || 'UNKNOWN');
+	
+	const websiteRaw = (a.website && String(a.website).trim()) ? String(a.website).trim() : '';
+    const websiteHref = websiteRaw ? hrefSafe(websiteRaw) : '';
+
+
+    return (
+      '<div class="acct-row" data-company="' + companySafe + '" data-open="false" ' +
+        'style="text-align:left; width:100%; background:#fff; border:1px solid #e5e7eb; border-radius:14px;' +
+               'padding:12px 14px; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.06);">' +
+
+        '<div class="acct-header" style="display:flex; justify-content:space-between; gap:12px; align-items:center;">' +
+          '<div style="display:flex; align-items:center; gap:10px;">' +
+            '<div class="acct-chevron" style="font-size:14px; color:#6b7280;">▸</div>' +
+
+            '<span title="' + safe(a.healthTooltip || "") + '" ' +
+              'style="display:inline-block; width:10px; height:10px; border-radius:999px; background:' +
+                (a.health === "healthy" ? "#16a34a" : (a.health === "stalled" ? "#ef4444" : "#f59e0b")) +
+                '; margin-right:2px;">' +
+            '</span>' +
+
+            '<div style="display:flex; flex-direction:column; gap:4px;">' +
+
+              '<div style="display:grid; grid-template-columns: 320px auto; column-gap:14px; align-items:center;">' +
+                '<div style="font-weight:700; font-size:14px; color:#111827; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' +
+ companySafe +
+'</div>' +
+(industry ? ('<span class="acct-industry" style="white-space:nowrap;">' + industry + '</span>') : '') +
+(websiteHref ? ('<a class="acct-website" href="' + websiteHref + '" target="_blank" rel="noopener noreferrer" ' +
+  'style="white-space:nowrap; font-size:12px; color:#2563eb; text-decoration:none; margin-left:8px;" ' +
+  'title="' + safe(websiteRaw) + '">🌐 Website</a>') : '') +
+
+              '</div>' +
+
+              '<div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">' +
+                (tz ? ('<span class="state-pill ' + tzClass + '">' + tz + '</span>') : '') +
+                (state ? ('<span class="state-pill ' + tzClass + '">' + state + '</span>') : '') +
+              '</div>' +
+
+            '</div>' +
+          '</div>' +
+
+          '<div style="display:flex; align-items:center; gap:10px;">' +  '<div style="font-size:12px; color:#6b7280;">' + (a.total || 0) + ' leads</div>' +  '<button class="acct-delete-btn" data-company="' + companySafe + '" title="Delete account from Deli" ' +    'style="border:1px solid #e5e7eb; background:#fff; color:#ef4444; border-radius:10px; padding:6px 8px; font-size:12px; cursor:pointer;">🗑️</button>' +'</div>' +
+        '</div>' +
+
+        '<div style="margin-top:8px; display:flex; gap:10px; flex-wrap:wrap; font-size:12px; color:#111827;">' +
+          '<span>🔥 ' + (c.hot || 0) + '</span>' +
+          '<span>🌞 ' + (c.warm || 0) + '</span>' +
+          '<span>🧊 ' + (c.cold || 0) + '</span>' +
+          '<span>🔍 ' + (c.research || 0) + '</span>' +
+          '<span>⏳ ' + (c.followup || 0) + '</span>' +
+          '<span>🏆 ' + (c.converted || 0) + '</span>' +
+        '</div>' +
+
+        '<div class="acct-expanded" style="display:none;"></div>' +
+      '</div>'
+    );
+  }
+
+  function getActiveSet(selector, attr) {
+    const set = new Set();
+    document.querySelectorAll(selector).forEach(el => {
+      if (!el.classList.contains('active')) return;
+      const v = el.getAttribute(attr);
+      if (v) set.add(String(v).toUpperCase());
+    });
+    return set;
+  }
+
+  function matchesStatus(accountObj, activeStatuses) {
+    if (!activeStatuses || activeStatuses.size === 0) return true;
+    const c = accountObj.counts || {};
+    const norm = (k) => String(k || '').toLowerCase().replace(/[^a-z]/g, '');
+
+    for (const raw of activeStatuses) {
+      const key = norm(raw);
+      if ((c[key] || 0) > 0) return true;
+    }
+    return false;
+  }
+
+  function renderList() {
+    const q = String(searchEl?.value || '').trim().toLowerCase();
+    const tagQ = String(tagEl?.value || '').trim().toLowerCase();
+
+    const activeTzs = getActiveSet('#accountsToolbar .chip[data-tz]', 'data-tz');
+    const activeStatuses = getActiveSet('#accountsToolbar .chip[data-status]', 'data-status');
+
+    const filtered = accounts.filter(a => {
+      if (q) {
+        const leadHay = (a.leads || []).map(l => [l.name, l.role, l.title].join(' ')).join(' ');
+        const hay = [
+          a.company || '',
+          a.industry || '',
+          a.state || '',
+          a.tz || '',
+          leadHay
+        ].join(' ').toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+
+      if (tagQ) {
+        const industry = String(a.industry || '').toLowerCase();
+        const state = String(a.state || '').toLowerCase();
+        if (!industry.includes(tagQ) && !state.includes(tagQ)) return false;
+      }
+
+      if (activeTzs.size) {
+        const tz = String(a.tz || 'UNKNOWN').toUpperCase();
+        if (!activeTzs.has(tz)) return false;
+      }
+
+      if (!matchesStatus(a, activeStatuses)) return false;
+      return true;
+    });
+
+       const totalAccounts = accounts.length;
+    const countText = `Showing ${filtered.length} of ${totalAccounts} accounts`;
+
+    if (countEl) countEl.textContent = countText;
+    if (headerCountEl) headerCountEl.textContent = countText;
+
+
+    if (!filtered.length) {
+      listEl.innerHTML = '<div style="padding:12px; color:#6b7280; font-size:13px;">No matches.</div>';
+      return;
+    }
+
+    listEl.innerHTML = filtered.map(rowHTML).join('');
+  }
+
+  renderList();
+
+  // Delete account (archives company locally + removes its leads from current session)
+  document.querySelectorAll('.acct-delete-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const company = String(btn.dataset.company || '').trim();
+      if (!company) return;
+      const ok = confirm(`Delete "${company}" from Deli?\n\nThis hides the account and removes its leads locally (persisted on this browser).`);
+      if (!ok) return;
+
+      // Persist archive list
+      try {
+        const key = 'DS_ARCHIVED_COMPANIES';
+        const prev = JSON.parse(localStorage.getItem(key) || '[]');
+        const set = new Set(Array.isArray(prev) ? prev.map(s => String(s||'').toLowerCase()) : []);
+        set.add(company.toLowerCase());
+        localStorage.setItem(key, JSON.stringify(Array.from(set)));
+      } catch (err) {
+        console.warn('Archive save failed', err);
+      }
+
+      // Remove from in-memory rows (so List/Map update immediately)
+      const DS = window.DS || {};
+      if (DS.state && Array.isArray(DS.state.rawRows)) {
+        DS.state.rawRows = DS.state.rawRows.filter(r => String(r.company ?? r.Company ?? '').trim().toLowerCase() !== company.toLowerCase());
+      }
+      if (DS.state && Array.isArray(DS.state.filtered)) {
+        DS.state.filtered = DS.state.filtered.filter(r => String(r.company ?? r.Company ?? '').trim().toLowerCase() !== company.toLowerCase());
+      }
+
+      // If the Account 360 drawer is open for this account, close it
+      const drawer = document.getElementById('accountDrawer');
+      if (drawer && drawer.classList.contains('open')) {
+        const activeCompany = String(document.getElementById('accountCompany')?.textContent || '').trim();
+        if (activeCompany && activeCompany.toLowerCase() === company.toLowerCase()) {
+          closeAccountDrawer();
+        }
+      }
+
+      // Re-render all views
+      if (typeof window.renderAccountsView === 'function') window.renderAccountsView();
+      if (typeof window.renderListView === 'function') window.renderListView();
+      if (typeof window.renderMapView === 'function') window.renderMapView();
+    });
+  });
+
+  searchEl?.addEventListener('input', renderList);
+  tagEl?.addEventListener('input', renderList);
+
+  document.querySelectorAll('#accountsToolbar .chip[data-status]').forEach(btn => {
+    btn.addEventListener('click', () => { btn.classList.toggle('active'); renderList(); });
+  });
+
+  document.querySelectorAll('#accountsToolbar .chip[data-tz]').forEach(btn => {
+    btn.addEventListener('click', () => { btn.classList.toggle('active'); renderList(); });
+  });
+
+  document.getElementById('accountsReset')?.addEventListener('click', () => {
+    document.querySelectorAll('#accountsToolbar .chip.active').forEach(b => b.classList.remove('active'));
+    if (searchEl) searchEl.value = '';
+    if (tagEl) tagEl.value = '';
+    renderList();
+  });
+
+  // Expand (chevron click) + Open Account Drawer (row click)
+  if (listEl) {
+    function setSelectedAccountRow(rowEl) {
+      listEl.querySelectorAll('.acct-row.is-selected').forEach(r => r.classList.remove('is-selected'));
+      if (rowEl) rowEl.classList.add('is-selected');
+    }
+
+function openDrawerForAccount(acct) {
+  if (!acct) return;
+    window.DS_ACTIVE_ACCOUNT = acct;
+  window.DS_ACTIVE_COMPANY = acct.company || '';
+
+
+  const companyEl = document.getElementById('accountCompany');
+  const metaEl = document.getElementById('accountMeta');
+
+  if (companyEl) companyEl.textContent = acct.company || '—';
+
+  const leadCount = Array.isArray(acct.leads) ? acct.leads.length : 0;
+
+  // Rollups you care about most
+  const hotCount = Number(acct.counts?.hot || 0);
+  const warmCount = Number(acct.counts?.warm || 0);
+
+  const topState = acct.state || (acct.leads?.[0]?.state || '—');
+  const topIndustry =
+    acct.industry ||
+    (acct.leads?.map(l => String(l.industry || '').trim()).find(Boolean) || '—');
+
+  if (metaEl) {
+    metaEl.textContent =
+      `${topIndustry} • ${topState} • ${leadCount} lead${leadCount === 1 ? '' : 's'} • 🔥 ${hotCount} • 🌞 ${warmCount}`;
+  }
+
+  // Most recent lead activity + note
+  let mostRecentLead = null;
+  (acct.leads || []).forEach(l => {
+    if (!mostRecentLead || (l.recencyMs || 0) > (mostRecentLead.recencyMs || 0)) mostRecentLead = l;
+  });
+
+  const recencyEl = document.getElementById('accountRecency');
+  if (recencyEl) recencyEl.textContent = 'Last touched: ' + (mostRecentLead?.recencyText || '—');
+
+  const noteEl = document.getElementById('accountLatestNote');
+  if (noteEl) {
+    const note = mostRecentLead?.notes?.trim();
+    if (!note) noteEl.textContent = '—';
+    else {
+      const singleLine = note.replace(/\s+/g, ' ');
+      noteEl.textContent =
+        (mostRecentLead?.name ? mostRecentLead.name + ': ' : '') +
+        (singleLine.length > 180 ? singleLine.slice(0, 180) + '…' : singleLine);
+    }
+  }
+
+  // Leads table
+  const tableEl = document.getElementById('accountLeadsTable');
+  if (tableEl) tableEl.innerHTML = buildExpandedTable(acct);
+
+  openAccountDrawer();
+}
+
+
+// ================================
+// Account 360 Person Row Controls (Delegated)
+// ================================
+(function wireAccountPersonControls(){
+  if (window.__DS_PERSON_CONTROLS_WIRED) return;
+  window.__DS_PERSON_CONTROLS_WIRED = true;
+
+  function normLeadId(x){ return String(x || '').trim(); }
+
+  function patchLeadEverywhere(leadId, partial){
+    const id = normLeadId(leadId);
+    if (!id) return;
+
+    // Persist patch (works for imported + manual; manual also updated below)
+    try { dsUpsertLeadPatch(id, partial); } catch(e){}
+
+    // Update DS.state rows in-memory
+    const DS = window.DS || {};
+    const apply = (arr) => {
+      if (!Array.isArray(arr)) return;
+      arr.forEach(r => {
+        const rid = normLeadId(r.id ?? r.ID ?? r.lead_id ?? r.leadId ?? r.uuid);
+        if (rid !== id) return;
+        Object.keys(partial || {}).forEach(k => { r[k] = partial[k]; });
+      });
+    };
+    if (DS.state) {
+      apply(DS.state.rawRows);
+      apply(DS.state.filtered);
+    }
+
+    // Update manual leads storage shape (if present)
+    try {
+      const manual = dsGetManualLeads();
+      let changed = false;
+      manual.forEach(m => {
+        const mid = normLeadId(m.id ?? m.ID ?? m.lead_id ?? m.leadId ?? m.uuid);
+        if (mid !== id) return;
+        Object.keys(partial || {}).forEach(k => { m[k] = partial[k]; });
+        changed = true;
+      });
+      if (changed) dsSetManualLeads(manual);
+    } catch(e){}
+  }
+
+  function deleteLeadEverywhere(leadId){
+    const id = normLeadId(leadId);
+    if (!id) return;
+
+    // If it's a manual lead, remove it from manual list. Otherwise mark deleted.
+    try {
+      const manual = dsGetManualLeads();
+      const before = manual.length;
+      const kept = manual.filter(m => normLeadId(m.id ?? m.ID ?? m.lead_id ?? m.leadId ?? m.uuid) !== id);
+      if (kept.length !== before) {
+        dsSetManualLeads(kept);
+      } else {
+        dsAddDeletedLeadId(id);
+      }
+    } catch(e){
+      try { dsAddDeletedLeadId(id); } catch(_){}
+    }
+  }
+
+  function refreshAfterEdit(){
+    const company = String(window.DS_ACTIVE_COMPANY || '').trim();
+    // Re-render Accounts list (rollups, sorting, counts)
+    try { window.renderAccountsView?.(); } catch(e){}
+    // If drawer is open, re-open it for the same company so Recent Activity + table refresh
+    setTimeout(() => {
+      const drawer = document.getElementById('accountDrawer');
+      if (!drawer || !drawer.classList.contains('open')) return;
+      const cache = window.DS_ACCOUNTS_CACHE;
+      const acct = Array.isArray(cache) ? cache.find(a => String(a.company||'') === company) : null;
+      if (acct && typeof openDrawerForAccount === 'function') openDrawerForAccount(acct);
+    }, 0);
+  }
+
+  // Stop clicks on controls from bubbling into row open/close behavior
+  document.addEventListener('click', (e) => {
+    const ctl = e.target?.closest?.('.acct-role-select, .acct-status-select, .acct-name-input, .acct-person-delete');
+    if (ctl) e.stopPropagation();
+  }, true);
+
+  // Role dropdown
+  document.addEventListener('change', (e) => {
+    const sel = e.target?.closest?.('.acct-role-select');
+    if (!sel) return;
+    const id = normLeadId(sel.getAttribute('data-lead-id'));
+    const role = dsEnumRole(sel.value);
+    if (!id) return;
+
+    patchLeadEverywhere(id, { role, title: role });
+    refreshAfterEdit();
+  });
+
+  // Status dropdown (also updates lastTouchAt)
+  document.addEventListener('change', (e) => {
+    const sel = e.target?.closest?.('.acct-status-select');
+    if (!sel) return;
+
+    const id = normLeadId(sel.getAttribute('data-lead-id'));
+    if (!id) return;
+
+    const status = dsNormStatus(sel.value);
+    const today = dsTodayISO();
+
+    // Keep both key shapes for compatibility
+    patchLeadEverywhere(id, { status, lastTouchAt: today, last_touch_at: today, last_touched: today, last_touch: today });
+    refreshAfterEdit();
+  });
+
+  // Name inline edit (blur + Enter)
+  function commitName(input){
+    const id = normLeadId(input.getAttribute('data-lead-id'));
+    if (!id) return;
+    const name = dsTitleCaseName(input.value);
+    input.value = name; // normalize visible value
+    patchLeadEverywhere(id, { name });
+    refreshAfterEdit();
+  }
+
+  document.addEventListener('blur', (e) => {
+    const input = e.target?.closest?.('.acct-name-input');
+    if (!input) return;
+    commitName(input);
+  }, true);
+
+  document.addEventListener('keydown', (e) => {
+    const input = e.target?.closest?.('.acct-name-input');
+    if (!input) return;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      input.blur();
+    }
+  });
+
+  // Delete person
+  document.addEventListener('click', (e) => {
+    const btn = e.target?.closest?.('.acct-person-delete');
+    if (!btn) return;
+    e.preventDefault();
+
+    const id = normLeadId(btn.getAttribute('data-lead-id'));
+    if (!id) return;
+
+    const ok = window.confirm('Delete this person from the account?');
+    if (!ok) return;
+
+    deleteLeadEverywhere(id);
+    refreshAfterEdit();
+  });
+})();
+
+
+    function toggleExpanded(row) {
+	  // Do not toggle when clicking website link
+  if (event && event.target && event.target.closest('.acct-website')) {
+    return;
+  }
+  // Do not toggle when clicking delete button
+  if (event && event.target && event.target.closest('.acct-delete-btn')) {
+    return;
+  }
+
+      const company = row.dataset.company;
+      const isOpen = row.dataset.open === 'true';
+
+      const chevron = row.querySelector('.acct-chevron');
+      const exp = row.querySelector('.acct-expanded');
+      if (!chevron || !exp) return;
+
+      if (isOpen) {
+        row.dataset.open = 'false';
+        chevron.textContent = '▸';
+        exp.style.display = 'none';
+        exp.innerHTML = '';
+        return;
+      }
+
+      row.dataset.open = 'true';
+      chevron.textContent = '▾';
+
+      const acct = accounts.find(a => a.company === company);
+      exp.innerHTML = acct ? buildExpandedTable(acct) : '';
+      exp.style.display = 'block';
+    }
+
+    listEl.addEventListener('click', (e) => {
+      const row = e.target.closest('.acct-row');
+      if (!row) return;
+
+      const company = row.dataset.company;
+      const acct = accounts.find(a => a.company === company);
+
+      if (e.target.closest('.acct-chevron')) {
+        toggleExpanded(row);
+        return;
+      }
+
+      setSelectedAccountRow(row);
+      openDrawerForAccount(acct);
+    });
+  }
+};
 </script>
 
 
@@ -4120,6 +6725,193 @@ console.log("✅ index.html script fully loaded");
     mo.observe(overlay, { attributes: true, attributeFilter: ['class'] });
   })();
 </script>
+
+<!-- ============================= -->
+<!-- Account View Drawer (UI only) -->
+<!-- ============================= -->
+
+<!-- ============================= -->
+<!-- Add Account Modal (Account-first creation) -->
+<!-- ============================= -->
+<div id="addAccountModal" class="ds-modal hidden" aria-hidden="true">
+  <div class="ds-modal-backdrop" data-close="1"></div>
+
+  <div class="ds-modal-card" role="dialog" aria-modal="true" aria-label="Add Account">
+    <div class="ds-modal-head">
+      <div style="font-weight:700;">Add Account</div>
+      <button type="button" id="addAccountCloseBtn" class="ds-modal-x" aria-label="Close">✕</button>
+    </div>
+
+    <div class="ds-modal-body">
+      <div class="ds-field">
+        <label class="ds-label">Company <span style="color:#ef4444;">*</span></label>
+        <input id="aa_company" class="ds-input" type="text" placeholder="e.g., Eli Lilly and Company" />
+      </div>
+
+      <div class="ds-grid2">
+        <div class="ds-field">
+          <label class="ds-label">Website</label>
+          <input id="aa_website" class="ds-input" type="text" placeholder="e.g., elililly.com" />
+        </div>
+        <div class="ds-field">
+          <label class="ds-label">Industry</label>
+          <select id="aa_industry" class="ds-input">
+            <option value="">Select industry…</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="ds-grid3">
+        <div class="ds-field">
+          <label class="ds-label">City</label>
+          <input id="aa_city" class="ds-input" type="text" placeholder="City" />
+        </div>
+        <div class="ds-field">
+          <label class="ds-label">State</label>
+          <select id="aa_state" class="ds-input">
+            <option value="">Select state…</option>
+          </select>
+        </div>
+        <div class="ds-field">
+          <label class="ds-label">Tags</label>
+          <input id="aa_tags" class="ds-input" type="text" placeholder="Comma-separated tags" />
+        </div>
+      </div>
+
+      <div class="ds-field">
+        <label class="ds-label">Notes</label>
+        <textarea id="aa_notes" class="ds-textarea" placeholder="Optional account notes"></textarea>
+      </div>
+
+      <div id="aa_error" style="display:none; margin-top:8px; color:#b91c1c; font-size:12px;"></div>
+    </div>
+
+    <div class="ds-modal-foot">
+      <button type="button" id="addAccountCancelBtn" class="ds-btn">Cancel</button>
+      <button type="button" id="addAccountSaveBtn" class="ds-btn primary">Save Account</button>
+    </div>
+  </div>
+</div>
+
+
+<div id="accountDrawer" class="account-drawer hidden">
+  <div class="account-drawer-header">
+    <div>
+      <h2 id="accountCompany">Company Name</h2>
+      <div id="accountMeta" class="muted">
+        Vertical • State • 0 Leads
+      </div>
+    </div>
+     <button id="closeAccountDrawer" type="button" aria-label="Close drawer">✕</button>
+  </div>
+
+  <div class="account-drawer-actions" style="display:flex; gap:10px; flex-wrap:wrap;">
+    <button id="drawerAddPersonBtn" type="button">➕ Add Person</button>
+    <button id="drawerDeleteAccountBtn" type="button" style="border:1px solid #ef4444; color:#ef4444; background:#fff;">
+      🗑️ Delete Account
+    </button>
+  </div>
+
+
+  <!-- ✅ NEW: scroll container so bottom sections never get cut off -->
+  <div class="account-drawer-content">
+    <div class="account-drawer-section">
+      <h4>Recent Activity</h4>
+      <div id="accountRecency">Last touched: —</div>
+      <div id="accountLatestNote" class="muted">—</div>
+    </div>
+
+    <div class="account-drawer-section">
+      <h4>Leads at This Account</h4>
+      <div id="accountLeadsTable"></div>
+    </div>
+
+    <div class="account-drawer-section collapsed">
+      <h4>Status History</h4>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= -->
+<!-- Add Person Modal (inside Account 360) -->
+<!-- ============================= -->
+<div id="addPersonModal" class="ds-modal hidden" aria-hidden="true">
+  <div class="ds-modal-backdrop" data-close="1"></div>
+
+  <div class="ds-modal-card" role="dialog" aria-modal="true" aria-label="Add Person">
+    <div class="ds-modal-head">
+      <div style="font-weight:700;">Add Person</div>
+      <button type="button" id="addPersonCloseBtn" class="ds-modal-x" aria-label="Close">✕</button>
+    </div>
+
+    <div class="ds-modal-body">
+      <input type="hidden" id="ap_company" />
+
+      <div class="ds-field">
+        <label class="ds-label">Name <span style="color:#ef4444;">*</span></label>
+        <input id="ap_name" class="ds-input" type="text" placeholder="e.g., Jane Smith" />
+      </div>
+
+      <div class="ds-grid2">
+        <div class="ds-field">
+          <label class="ds-label">Role <span style="color:#ef4444;">*</span></label>
+          <select id="ap_role" class="ds-input">
+            <option value="">Select role</option>
+            <option value="CFO">CFO</option>
+            <option value="Controller">Controller</option>
+            <option value="Finance">Finance</option>
+            <option value="Treasury">Treasury</option>
+            <option value="AP">AP</option>
+          </select>
+        </div>
+
+        <div class="ds-field">
+          <label class="ds-label">Status</label>
+          <select id="ap_status" class="ds-input">
+            <option value="Unspecified" selected>Unspecified</option>
+            <option value="Converted">Converted</option>
+            <option value="Hot">Hot</option>
+            <option value="Warm">Warm</option>
+            <option value="Follow-Up">Follow-Up</option>
+            <option value="Research">Research</option>
+            <option value="Cold">Cold</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="ds-grid2">
+        <div class="ds-field">
+          <label class="ds-label">Tags</label>
+          <input id="ap_tags" class="ds-input" type="text" placeholder="Comma-separated tags" />
+        </div>
+        <div class="ds-field">
+          <label class="ds-label">Cadence</label>
+          <input id="ap_cadence" class="ds-input" type="text" placeholder="Cadence name" />
+        </div>
+      </div>
+
+      <div class="ds-field">
+        <label class="ds-label">Last Touch</label>
+        <input id="ap_lastTouchAt" class="ds-input" type="date" />
+      </div>
+
+      <div class="ds-field">
+        <label class="ds-label">Notes</label>
+        <textarea id="ap_notes" class="ds-textarea" placeholder="Optional notes"></textarea>
+      </div>
+
+      <div id="ap_error" style="display:none; margin-top:8px; color:#b91c1c; font-size:12px;"></div>
+    </div>
+
+    <div class="ds-modal-foot">
+      <button type="button" id="addPersonCancelBtn" class="ds-btn">Cancel</button>
+      <button type="button" id="addPersonSaveBtn" class="ds-btn primary">Save Person</button>
+    </div>
+  </div>
+</div>
+
+
+
 
 
 </body>

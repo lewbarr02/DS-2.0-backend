@@ -149,6 +149,32 @@ window.patchLeadInState = function patchLeadInState(id, patch) {
 
 
   // ---------- UTIL ----------
+  
+  // ---------- TIME ZONE HELPERS (single source of truth) ----------
+const TIMEZONE_MAP = {
+  ET: ['ME','NH','VT','MA','RI','CT','NY','NJ','PA','DE','MD','DC','VA','NC','SC','GA','FL'],
+  CT: ['OH','MI','IN','KY','TN','WV','AL','MS','LA','AR','MO','IL','WI','MN','IA'],
+  MT: ['CO','WY','MT','ID','UT','NM','AZ'],
+  PT: ['CA','OR','WA','NV']
+};
+
+function getTimezoneClass(state) {
+  if (!state) return '';
+
+  const s = String(state).trim().toUpperCase();
+
+  if (TIMEZONE_MAP.ET.includes(s)) return 'tz-et';
+  if (TIMEZONE_MAP.CT.includes(s)) return 'tz-ct';
+  if (TIMEZONE_MAP.MT.includes(s)) return 'tz-mt';
+  if (TIMEZONE_MAP.PT.includes(s)) return 'tz-pt';
+
+  return '';
+}
+
+// expose globally so List View + Account View use SAME logic
+window.getTimezoneClass = getTimezoneClass;
+
+  
   const toNumber = (v) => (v == null)
     ? NaN
     : (typeof v === 'number')
