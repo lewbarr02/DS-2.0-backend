@@ -2613,6 +2613,11 @@ window.LIST_STATUS_OPTIONS = [
       // DB id (case-insensitive) so we can call API routes
       const id = getCI(r, 'id') || r.id || r.lead_id || '';
 
+      // Role enum (keep List View + Account 360 in sync)
+      const roleVal = (typeof dsEnumRole === 'function')
+        ? (dsEnumRole(getCI(r,'role')) || '')
+        : (t(getCI(r,'role')) || '');
+
       const deleteCell = id
         ? `<button class="list-delete-btn"
                     data-id="${id}"
@@ -2660,8 +2665,15 @@ window.LIST_STATUS_OPTIONS = [
         <td>${t(getCI(r,'company'))}</td>
         <td>${t(getCI(r,'name'))}</td>
         <td class="role-cell" data-id="${id}">
-  <span class="role-text">${t(getCI(r,'role'))}</span>
-  <button class="role-edit-btn" title="Edit role">✏️</button>
+  <select class="role-select" data-id="${id}" data-prev-role="${roleVal}"
+          style="width:100%; padding:4px; font-size:12px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+    <option value="" ${!roleVal ? 'selected' : ''}>—</option>
+    <option value="CFO" ${roleVal==='CFO' ? 'selected' : ''}>CFO</option>
+    <option value="Controller" ${roleVal==='Controller' ? 'selected' : ''}>Controller</option>
+    <option value="Finance" ${roleVal==='Finance' ? 'selected' : ''}>Finance</option>
+    <option value="Treasury" ${roleVal==='Treasury' ? 'selected' : ''}>Treasury</option>
+    <option value="AP" ${roleVal==='AP' ? 'selected' : ''}>AP</option>
+  </select>
 </td>
         <td>${t(getCI(r,'city'))}</td>
         <td>
@@ -2972,108 +2984,67 @@ $$('#leadTbody .preview-btn').forEach(btn => {
         }
       });
     });
-
-    // 🪪 ROLE INLINE EDIT HANDLERS (new)
-    $$('#leadTbody .role-edit-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+    // 🪪 ROLE dropdown handlers (List View)
+    $$('#leadTbody .role-select').forEach(select => {
+      select.addEventListener('change', async (e) => {
         e.preventDefault();
         e.stopPropagation();
 
-        const cell = btn.closest('.role-cell');
-        if (!cell) return;
+        const id = select.dataset.id || select.closest('tr')?.dataset?.id;
+        if (!id) return;
 
-        const id = cell.dataset.id;
-        const textEl = cell.querySelector('.role-text');
-        const current = textEl ? textEl.textContent.trim() : '';
+        const prev = select.getAttribute('data-prev-role') || '';
+        const newRole = (typeof dsEnumRole === 'function') ? (dsEnumRole(select.value) || '') : String(select.value || '').trim();
 
-        cell.innerHTML = `
-          <input class="role-input" type="text"
-                 value="${current.replace(/"/g, '&quot;')}"
-                 style="width: 70%; padding: 4px; font-size: 13px;" />
-          <button class="role-save-btn" style="margin-left:4px; font-size:12px;">Save</button>
-          <button class="role-cancel-btn" style="margin-left:4px; font-size:12px;">Cancel</button>
-        `;
-
-        const input  = cell.querySelector('.role-input');
-        const save   = cell.querySelector('.role-save-btn');
-        const cancel = cell.querySelector('.role-cancel-btn');
-
-        if (input) {
-          input.focus();
-          input.select();
-        }
-
-        const restoreView = (value) => {
-          cell.innerHTML = `
-            <span class="role-text">${value}</span>
-            <button class="role-edit-btn" title="Edit role">✏️</button>
-          `;
-        };
-
-        if (cancel) {
-          cancel.addEventListener('click', (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
-            restoreView(current);
+        try {
+          const API_BASE = window.DELI_API_BASE || '';
+          const res = await fetch(`${API_BASE}/update-lead/${encodeURIComponent(id)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: newRole, title: newRole })
           });
-        }
 
-        if (save) {
-          save.addEventListener('click', async (ev) => {
-            ev.preventDefault();
-            ev.stopPropagation();
+          if (!res.ok) {
+            console.error('Role update failed', res.status);
+            alert('Could not save role – please try again.');
+            // revert UI
+            select.value = prev;
+            return;
+          }
 
-            if (!input || !id) return;
-            const newRole = input.value.trim();
+          // ✅ Patch this lead in memory so filters + other views stay put
+          if (typeof patchLeadInState === 'function') {
+            patchLeadInState(id, { role: newRole, title: newRole });
+          }
 
-            try {
-              const API_BASE = window.DELI_API_BASE || '';
-              const res = await fetch(`${API_BASE}/update-lead/${encodeURIComponent(id)}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ role: newRole, title: newRole })
-              });
+          // Update the "prev" value so future failures revert correctly
+          select.setAttribute('data-prev-role', newRole);
 
-              if (!res.ok) {
-                console.error('Role update failed', res.status);
-                alert('Could not save role – please try again.');
-                return;
-              }
+          // Refresh list (keeps filters)
+          window.renderListView?.();
 
-              // ✅ Patch this lead in memory so filters stay put
-              if (typeof patchLeadInState === 'function') {
-                patchLeadInState(id, { role: newRole, title: newRole });
-              }
+          // If Account Drawer is open, refresh it so Role dropdown reflects instantly
+          try { window.renderAccountsView?.(); } catch(e){}
+          setTimeout(() => {
+            const drawer = document.getElementById('accountDrawer');
+            if (!drawer || !drawer.classList.contains('open')) return;
 
-              if (typeof window.renderListView === 'function') {
-                window.renderListView();
-              }
+            const company = String(window.DS_ACTIVE_COMPANY || '').trim();
+            const cache = window.DS_ACCOUNTS_CACHE;
+            const acct = Array.isArray(cache) ? cache.find(a => String(a.company||'') === company) : null;
+            if (acct && typeof openDrawerForAccount === 'function') openDrawerForAccount(acct);
+          }, 0);
 
-            } catch (err) {
-              console.error('Error updating role', err);
-              alert('Error saving role – network or server issue.');
-            }
-          });
-        }
-
-        if (input) {
-          input.addEventListener('keydown', (ev) => {
-            if (ev.key === 'Enter') {
-              ev.preventDefault();
-              save?.click();
-            } else if (ev.key === 'Escape') {
-              ev.preventDefault();
-              cancel?.click();
-            }
-          });
+        } catch (err) {
+          console.error('Error updating role', err);
+          alert('Error saving role – network or server issue.');
+          select.value = prev;
         }
       });
     });
-	
-	
 
+    // 🧱 Account 360 Panel (List View Option B — panel-only editing)
 
-  // 🧱 Account 360 Panel (List View Option B — panel-only editing)
   const account360Panel = document.getElementById('account360Panel');
 
   // ✅ Helper: find lead by id from DS memory (rawRows preferred)
@@ -5720,12 +5691,58 @@ function openDrawerForAccount(acct) {
       if (changed) dsSetManualLeads(manual);
     } catch(e){}
   }
-
-  function deleteLeadEverywhere(leadId){
+  function deleteLeadEverywhere(leadId, opts){
     const id = normLeadId(leadId);
     if (!id) return;
 
-    // If it's a manual lead, remove it from manual list. Otherwise mark deleted.
+    const options = opts || {};
+    const preserveAccount = (options.preserveAccount !== false); // default: true
+
+    const DS = window.DS || {};
+    const rows = (DS.state && Array.isArray(DS.state.rawRows)) ? DS.state.rawRows : [];
+
+    // --- Snapshot company BEFORE deletion (best-effort) ---
+    let leadRow = null;
+    let company = '';
+    try {
+      leadRow = rows.find(r => normLeadId(r.id ?? r.ID ?? r.lead_id ?? r.leadId ?? r.uuid) === id) || null;
+      company = String(leadRow?.company ?? leadRow?.Company ?? '').trim();
+    } catch (e) {}
+
+    // --- Preserve Account: if this is the last person at the company, upsert a Manual Account anchor ---
+    try {
+      if (preserveAccount && company && typeof dsUpsertManualAccount === 'function') {
+        const norm = (s) => String(s || '').trim().toLowerCase();
+        const companyNorm = norm(company);
+
+        const remainingCount =
+          rows
+            .filter(r => norm(r.company ?? r.Company ?? '') === companyNorm)
+            .filter(r => normLeadId(r.id ?? r.ID ?? r.lead_id ?? r.leadId ?? r.uuid) !== id)
+            .length;
+
+        if (remainingCount === 0) {
+          const activeAcct = window.DS_ACTIVE_ACCOUNT || {};
+
+          // Keep whatever account meta you already have (drawer > lead row > blank)
+          const acct = {
+            company: company,
+            website: String(activeAcct.website || leadRow?.website || leadRow?.Website || '').trim(),
+            city: String(activeAcct.city || leadRow?.city || leadRow?.City || '').trim(),
+            state: String(activeAcct.state || leadRow?.state || leadRow?.State || '').trim(),
+            industry: String(activeAcct.industry || leadRow?.industry || leadRow?.Industry || '').trim(),
+            tags: Array.isArray(activeAcct.tags) ? activeAcct.tags : (Array.isArray(leadRow?.tags) ? leadRow.tags : []),
+            notes: String(activeAcct.notes || leadRow?.notes || leadRow?.Notes || '').trim(),
+            preservedBy: 'delete-lead',
+            preservedAt: new Date().toISOString()
+          };
+
+          dsUpsertManualAccount(acct);
+        }
+      }
+    } catch (e) {}
+
+    // --- Delete the person (manual lead removal OR mark deleted) ---
     try {
       const manual = dsGetManualLeads();
       const before = manual.length;
@@ -5738,8 +5755,17 @@ function openDrawerForAccount(acct) {
     } catch(e){
       try { dsAddDeletedLeadId(id); } catch(_){}
     }
-  }
 
+    // --- Remove from in-memory DS state immediately so UI updates without a full refresh ---
+    try {
+      if (DS.state && Array.isArray(DS.state.rawRows)) {
+        DS.state.rawRows = DS.state.rawRows.filter(r => normLeadId(r.id ?? r.ID ?? r.lead_id ?? r.leadId ?? r.uuid) !== id);
+      }
+      if (DS.state && Array.isArray(DS.state.filtered)) {
+        DS.state.filtered = DS.state.filtered.filter(r => normLeadId(r.id ?? r.ID ?? r.lead_id ?? r.leadId ?? r.uuid) !== id);
+      }
+    } catch (e) {}
+  }
   function refreshAfterEdit(){
     const company = String(window.DS_ACTIVE_COMPANY || '').trim();
     // Re-render Accounts list (rollups, sorting, counts)
