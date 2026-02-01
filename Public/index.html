@@ -4107,6 +4107,47 @@ function dsShowUndoToast(message, onUndo) {
 }
 
 
+function dsShowToast(message, opts) {
+  opts = opts || {};
+  const toast = dsEnsureToast();
+  const msgEl = document.getElementById('dsToastMsg');
+  const undoBtn = document.getElementById('dsToastUndo');
+  const closeBtn = document.getElementById('dsToastClose');
+
+  if (msgEl) msgEl.textContent = String(message || '');
+
+  // Hide Undo for normal toasts
+  if (undoBtn) {
+    undoBtn.style.display = 'none';
+    undoBtn.onclick = null;
+  }
+
+  // Make sure Close is visible
+  if (closeBtn) closeBtn.style.display = 'inline-block';
+
+  // Variants: success | error | info | warn
+  const variant = String(opts.variant || 'info').toLowerCase();
+  const bg =
+    variant === 'success' ? '#065f46' :
+    variant === 'error'   ? '#7f1d1d' :
+    variant === 'warn'    ? '#92400e' :
+                            '#111827';
+  toast.style.background = bg;
+
+  toast.style.display = 'flex';
+
+  // Auto-hide unless sticky
+  const sticky = !!opts.sticky;
+  const duration = Number(opts.duration || 2200);
+  if (!sticky) {
+    setTimeout(() => {
+      if (toast.style.display !== 'none') toast.style.display = 'none';
+    }, Math.max(800, duration));
+  }
+}
+
+
+
 // =============================
 // Drawer controls + Status dropdown wiring
 // =============================
