@@ -3604,6 +3604,14 @@ if (panelIsOpen && typeof openAccount360 === 'function') {
 }
 
 (function attachRefreshRestoreWrapper() {
+  function applyLocalLeadPatchesEverywhere() {
+    try { if (typeof dsMergeManualLeadsIntoState === 'function') dsMergeManualLeadsIntoState(); } catch (e) { console.error(e); }
+    // Re-render so List/Account/Map reflect patches after a refresh
+    try { window.renderListView?.(); } catch (e) {}
+    try { window.renderAccountsView?.(); } catch (e) {}
+    try { window.renderMapView?.(); } catch (e) {}
+  }
+
   function tryAttach() {
     if (!window.refreshLeads) return false;
     if (window.refreshLeads.__restoresSelected) return true;
@@ -3613,7 +3621,9 @@ if (panelIsOpen && typeof openAccount360 === 'function') {
     window.refreshLeads = async function (...args) {
       const res = await _origRefreshLeads.apply(this, args);
 
+      // After every refresh, re-apply local patches so edits (like Role) survive page reloads
       setTimeout(() => {
+        try { applyLocalLeadPatchesEverywhere(); } catch (e) { console.error(e); }
         try { restoreSelectedLeadIfAny(); } catch (e) { console.error(e); }
       }, 0);
 
@@ -3621,6 +3631,10 @@ if (panelIsOpen && typeof openAccount360 === 'function') {
     };
 
     window.refreshLeads.__restoresSelected = true;
+
+    // If refreshLeads already ran before we wrapped it, force-apply patches once on attach
+    setTimeout(() => { try { applyLocalLeadPatchesEverywhere(); } catch (e) {} }, 0);
+
     return true;
   }
 
@@ -3631,7 +3645,7 @@ if (panelIsOpen && typeof openAccount360 === 'function') {
     tries += 1;
     if (tryAttach() || tries > 50) clearInterval(t);
   }, 100);
-})();
+})();;
  
 
   function openAccount360(id) {

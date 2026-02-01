@@ -2984,6 +2984,8 @@ app.put('/update-lead/:id', async (req, res) => {
     lead_type: strOrNull(req.body.lead_type),
     arr: numOrNull(req.body.arr),
     ap_spend: numOrNull(req.body.ap_spend),
+    role: strOrNull(req.body.role),
+    title: strOrNull(req.body.title),
     notes: strOrNull(req.body.notes),
     latitude: numOrNull(req.body.latitude),
     longitude: numOrNull(req.body.longitude),
@@ -3005,9 +3007,11 @@ app.put('/update-lead/:id', async (req, res) => {
       arr             = COALESCE($12, arr),
       ap_spend        = COALESCE($13, ap_spend),
       tags            = COALESCE($14, tags),
-      notes           = COALESCE($15, notes),
-      latitude        = COALESCE($16, latitude),
-      longitude       = COALESCE($17, longitude),
+      role            = COALESCE($15, role),
+      title           = COALESCE($16, title),
+      notes           = COALESCE($17, notes),
+      latitude        = COALESCE($18, latitude),
+      longitude       = COALESCE($19, longitude),
       updated_at      = NOW()
     WHERE id = $1
     RETURNING *;
@@ -3028,9 +3032,11 @@ app.put('/update-lead/:id', async (req, res) => {
     payload.arr,                           // $12
     payload.ap_spend,                      // $13
     payload.tags,                          // $14
-    payload.notes,                         // $15
-    payload.latitude,                      // $16
-    payload.longitude,                     // $17
+    payload.role,                          // $15
+    payload.title,                         // $16
+    payload.notes,                         // $17
+    payload.latitude,                      // $18
+    payload.longitude,                     // $19
   ];
 
   try {
