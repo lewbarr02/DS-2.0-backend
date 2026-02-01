@@ -51,6 +51,11 @@ app.get('/daily-queue', (_req, res) => {
   res.sendFile(path.join(FRONT_DIR, 'daily-queue.html'));
 });
 
+app.get('/daily-execute', (_req, res) => {
+  res.sendFile(path.join(FRONT_DIR, 'daily-execute.html'));
+});
+
+
 
 // === END: STATIC_FRONTEND_SERVING ===
 
@@ -1697,6 +1702,9 @@ app.get('/api/daily-queue/current', async (_req, res) => {
       state:     r.state,
       status:    r.status,
       industry:  r.industry,
+	  role:      r.role ?? r.title ?? null,
+      title:     r.title ?? r.role ?? null,
+
       forecast_month: r.forecast_month,
       lead_type:      r.lead_type,
       arr:            r.arr,
@@ -1726,6 +1734,8 @@ ap_snapshot_notes: r.ap_snapshot_notes || null,
         state:           r.state,
         status:          r.status,
         industry:        r.industry,
+		role:            r.role ?? r.title ?? null,
+        title:           r.title ?? r.role ?? null,
         forecast_month:  r.forecast_month,
         lead_type:       r.lead_type,
         arr:             r.arr,
@@ -2071,26 +2081,40 @@ function normalizeStatus(raw) {
     .replace(/-/g, '_');
 }
 
-// Take a raw CSV row with arbitrary header casing and map into our DB shape
 function normalizeRow(rowRaw) {
   const row = {};
-  for (const [k, v] of Object.entries(rowRaw)) {
-    row[String(k).toLowerCase()] = v;
-  }
 
-  const mustExist = (key) => {
-    const val = row[key];
-    if (val == null || String(val).trim() === '') {
-      throw new Error(`Missing required field: ${key}`);
-    }
-    return String(val).trim();
-  };
+  // Normalize headers to be resilient to casing + underscores
+  for (const [k, v] of Object.entries(rowRaw)) {
+    const k0 = String(k).trim().toLowerCase();
+    row[k0] = v;
+
+    const k1 = k0.replace(/_/g, ' ');
+    if (!(k1 in row)) row[k1] = v;
+
+    const k2 = k1.replace(/\s+/g, ' ').trim();
+    if (!(k2 in row)) row[k2] = v;
+  }
 
   const pick = (key) => {
     const val = row[key];
     if (val == null) return null;
     const s = String(val).trim();
     return s === '' ? null : s;
+  };
+
+  const pickFirst = (keys) => {
+    for (const key of keys) {
+      const v = pick(key);
+      if (v) return v;
+    }
+    return null;
+  };
+
+  const mustExistAny = (keys, labelForError) => {
+    const val = pickFirst(keys);
+    if (!val) throw new Error(`Missing required field: ${labelForError}`);
+    return val;
   };
 
   const toNumber = (key) => {
@@ -2117,26 +2141,42 @@ function normalizeRow(rowRaw) {
     return Number.isNaN(d.getTime()) ? null : d;
   };
 
-  // Required base fields
-  const name    = mustExist('name');
-  const company = mustExist('company');
+  // ---- Name: accept Name OR (First Name + Last Name) ----
+  const nameDirect = pickFirst(['name', 'full name', 'contact name', 'lead name', 'person', 'person name']);
+  const first = pickFirst(['first name', 'firstname', 'first_name', 'given name', 'given_name']);
+  const last  = pickFirst(['last name', 'lastname', 'last_name', 'surname', 'family name', 'family_name']);
 
-  // Tags: either comma-separated string or already an array-ish
+  const name = (nameDirect || `${first || ''} ${last || ''}`.trim());
+  if (!name) throw new Error('Missing required field: name');
+
+  // ---- Company: accept Company OR Account Name variants ----
+  const company = mustExistAny(
+    [
+      'company',
+      'company name',
+      'account',
+      'account name',
+      'account_name',
+      'organization',
+      'organisation',
+      'org',
+      'business',
+      'business name'
+    ],
+    'company'
+  );
+
+  // Tags
   let tags = [];
   const rawTags = row['tags'];
   if (Array.isArray(rawTags)) {
-    tags = rawTags
-      .map((t) => String(t).trim())
-      .filter(Boolean);
+    tags = rawTags.map((t) => String(t).trim()).filter(Boolean);
   } else if (typeof rawTags === 'string') {
-    tags = rawTags
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean);
+    tags = rawTags.split(',').map((t) => t.trim()).filter(Boolean);
   }
 
   return {
-    zoominfo_id: pick('zoominfo_id') || pick('zoominfo id') || null,
+    zoominfo_id: pickFirst(['zoominfo_id', 'zoominfo id']) || null,
     name,
     email: pick('email'),
     company,
@@ -2146,10 +2186,10 @@ function normalizeRow(rowRaw) {
     state: pick('state'),
     status: normalizeStatus(pick('status')),
     tags,
-    cadence_name: pick('cadence name'),
+    cadence_name: pickFirst(['cadence name', 'cadence_name']),
     source: pick('source'),
-    source_channel: pick('source channel'),
-    conversion_stage: pick('conversion stage'),
+    source_channel: pickFirst(['source channel', 'source_channel']),
+    conversion_stage: pickFirst(['conversion stage', 'conversion_stage']),
     arr: toNumber('arr'),
     ap_spend: toNumber('ap spend'),
     size: pick('size'),
@@ -2163,11 +2203,13 @@ function normalizeRow(rowRaw) {
     notes: pick('notes'),
     latitude: toNumber('latitude'),
     longitude: toNumber('longitude'),
-    forecast_month: pick('forecast month'),
-    lead_type: pick('lead type'),
+    forecast_month: pickFirst(['forecast month', 'forecast_month']),
+    lead_type: pickFirst(['lead type', 'lead_type']),
     website: pick('website'),
   };
 }
+
+
 
 // Template download (keeps Notes near end; Lat/Lon last-ish)
 app.get('/import/template', (_req, res) => {
@@ -2226,6 +2268,58 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
     }
 
     // Normalize & validate rows
+    // ---- Pre-validate required COLUMNS (so we can return a helpful message) ----
+    const headerSet = new Set();
+    for (const k of Object.keys(rows[0] || {})) headerSet.add(String(k).toLowerCase().trim());
+
+    const hasAnyHeader = (keys) => keys.some((k) => headerSet.has(String(k).toLowerCase().trim()));
+
+    // Required field groups:
+    //  - Name OR (First Name + Last Name)
+    //  - Company OR common variants (Account Name, Account, etc.)
+    const NAME_HEADERS_ANY = ['name', 'full name', 'contact name', 'lead name', 'person', 'person name'];
+    const FIRST_HEADERS_ANY = ['first name', 'firstname', 'first_name', 'given name', 'given_name'];
+    const LAST_HEADERS_ANY  = ['last name', 'lastname', 'last_name', 'surname', 'family name', 'family_name'];
+
+    const COMPANY_HEADERS_ANY = [
+      'company',
+      'company name',
+      'account',
+      'account name',
+      'account_name',
+      'organization',
+      'organisation',
+      'org',
+      'business',
+      'business name'
+    ];
+
+    const missing = [];
+
+    const hasName = hasAnyHeader(NAME_HEADERS_ANY);
+    const hasFirst = hasAnyHeader(FIRST_HEADERS_ANY);
+    const hasLast  = hasAnyHeader(LAST_HEADERS_ANY);
+    if (!(hasName || (hasFirst && hasLast))) {
+      missing.push('Name (or First Name + Last Name)');
+    }
+
+    if (!hasAnyHeader(COMPANY_HEADERS_ANY)) {
+      missing.push('Company/Account Name');
+    }
+
+    if (missing.length) {
+      return res.status(400).json({
+        error: `Missing required column(s): ${missing.join(', ')}`,
+        missing_columns: missing,
+        expected: {
+          name_any_of: NAME_HEADERS_ANY,
+          first_name_any_of: FIRST_HEADERS_ANY,
+          last_name_any_of: LAST_HEADERS_ANY,
+          company_any_of: COMPANY_HEADERS_ANY
+        }
+      });
+    }
+
     const normalized = [];
     let bad = 0;
     const badExamples = [];
@@ -2243,10 +2337,53 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'All rows failed validation.', examples: badExamples });
     }
 
+
+    if (!normalized.length) {
+      return res.status(400).json({ error: 'All rows failed validation.', examples: badExamples });
+    }
+
     // 🔹 NEW: defaults from query string
     const defaultSource = (req.query.default_source || '').trim();
     const defaultTagRaw = (req.query.default_tag || '').trim();
     const defaultTagLower = defaultTagRaw.toLowerCase();
+
+
+    // ---------- Derive Accounts from this import (Account-first behavior) ----------
+    // We keep a lightweight "manual accounts" layer in the UI (localStorage).
+    // To make CSV import "create an account", we return a de-duped list of companies
+    // so the frontend can upsert them into that manual accounts store.
+    const accountsMap = new Map();
+    const normCompany = (s) => String(s || '').trim();
+    const companyKey  = (s) => normCompany(s).toLowerCase();
+
+    const prefer = (a, b) => {
+      if (b == null) return a;
+      const s = String(b).trim();
+      return s === '' ? a : b;
+    };
+
+    for (const r of normalized) {
+      const company = normCompany(r.company);
+      if (!company) continue;
+
+      const key = companyKey(company);
+      const prev = accountsMap.get(key) || { company };
+
+      // Prefer non-empty values from any row in the import
+      const next = {
+        company,
+        website:  prefer(prev.website,  r.website),
+        industry: prefer(prev.industry, r.industry),
+        city:     prefer(prev.city,     r.city),
+        state:    prefer(prev.state,    r.state),
+        // optional: carry tags at the account layer (deduped)
+        tags: Array.from(new Set([...(Array.isArray(prev.tags) ? prev.tags : []), ...(Array.isArray(r.tags) ? r.tags : [])].filter(Boolean)))
+      };
+
+      accountsMap.set(key, next);
+    }
+
+    const accounts = Array.from(accountsMap.values());
 
     // ---------- DB transaction ----------
     const client = await pool.connect();
@@ -2337,6 +2474,8 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
         inserted_or_updated: normalized.length,
         failed: bad,
         failed_examples: badExamples,
+        accounts_count: accounts.length,
+        accounts,
         geocoded_processed: geoSummary.processed,
         geocoded_success: geoSummary.success,
         geocoded_failed: geoSummary.failed

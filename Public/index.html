@@ -696,6 +696,7 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
         position: sticky; top: 0; background: #fff; z-index: 1; text-align: left; padding: 10px; border-bottom: 1px solid #eee; cursor: default;
       }
       thead th.sortable { cursor: pointer; }
+      td.linkedin-cell { text-align:center; width:44px; cursor:pointer; user-select:none; }
       tbody td { padding: 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
       tr:hover { background: #fafafa; }
 	  /* ✅ Selected row highlight (List View Option A) */
@@ -710,6 +711,7 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
       }
       .status-cell { white-space: nowrap; font-weight: 600; }
       .website-link { color: #0b6bcb; text-decoration: none; }
+
 	  
 	  /* ============================================
    LIST VIEW — STATUS COLORS + BADGE UI
@@ -1027,6 +1029,60 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
   overflow-x: hidden;
 }
 
+/* ================================
+   Account 360 — v1 Coverage Strip
+================================ */
+.ds-section-head{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:10px;
+}
+.coverage-strip{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:10px;
+}
+.coverage-pill{
+  border:1px solid #e5e7eb;
+  background:#fff;
+  border-radius:999px;
+  padding:7px 10px;
+  font-size:12px;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  cursor:default;
+  user-select:none;
+}
+.coverage-pill .dot{
+  width:10px;
+  height:10px;
+  border-radius:999px;
+  background:#d1d5db; /* neutral */
+  flex:0 0 auto;
+}
+.coverage-pill.filled{
+  border-color: rgba(34,197,94,0.45);
+  background: rgba(34,197,94,0.06);
+}
+.coverage-pill.filled .dot{ background:#22c55e; }
+.coverage-pill.missing{
+  border-style:dashed;
+  cursor:pointer;
+}
+.coverage-pill.missing:hover{
+  border-color:#93c5fd;
+  background:#eff6ff;
+}
+.coverage-pill .role{ font-weight:700; }
+.coverage-pill .count{
+  color:#6b7280;
+  font-weight:600;
+}
+.coverage-pill.missing .count{ color:#2563eb; }
+
 #accountLeadsTable table {
   width: 100%;
   border-collapse: collapse;
@@ -1044,13 +1100,13 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
 #accountLeadsTable td:nth-child(1) { width: 22%; }
 
 #accountLeadsTable th:nth-child(2),
-#accountLeadsTable td:nth-child(2) { width: 40%; word-break: break-word; }
+#accountLeadsTable td:nth-child(2) { width: 36%; word-break: break-word; }
 
 #accountLeadsTable th:nth-child(3),
 #accountLeadsTable td:nth-child(3) { width: 18%; white-space: nowrap; }
 
 #accountLeadsTable th:nth-child(4),
-#accountLeadsTable td:nth-child(4) { width: 20%; white-space: nowrap; text-align: right; }
+#accountLeadsTable td:nth-child(4) { width: 24%; white-space: nowrap; text-align: right; }
 
 
 /* ✅ Account 360: clean, row-based person table (no empty role placeholders) */
@@ -1203,6 +1259,46 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
     
 /* Highlight newly added person row (Account 360) */
 .acct-person-row { transition: background 0.2s ease; }
+
+
+/* ================================
+   LIST VIEW – ROLE COLUMN WIDTH
+   (Targets header + body by key/class so it still works if columns are hidden)
+================================ */
+
+#leadTableWrap {
+  overflow-x: auto; /* allow wider columns instead of squeezing */
+}
+
+#leadTable th[data-key="role"] {
+  min-width: 220px;
+  width: 260px;
+}
+
+#leadTable td.role-cell {
+  min-width: 220px;
+  width: 260px;
+}
+
+#leadTable td.role-cell select.role-select {
+  width: 100%;
+  min-width: 220px;
+}
+
+
+/* ✅ Clickable Company → opens Account 360 drawer (no extra buttons) */
+#leadTable .acct360-link{
+  cursor:pointer;
+  font-weight:700;
+  text-decoration: underline;
+  text-decoration-color: rgba(0,0,0,0.25);
+}
+#leadTable .acct360-link:hover{ text-decoration-color: rgba(0,0,0,0.6); }
+
+/* ✅ Bold Account name everywhere */
+#leadModal input[name="company"] { font-weight: 700; }
+#accountCompany { font-weight: 700; }
+
 </style>
   </head>
   <body>
@@ -1742,6 +1838,23 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
           uploadStatus.textContent = `✅ Imported ${count} row(s) • ${failed} failed`;
           uploadStatus.style.color = '#16a34a';
 
+          // ✅ Account-first import: make sure each imported company exists as an Account
+          // (stored in localStorage "Manual Accounts" so Accounts View can render even if no leads remain)
+          if (Array.isArray(data?.accounts) && data.accounts.length) {
+            for (const acct of data.accounts) {
+              if (!acct || !acct.company) continue;
+              if (typeof dsUpsertManualAccount === 'function') {
+                dsUpsertManualAccount(acct);
+              } else if (typeof window.dsUpsertManualAccount === 'function') {
+                window.dsUpsertManualAccount(acct);
+              }
+            }
+            if (typeof window.renderAccountsView === 'function') {
+              window.renderAccountsView();
+            }
+          }
+
+
           if (window.refreshLeads) await window.refreshLeads();
           if (window.autoGeocodeMissing) {
             window.autoGeocodeMissing({ max: 25, delayMs: 1000 });
@@ -1910,6 +2023,34 @@ document.addEventListener('click', (e) => {
   if (!btn) return;
   e.preventDefault();
   closeAccountDrawer();
+});
+
+
+// ✅ Company click (List View) → open Account 360 drawer (shows other contacts)
+document.addEventListener('click', (e) => {
+  const acctLink = e.target && e.target.closest ? e.target.closest('#leadTbody .acct360-link') : null;
+  if (!acctLink) return;
+
+  e.preventDefault();
+  // critical: prevents any other document click handlers (like row → Lead 360) from firing
+  if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+  else e.stopPropagation();
+
+  const company = String(acctLink.getAttribute('data-company') || acctLink.textContent || '').trim();
+  const getter = window.dsGetAccountByCompany;
+  if (typeof getter !== 'function') {
+    console.warn('dsGetAccountByCompany missing; cannot open Account 360');
+    alert('Account 360 helper not loaded yet. Refresh the page and try again.');
+    return;
+  }
+  const acct = getter(company);
+if (!acct) {
+    alert('Could not find that account in memory. Try Refresh.');
+    return;
+  }
+
+  try { openAccountDrawer(); } catch (err) {}
+  try { openDrawerForAccount(acct); } catch (err) {}
 });
 
 // ESC key closes drawer
@@ -2291,10 +2432,9 @@ function getTimezoneByState(state) {
     { key:'state',          label:'State',          sortable:true },
     { key:'industry',       label:'Industry',       sortable:true },
     { key:'forecast_month', label:'Forecast',       sortable:true },
-    { key:'arr',            label:'ARR',            sortable:true, numeric:true },
+    { key:'linkedin',       label:'LinkedIn',       sortable:true },
     { key:'tags',           label:'Tags',           sortable:false },
     { key:'website',        label:'Website',        sortable:false },
-    { key:'notes',          label:'Notes',          sortable:false },
 
     // ⭐ NEW: actions column (for delete button)
     { key:'actions',        label:'',               sortable:false },
@@ -2390,6 +2530,16 @@ function getCI(row, key) {
         return lat && lon ? '1' : '0';  // sortable numeric
     }
 
+
+    // ⭐ NEW: LinkedIn status virtual column (supports linkedin or linkedin_status keys)
+    if (key && String(key).toLowerCase() === 'linkedin') {
+        const hitLi = Object.keys(row).find(k => {
+          const lk = String(k || '').toLowerCase();
+          return lk === 'linkedin' || lk === 'linkedin_status' || lk === 'linkedinstatus';
+        });
+        return hitLi ? (row[hitLi] ?? '') : '';
+    }
+
     const hit = Object.keys(row).find(k => k.toLowerCase() === key.toLowerCase());
     if (hit) return row[hit] ?? '';
 
@@ -2472,6 +2622,41 @@ function getCI(row, key) {
     if (k.includes('research'))return STATUS_RANK.research;
     return STATUS_RANK.unspecified;
   }
+
+  // LinkedIn status rank (lower = higher priority in ASC)
+  // '' (blank) = not yet reached out
+  // sent = reached out
+  // accepted = connection accepted
+  // replied = responded to outreach
+  // hard_no = explicit "no" on LinkedIn
+  function linkedinRankVal(v) {
+    const raw = String(v || '').trim().toLowerCase();
+    if (!raw) return 0;
+    if (raw.includes('hard')) return 4;
+    if (raw.includes('repl') || raw.includes('resp')) return 3;
+    if (raw.includes('accept') || raw.includes('connect')) return 2;
+    if (raw.includes('sent') || raw.includes('outreach') || raw.includes('dm')) return 1;
+    return 1; // fallback = treated like "sent"
+  }
+
+  function linkedinEmoji(v) {
+    const raw = String(v || '').trim().toLowerCase();
+    if (!raw) return '⚪';            // not reached out
+    if (raw.includes('sent') || raw.includes('outreach') || raw.includes('dm')) return '📨';
+    if (raw.includes('accept') || raw.includes('connect')) return '🤝';
+    if (raw.includes('repl') || raw.includes('resp')) return '💬';
+    if (raw.includes('hard')) return '⛔';
+    return '📨';
+  }
+
+  function linkedinNextVal(v) {
+    const raw = String(v || '').trim().toLowerCase();
+    const order = ['', 'sent', 'accepted', 'replied', 'hard_no'];
+    const idx = Math.max(0, order.indexOf(raw));
+    const next = order[(idx + 1) % order.length];
+    return next;
+  }
+
   
   // =====================================
 // STATUS NORMALIZATION HELPERS (REQUIRED)
@@ -2606,7 +2791,7 @@ window.LIST_STATUS_OPTIONS = [
       const t = (v) => (v == null || v === '') ? '' : String(v);
       const website = getCI(r,'website');
       const websiteUrl = website ? normalizeWebsiteUrl(website) : '';
-      const arr = getCI(r,'arr');
+      const linkedin = getCI(r,'linkedin');
       const ap  = getCI(r,'ap_spend');
       const hasPin = getCI(r, 'pin') === '1';
 
@@ -2662,7 +2847,7 @@ window.LIST_STATUS_OPTIONS = [
 
 		
 <td>${hasPin ? '✅' : '❌'}</td>
-        <td>${t(getCI(r,'company'))}</td>
+        <td><a href="#" class="acct360-link" data-company="${String(getCI(r,'company')||'').replace(/"/g, '&quot;')}" title="Open Account 360">${t(getCI(r,'company'))}</a></td>
         <td>${t(getCI(r,'name'))}</td>
         <td class="role-cell" data-id="${id}">
   <select class="role-select" data-id="${id}" data-prev-role="${roleVal}"
@@ -2684,7 +2869,7 @@ window.LIST_STATUS_OPTIONS = [
 
         <td>${t(getCI(r,'industry'))}</td>
         <td>${t(getCI(r,'forecast_month') || getCI(r,'forecast'))}</td>
-<td>${arr ? ('$' + arr) : ''}</td>
+<td class="linkedin-cell" data-id="${id}" data-prev="${t(linkedin)}" title="LinkedIn status (click to cycle)">${linkedinEmoji(linkedin)}</td>
 
 
         <!-- ⭐ TAGS CELL EDITABLE -->
@@ -2696,9 +2881,8 @@ window.LIST_STATUS_OPTIONS = [
         <td>${websiteUrl
               ? `<a class="website-link" href="${websiteUrl}" target="_blank" rel="noopener noreferrer">Visit</a>`
               : ''}</td>
-        <td>${t(getCI(r,'notes'))}</td>
 
-		
+
 <td class="actions-cell">
   <button class="preview-btn"
           data-id="${id}"
@@ -2717,10 +2901,83 @@ window.LIST_STATUS_OPTIONS = [
   ${deleteCell}
 </td>
 
-      </tr>`;
+      </tr>` + (() => {
+        const rawNotes = String(getCI(r,'notes') || '').trim();
+        if (!rawNotes) return '';
+        return `<tr class="lead-notes-row" data-id="${id}"><td colspan="${COLUMNS.length}" class="lead-notes-cell"><div class="lead-notes-text">${t(rawNotes)}</div></td></tr>`;
+      })();
     }).join('');
 
     tbody.innerHTML = html;
+
+
+    // 🔗 LinkedIn status cell (click-to-cycle + persist)
+    $$('#leadTbody .linkedin-cell').forEach(cell => {
+      cell.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const id = String(cell.getAttribute('data-id') || '').trim();
+        if (!id) return;
+
+        const prev = String(cell.getAttribute('data-prev') || '').trim().toLowerCase();
+        const next = linkedinNextVal(prev);
+
+        // Optimistic UI + memory patch
+        try { cell.textContent = linkedinEmoji(next); } catch(_e){}
+        try { cell.setAttribute('data-prev', next); } catch(_e){}
+        try {
+          const patch = { linkedin_status: next, linkedin: next };
+          if (typeof window.patchLeadEverywhere === 'function') window.patchLeadEverywhere(id, patch);
+          else if (typeof patchLeadInState === 'function') patchLeadInState(id, patch);
+          else { try { dsUpsertLeadPatch(id, patch); } catch(_e2){} }
+        } catch (_e) {}
+
+        try {
+          const API_BASE = window.DELI_API_BASE || '';
+          const res = await fetch(`${API_BASE}/update-lead/${encodeURIComponent(id)}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ linkedin_status: next, linkedin: next })
+          });
+
+          if (!res.ok) {
+            console.error('LinkedIn update failed', res.status);
+
+            // revert UI + memory
+            const revert = prev;
+            try { cell.textContent = linkedinEmoji(revert); } catch(_e){}
+            try { cell.setAttribute('data-prev', revert); } catch(_e){}
+            try {
+              const patch = { linkedin_status: revert, linkedin: revert };
+              if (typeof window.patchLeadEverywhere === 'function') window.patchLeadEverywhere(id, patch);
+              else if (typeof patchLeadInState === 'function') patchLeadInState(id, patch);
+            } catch (_e) {}
+
+            alert('Could not save LinkedIn status — please try again.');
+            return;
+          }
+
+          // keep list + account view in sync if open
+          try { window.renderAccountsView?.(); } catch(_e){}
+        } catch (err) {
+          console.error('Error updating LinkedIn status', err);
+
+          // revert UI + memory
+          const revert = prev;
+          try { cell.textContent = linkedinEmoji(revert); } catch(_e){}
+          try { cell.setAttribute('data-prev', revert); } catch(_e){}
+          try {
+            const patch = { linkedin_status: revert, linkedin: revert };
+            if (typeof window.patchLeadEverywhere === 'function') window.patchLeadEverywhere(id, patch);
+            else if (typeof patchLeadInState === 'function') patchLeadInState(id, patch);
+          } catch (_e) {}
+
+          alert('Error saving LinkedIn status — network or server issue.');
+        }
+      });
+    });
+
 
  
 
@@ -2990,11 +3247,32 @@ $$('#leadTbody .preview-btn').forEach(btn => {
         e.preventDefault();
         e.stopPropagation();
 
-        const id = select.dataset.id || select.closest('tr')?.dataset?.id;
+        // ✅ Robust id grab (supports different render shapes)
+        const id = String(
+          select.getAttribute('data-lead-id')
+          || select.dataset.id
+          || select.closest('tr')?.dataset?.id
+          || ''
+        ).trim();
         if (!id) return;
 
         const prev = select.getAttribute('data-prev-role') || '';
-        const newRole = (typeof dsEnumRole === 'function') ? (dsEnumRole(select.value) || '') : String(select.value || '').trim();
+        const newRole =
+          (typeof dsEnumRole === 'function')
+            ? (dsEnumRole(select.value) || '')
+            : String(select.value || '').trim();
+
+        // Optimistic in-memory + persisted patch (so it survives refresh even if API is slow/partial)
+        try {
+          const patch = { role: newRole, title: newRole };
+          if (typeof window.patchLeadEverywhere === 'function') {
+            window.patchLeadEverywhere(id, patch);
+          } else if (typeof patchLeadInState === 'function') {
+            patchLeadInState(id, patch);
+          } else {
+            try { dsUpsertLeadPatch(id, patch); } catch (_e) {}
+          }
+        } catch (_e) {}
 
         try {
           const API_BASE = window.DELI_API_BASE || '';
@@ -3007,14 +3285,15 @@ $$('#leadTbody .preview-btn').forEach(btn => {
           if (!res.ok) {
             console.error('Role update failed', res.status);
             alert('Could not save role – please try again.');
-            // revert UI
-            select.value = prev;
-            return;
-          }
 
-          // ✅ Patch this lead in memory so filters + other views stay put
-          if (typeof patchLeadInState === 'function') {
-            patchLeadInState(id, { role: newRole, title: newRole });
+            // revert UI + in-memory
+            select.value = prev;
+            try {
+              const revert = { role: prev, title: prev };
+              if (typeof window.patchLeadEverywhere === 'function') window.patchLeadEverywhere(id, revert);
+              else if (typeof patchLeadInState === 'function') patchLeadInState(id, revert);
+            } catch (_e) {}
+            return;
           }
 
           // Update the "prev" value so future failures revert correctly
@@ -3032,18 +3311,25 @@ $$('#leadTbody .preview-btn').forEach(btn => {
             const company = String(window.DS_ACTIVE_COMPANY || '').trim();
             const cache = window.DS_ACCOUNTS_CACHE;
             const acct = Array.isArray(cache) ? cache.find(a => String(a.company||'') === company) : null;
-            if (acct && typeof openDrawerForAccount === 'function') openDrawerForAccount(acct);
+            if (acct && typeof window.openDrawerForAccount === 'function') window.openDrawerForAccount(acct);
           }, 0);
 
         } catch (err) {
           console.error('Error updating role', err);
           alert('Error saving role – network or server issue.');
+
+          // revert UI + in-memory
           select.value = prev;
+          try {
+            const revert = { role: prev, title: prev };
+            if (typeof window.patchLeadEverywhere === 'function') window.patchLeadEverywhere(id, revert);
+            else if (typeof patchLeadInState === 'function') patchLeadInState(id, revert);
+          } catch (_e) {}
         }
       });
     });
 
-    // 🧱 Account 360 Panel (List View Option B — panel-only editing)
+// 🧱 Account 360 Panel (List View Option B — panel-only editing)
 
   const account360Panel = document.getElementById('account360Panel');
 
@@ -3128,7 +3414,7 @@ function closeAccount360() {
         <button type="button" class="close-btn acc360-close" aria-label="Close">✖</button>
 
         <div style="font-weight:700;font-size:16px;margin-bottom:6px;">
-          Account 360 — ${esc(lead.company || lead.name || '(Lead)')}
+          Lead 360 — ${esc(lead.company || lead.name || '(Lead)')}
         </div>
 
         <div style="font-size:12px;color:#666;margin-bottom:12px;">
@@ -3154,7 +3440,17 @@ function closeAccount360() {
 
           <div style="display:grid;gap:6px;">
             <label style="font-size:12px;color:#555;">Role</label>
-            <input name="role" value="${esc((lead.role || lead.title || '') )}" />
+            <select name="role">
+              ${(() => {
+                const current = String((lead.role || lead.title || '')).trim().toLowerCase();
+                const opts = ['', 'CFO','Controller','Finance','Treasury','AP'];
+                return opts.map(v => {
+                  const label = v ? v : 'Select';
+                  const isSel = (v && v.toLowerCase()===current) || (!v && !current);
+                  return `<option value="${v}" ${isSel ? 'selected' : ''}>${label}</option>`;
+                }).join('');
+              })()}
+            </select>
           </div>
 
           <div style="display:grid;gap:6px;">
@@ -3475,11 +3771,16 @@ if (panelIsOpen && typeof openAccount360 === 'function') {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || `Save failed (${res.status})`);
 
-        // ✅ update DS memory if your helper exists, otherwise just refresh
-        if (typeof patchLeadInState === 'function') {
-          patchLeadInState(id, { ...payload, ...(data.lead || data || {}) });
-        }
+        // ✅ Persist + sync role (and other edits) everywhere (List, Account Drawer, Account 360 Panel)
+        try { dsUpsertLeadPatch(id, payload); } catch(e){}
 
+        const merged = { ...payload, ...(data.lead || data || {}) };
+
+        if (typeof window.patchLeadEverywhere === 'function') {
+          window.patchLeadEverywhere(id, merged);
+        } else if (typeof patchLeadInState === 'function') {
+          patchLeadInState(id, merged);
+        }
         // re-render panel with fresh memory
         const fresh = findLeadById(id) || {};
         account360Panel.innerHTML = renderAccount360Panel(fresh);
@@ -3961,7 +4262,7 @@ document.addEventListener('DOMContentLoaded', () => {
           lastActivityMs: lastMs
         };
 
-        openDrawerForAccount(acctFresh);
+        window.openDrawerForAccount(acctFresh);
       } catch (err) {}
     }
 
@@ -4035,62 +4336,62 @@ document.addEventListener('DOMContentLoaded', () => {
     window.renderMapView?.();
   }, true);
 
-  // Delete person
-  document.addEventListener('click', (e) => {
-    const btn = e.target && e.target.closest ? e.target.closest('.acct-person-delete') : null;
-    if (!btn) return;
-    e.preventDefault();
+// ================================
+// Lead 360 — Delete Person (single source of truth)
+// Flag to disable legacy delete handler (prevents double-delete)
+window.__DS_PERSON_DELETE_SOT = true;
+// ================================
+document.addEventListener('click', (e) => {
+  const btn = e.target?.closest?.('.acct-person-delete');
+  if (!btn) return;
 
-    const id = String(btn.getAttribute('data-lead-id') || '').trim();
-    if (!id) return;
+  e.preventDefault();
+  e.stopPropagation();
 
-    const ok = confirm('Delete this person? This cannot be undone (local browser).');
-    if (!ok) return;
+  const id = String(btn.getAttribute('data-lead-id') || '').trim();
+  if (!id) {
+    console.warn('Delete clicked but no data-lead-id found');
+    return;
+  }
 
-    // Remove from localStorage (if manual) + DS.state
-    try {
-      const keep = dsGetManualLeads().filter(r => String(r.id || r.lead_id || r.uuid || '') !== String(id));
-      dsSetManualLeads(keep);
-    } catch (e) {}
+  const ok = window.confirm('Delete this person from the account?');
+  if (!ok) return;
 
-    try { deleteLeadFromState?.(id); } catch (e) {}
+  // 🔥 ONE delete path only
+  window.deleteLeadEverywhere?.(id, { preserveAccount: true });
 
-    window.renderAccountsView?.();
-    window.renderListView?.();
-    window.renderMapView?.();
+  // Re-render views
+  try { window.renderAccountsView?.(); } catch {}
+  try { window.renderListView?.(); } catch {}
+  try { window.renderMapView?.(); } catch {}
 
-    // refresh drawer
-    try {
-      const active = window.DS_ACTIVE_ACCOUNT || null;
-      if (active && typeof openDrawerForAccount === 'function') {
-        // call renderAccountsView already rebuilt the list; we re-open via click simulation is overkill.
-        const company = String(active.company || '').trim();
-        if (company) {
-          // build minimal acct object from current DS state
-          const DS = window.DS || {};
-          const rows = (DS.state && Array.isArray(DS.state.rawRows)) ? DS.state.rawRows : [];
-          const leads = rows.filter(r => String(r.company ?? r.Company ?? '').trim().toLowerCase() === company.toLowerCase()).map(r => ({
-            id: r.id || r.ID || r.lead_id || r.uuid,
-            name: String(r.name ?? r.Name ?? '').trim(),
-            title: String(r.title ?? r.Title ?? '').trim(),
-            role: dsEnumRole(r.role ?? r.Role ?? r.title ?? r.Title ?? ''),
-            status: dsNormStatus(r.status ?? r.Status ?? 'Unspecified'),
-            recencyMs: getLastActivityMs?.(r) || 0,
-            recencyText: getLastTouchText?.(r) || '',
-            lastTouch: getLastTouchText?.(r) || '',
-            notes: String(r.notes ?? r.Notes ?? '').trim(),
-            state: String(r.state ?? r.State ?? '').trim(),
-            industry: String(r.industry ?? r.Industry ?? '').trim()
-          }));
-          const hot = leads.filter(l => String(l.status).toLowerCase() === 'hot').length;
-          const warm = leads.filter(l => String(l.status).toLowerCase() === 'warm').length;
-          let lastMs = 0;
-          leads.forEach(l => { if (l.recencyMs && l.recencyMs > lastMs) lastMs = l.recencyMs; });
-          openDrawerForAccount({ ...active, company, leads, total: leads.length, counts: { hot, warm }, lastActivityMs: lastMs });
+  // Refresh Account 360 drawer if still open
+  try {
+    const drawer = document.getElementById('accountDrawer');
+    if (drawer && drawer.classList.contains('open')) {
+      const company = String(window.DS_ACTIVE_COMPANY || '').trim();
+      if (!company) return;
+
+      const rows = window.DS?.state?.rawRows || [];
+      const leads = rows.filter(r =>
+        String(r.company ?? r.Company ?? '').trim().toLowerCase() === company.toLowerCase()
+      );
+
+      window.openDrawerForAccount({
+        company,
+        leads,
+        total: leads.length,
+        counts: {
+          hot: leads.filter(l => dsNormStatus(l.status) === 'Hot').length,
+          warm: leads.filter(l => dsNormStatus(l.status) === 'Warm').length
         }
-      }
-    } catch (e) {}
-  });
+      });
+    }
+  } catch (err) {
+    console.warn('Drawer refresh failed after delete', err);
+  }
+}, true);
+
 
   // Add Person modal wiring
   const modal = document.getElementById('addPersonModal');
@@ -4227,7 +4528,7 @@ document.addEventListener('DOMContentLoaded', () => {
           (active && active.company) ? String(active.company) :
           String(document.getElementById('accountCompany')?.textContent || '');
         const company2 = String(activeCompany || '').trim();
-        if (company2 && typeof openDrawerForAccount === 'function') {
+        if (company2 && typeof window.openDrawerForAccount === 'function') {
           // build a fresh acct object from DS state
           const rows = DS.state.rawRows || [];
           const leads = rows.filter(r => String(r.company ?? r.Company ?? '').trim().toLowerCase() === company2.toLowerCase()).map(r => ({
@@ -4249,7 +4550,7 @@ document.addEventListener('DOMContentLoaded', () => {
           let lastMs = 0;
           leads.forEach(l => { if (l.recencyMs && l.recencyMs > lastMs) lastMs = l.recencyMs; });
 
-          openDrawerForAccount({
+          window.openDrawerForAccount({
             company: company2,
             website: String(acct.website || '').trim(),
             industry: String(acct.industry || '').trim(),
@@ -4491,8 +4792,8 @@ function dsSaveAccountFromModal() {
       lastActivityMs: 0
     };
 
-    if (typeof openDrawerForAccount === 'function') {
-      openDrawerForAccount(fakeAcctForDrawer);
+    if (typeof window.openDrawerForAccount === 'function') {
+      window.openDrawerForAccount(fakeAcctForDrawer);
     } else if (typeof openAccountDrawer === 'function') {
       // fallback: open drawer shell at least
       openAccountDrawer();
@@ -4719,6 +5020,12 @@ if (activeTZs.length) {
         (statusRankVal(getCI(a, 'status')) -
           statusRankVal(getCI(b, 'status')))
       );
+    }
+
+
+    // LinkedIn uses custom rank (blank first in ASC)
+    if (key === 'linkedin') {
+      return asc * (linkedinRankVal(getCI(a, 'linkedin')) - linkedinRankVal(getCI(b, 'linkedin')));
     }
 
     const col = COLUMNS.find(c => c.key === key);
@@ -5006,7 +5313,135 @@ function normalizeRole(title) {
   return 'Finance';
 }
 
+/* ==========================================================
+   Account lookup helper (List View → Account 360 Drawer)
+   ========================================================== */
+function dsGetAccountByCompany(company) {
+  const key = String(company || '').trim().toLowerCase();
+  if (!key) return null;
+
+  const DS = window.DS || {};
+  const rows = (DS.state && Array.isArray(DS.state.rawRows)) ? DS.state.rawRows : [];
+  const matches = rows.filter(r => String(r.company ?? r.Company ?? '').trim().toLowerCase() === key);
+
+  if (!matches.length) return null;
+
+  const acct = {
+    company: String(matches[0].company ?? matches[0].Company ?? '').trim(),
+    website: String(matches[0].website ?? matches[0].Website ?? matches[0].url ?? matches[0].URL ?? '').trim(),
+    counts: { hot: 0, warm: 0 },
+    leads: []
+  };
+
+  for (const r of matches) {
+    const statusRaw = String(r.status ?? r.Status ?? 'Unspecified').trim() || 'Unspecified';
+    const statusK = statusKey(statusRaw);
+    if (statusK === 'hot') acct.counts.hot += 1;
+    if (statusK === 'warm') acct.counts.warm += 1;
+
+    const id = String(r.id ?? r.ID ?? r.lead_id ?? r.leadId ?? r.uuid ?? '').trim();
+    acct.leads.push({
+      id,
+      name: getName(r) || '—',
+      role: (typeof dsEnumRole === 'function') ? (dsEnumRole(getTitle(r)) || '') : (getTitle(r) || ''),
+      status: statusRaw,
+      state: getState(r),
+      industry: getIndustry(r),
+      website: String(r.website ?? r.Website ?? '').trim(),
+      recencyMs: getLastActivityMs(r) || 0,
+      recencyText: getLastTouchText(r),
+      notes: String(r.notes ?? r.Notes ?? '').trim()
+    });
+  }
+
+  acct.state = getState(matches[0]) || (acct.leads[0]?.state || '—');
+  acct.industry = getIndustry(matches[0]) || (acct.leads[0]?.industry || '—');
+
+  return acct;
+}
+
+// Expose helper globally (works even if this script runs as a module)
+window.dsGetAccountByCompany = dsGetAccountByCompany;
+
+
 const coreRoles = ['CFO', 'Controller', 'Finance', 'Treasury', 'AP'];
+
+/* ==========================================================
+   v1 Coverage Strip (Account 360 drawer)
+   - Shows which entry points have ≥1 lead
+   - Click missing pill → opens Add Person modal pre-filled to that role
+   ========================================================== */
+function dsBuildCoverage(acct){
+  const leads = Array.isArray(acct?.leads) ? acct.leads : [];
+  const counts = { CFO:0, Controller:0, Finance:0, Treasury:0, AP:0 };
+  for (const l of leads) {
+    const roleRaw = (l && (l.role ?? l.Role ?? l.title ?? l.Title)) || '';
+    const role = dsEnumRole(roleRaw);
+    if (counts.hasOwnProperty(role)) counts[role] += 1;
+  }
+  return counts;
+}
+
+function dsRenderCoverageStrip(acct){
+  const strip = document.getElementById('coverageStrip');
+  const sumEl = document.getElementById('coverageSummary');
+  if (!strip) return;
+
+  const counts = dsBuildCoverage(acct);
+  let filled = 0;
+
+  const pills = coreRoles.map(role => {
+    const n = Number(counts[role] || 0);
+    const isFilled = n > 0;
+    if (isFilled) filled += 1;
+
+    const cls = isFilled ? 'coverage-pill filled' : 'coverage-pill missing';
+    const hint = isFilled ? 'Filled' : 'Missing — click to add';
+    const countText = isFilled ? (n === 1 ? '1 lead' : `${n} leads`) : '+ Add';
+
+    return `
+      <div class="${cls}" role="button" tabindex="0"
+           data-role="${role}" data-missing="${isFilled ? '0' : '1'}"
+           aria-label="${role}: ${hint}">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="role">${role}</span>
+        <span class="count">${countText}</span>
+      </div>
+    `;
+  }).join('');
+
+  strip.innerHTML = pills;
+
+  if (sumEl) sumEl.textContent = `${filled}/5 filled`;
+}
+
+// Delegated click/keyboard handler for Coverage Strip
+document.addEventListener('click', (e) => {
+  const pill = e.target?.closest?.('.coverage-pill');
+  if (!pill) return;
+  const missing = String(pill.getAttribute('data-missing') || '') === '1';
+  if (!missing) return;
+
+  const role = String(pill.getAttribute('data-role') || '').trim();
+  if (!role) return;
+
+  // Open Add Person modal like the normal button, then prefill role
+  document.getElementById('drawerAddPersonBtn')?.click();
+  const sel = document.getElementById('ap_role');
+  if (sel) sel.value = role;
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const pill = e.target?.closest?.('.coverage-pill');
+  if (!pill) return;
+  const missing = String(pill.getAttribute('data-missing') || '') === '1';
+  if (!missing) return;
+
+  e.preventDefault();
+  pill.click();
+});
+
 
 
   // -------- build accounts map ----------
@@ -5643,8 +6078,15 @@ function openDrawerForAccount(acct) {
   const tableEl = document.getElementById('accountLeadsTable');
   if (tableEl) tableEl.innerHTML = buildExpandedTable(acct);
 
+  // Coverage strip
+  try { dsRenderCoverageStrip(acct); } catch(e) {}
+
   openAccountDrawer();
 }
+
+// Expose Account 360 opener globally for delegated handlers
+try { window.openDrawerForAccount = openDrawerForAccount; } catch(e) {}
+
 
 
 // ================================
@@ -5766,7 +6208,12 @@ function openDrawerForAccount(acct) {
       }
     } catch (e) {}
   }
-  function refreshAfterEdit(){
+  
+  // Expose helpers globally so delegated handlers elsewhere can call them safely
+  try { window.patchLeadEverywhere = patchLeadEverywhere; } catch(e){}
+  try { window.deleteLeadEverywhere = deleteLeadEverywhere; } catch(e){}
+
+function refreshAfterEdit(){
     const company = String(window.DS_ACTIVE_COMPANY || '').trim();
     // Re-render Accounts list (rollups, sorting, counts)
     try { window.renderAccountsView?.(); } catch(e){}
@@ -5776,7 +6223,7 @@ function openDrawerForAccount(acct) {
       if (!drawer || !drawer.classList.contains('open')) return;
       const cache = window.DS_ACCOUNTS_CACHE;
       const acct = Array.isArray(cache) ? cache.find(a => String(a.company||'') === company) : null;
-      if (acct && typeof openDrawerForAccount === 'function') openDrawerForAccount(acct);
+      if (acct && typeof window.openDrawerForAccount === 'function') window.openDrawerForAccount(acct);
     }, 0);
   }
 
@@ -5843,7 +6290,9 @@ function openDrawerForAccount(acct) {
   document.addEventListener('click', (e) => {
     const btn = e.target?.closest?.('.acct-person-delete');
     if (!btn) return;
-    e.preventDefault();
+    
+    if (window.__DS_PERSON_DELETE_SOT) return; // new delete handler owns this
+e.preventDefault();
 
     const id = normLeadId(btn.getAttribute('data-lead-id'));
     if (!id) return;
@@ -5903,7 +6352,7 @@ function openDrawerForAccount(acct) {
       }
 
       setSelectedAccountRow(row);
-      openDrawerForAccount(acct);
+      window.openDrawerForAccount(acct);
     });
   }
 };
@@ -6840,7 +7289,19 @@ console.log("✅ index.html script fully loaded");
 
 
   <!-- ✅ NEW: scroll container so bottom sections never get cut off -->
+
   <div class="account-drawer-content">
+    <!-- ✅ v1 Coverage Strip -->
+    <div class="account-drawer-section">
+      <div class="ds-section-head">
+        <h4 style="margin:0;">Coverage</h4>
+        <div id="coverageSummary" class="muted" style="font-size:12px;">0/5 filled</div>
+      </div>
+      <div id="coverageStrip" class="coverage-strip" aria-label="Coverage by entry point"></div>
+      <div class="muted" style="margin-top:8px; font-size:12px;">
+        Click a missing role to add a person pre-filled to that entry point.
+      </div>
+    </div>
     <div class="account-drawer-section">
       <h4>Recent Activity</h4>
       <div id="accountRecency">Last touched: —</div>
