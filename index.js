@@ -253,11 +253,21 @@ function qpBool(val, defaultVal = false) {
   return defaultVal;
 }
 
+
 function qpCountMode(val) {
   const v = String(val || 'leads').trim().toLowerCase();
   if (v === 'account' || v === 'accounts') return 'accounts';
   return 'leads';
 }
+
+// ✅ Company normalizer: strips "/ State" or any trailing segment after "/"
+function normalizeCompany(company) {
+  if (!company) return company;
+  return String(company).split('/')[0].trim();
+}
+
+
+
 
 // === END: DB_POOL_AND_QP_HELPERS ===
 
@@ -276,7 +286,8 @@ app.post('/leads', async (req, res) => {
 
     // Require at least something meaningful
     const name = (b.name || '').trim();
-    const company = (b.company || '').trim();
+    const company = normalizeCompany((b.company || '').trim());
+
 
     if (!name && !company) {
       return res.status(400).json({ error: 'Please provide at least a Name or Company.' });
@@ -2179,7 +2190,7 @@ function normalizeRow(rowRaw) {
     zoominfo_id: pickFirst(['zoominfo_id', 'zoominfo id']) || null,
     name,
     email: pick('email'),
-    company,
+    company: normalizeCompany(company),
     industry: pick('industry'),
     owner: pick('owner'),
     city: pick('city'),
@@ -2337,10 +2348,6 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'All rows failed validation.', examples: badExamples });
     }
 
-
-    if (!normalized.length) {
-      return res.status(400).json({ error: 'All rows failed validation.', examples: badExamples });
-    }
 
     // 🔹 NEW: defaults from query string
     const defaultSource = (req.query.default_source || '').trim();
@@ -2974,7 +2981,7 @@ app.put('/update-lead/:id', async (req, res) => {
   const payload = {
     name: strOrNull(req.body.name),
     email: strOrNull(req.body.email),
-    company: strOrNull(req.body.company),
+    company: normalizeCompany(strOrNull(req.body.company)),
     website: strOrNull(req.body.website),
     city: strOrNull(req.body.city),
     state: strOrNull(req.body.state),
