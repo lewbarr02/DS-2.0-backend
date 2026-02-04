@@ -1258,11 +1258,12 @@ function getQueueCards() {
   // ———————————————————————
   // Init
   // ———————————————————————
-  if (newBatchBtn) {
-    newBatchBtn.addEventListener('click', () => {
-      alert('Daily Queue is manual-only. Add leads from Map or List view.');
-    });
-  }
+if (newBatchBtn) {
+  newBatchBtn.addEventListener('click', async () => {
+    await generateNewBatch();
+  });
+}
+
 
 
   setTodayText();

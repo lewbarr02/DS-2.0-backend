@@ -1252,31 +1252,77 @@ function normalizeBatchSize(raw) {
 }
 
 app.get('/api/daily-queue/check/:leadId', async (req, res) => {
-  const { leadId } = req.params;
+  const raw = req.params.leadId;
+  const leadId = parseInt(raw, 10);
 
+  if (!Number.isFinite(leadId) || leadId <= 0) {
+    return res.status(400).json({ ok: false, error: 'invalid_lead_id' });
+  }
+
+  const client = await pool.connect();
   try {
-    throw new Error('daily_queue check disabled: db client not configured');
+    // 1) Find the current active batch (latest incomplete)
+    const batchSql = `
+      SELECT id, created_at, batch_size, is_completed
+      FROM daily_batches
+      WHERE COALESCE(is_completed, false) = false
+      ORDER BY created_at DESC
+      LIMIT 1;
+    `;
+    const { rows: batchRows } = await client.query(batchSql);
+
+    if (!batchRows.length) {
+      return res.json({
+        ok: true,
+        in_queue: false,
+        batch: null,
+        item: null
+      });
+    }
+
+    const batch = batchRows[0];
+
+    // 2) Check if this lead exists in that batch
+    const itemSql = `
+      SELECT id, batch_id, lead_id, position, is_completed, is_skipped
+      FROM daily_batch_items
+      WHERE batch_id = $1 AND lead_id = $2
+      LIMIT 1;
+    `;
+    const { rows: itemRows } = await client.query(itemSql, [batch.id, leadId]);
+
+    if (!itemRows.length) {
+      return res.json({
+        ok: true,
+        in_queue: false,
+        batch: { id: batch.id, created_at: batch.created_at, batch_size: batch.batch_size },
+        item: null
+      });
+    }
+
+    return res.json({
+      ok: true,
+      in_queue: true,
+      batch: { id: batch.id, created_at: batch.created_at, batch_size: batch.batch_size },
+      item: itemRows[0]
+    });
+
   } catch (err) {
-    console.error('Check error:', err.message);
-    res.status(501).json({ error: 'daily_queue check disabled' });
+    console.error('GET /api/daily-queue/check error:', err);
+    return res.status(500).json({ ok: false, error: 'daily_queue_check_failed' });
+  } finally {
+    client.release();
   }
 });
+
 
 
 
 // POST /api/daily-queue/generate
 // Body: { batch_size?: number, industries?: string[], tag?: string }
 app.post('/api/daily-queue/generate', async (req, res) => {
-	
-	  return res.json({
-    ok: true,
-    batch: null,
-    items: [],
-    message: 'auto_generation_disabled'
-  });
-
-	
   const rawSize = req.body?.batch_size;
+
   const size = normalizeBatchSize(rawSize);
 
   const industries = Array.isArray(req.body?.industries)

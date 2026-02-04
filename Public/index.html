@@ -1360,19 +1360,11 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
       </div>
       <div>
         <button id="launchPresentation">Launch Presentation Mode</button>
-        <button id="exportDailyList">Daily List</button>
-        <button id="resetFilters">Reset Filters</button>
+<button id="resetFilters">Reset Filters</button>
       </div>
 <div>
   <button id="openSummaryBtn">📊 Open Today’s Summary</button>
-  <button id="startMyDayBtn">🚀 Start My Day (20)</button>
-  <button id="startMyDayEventBtn">🎯 Start My Day (Event Mode)</button>
-
-  <!-- ⭐ NEW: Direct AFP Event Mode button -->
-  <button id="startMyDayAFPBtn">🏟 AFP Event Mode</button>
-
-  <button id="addLeadBtn">➕ Add Lead</button>
-</div>
+  <button id="startMyDayBtn">🚀 Start My Day (20)</button></div>
 
 
       <!-- 📤 CSV Upload -->
@@ -2835,8 +2827,9 @@ window.LIST_STATUS_OPTIONS = [
 
 
 <button class="ds-btn-add-to-queue"
-        data-lead-id="${id}"
+        data-id="${id}"
         title="Add to Daily Queue">➕ Queue</button>
+
 
 
   </div>
@@ -3463,16 +3456,10 @@ function closeAccount360() {
             <input name="website" value="${esc(lead.website || '')}" />
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 90px;gap:10px;">
-            <div style="display:grid;gap:6px;">
-              <label style="font-size:12px;color:#555;">City</label>
-              <input name="city" value="${esc(lead.city || '')}" />
-            </div>
-            <div style="display:grid;gap:6px;">
-              <label style="font-size:12px;color:#555;">State</label>
-              <input name="state" maxlength="2" style="text-transform:uppercase;text-align:center" value="${esc(lead.state || '')}" />
-            </div>
-          </div>
+          <div style="display:grid;gap:6px;">
+  <label style="font-size:12px;color:#555;">City</label>
+  <input name="city" value="${esc(lead.city || '')}" />
+</div>
 
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
             <div style="display:grid;gap:6px;">
@@ -6417,51 +6404,13 @@ e.preventDefault();
 <script>
   // Redirect Start My Day → Daily Queue
   // Normal mode: mixed stack
-  // Event Mode: tag-locked stack (AFP / IOFM / etc.)
   document.addEventListener('DOMContentLoaded', () => {
     const normalBtn = document.getElementById('startMyDayBtn');
-    const eventBtn  = document.getElementById('startMyDayEventBtn');
-    const afpBtn    = document.getElementById('startMyDayAFPBtn'); // 🏟 new stadium button
-    const tagSelect = document.getElementById('tagFilter'); // existing Tag filter dropdown
 
-    // 🚀 Normal mode: ignore tags, just build the best next 20
     if (normalBtn) {
       normalBtn.addEventListener('click', (e) => {
         e.preventDefault();
         window.location.href = '/daily-queue?autostart=1';
-      });
-    }
-
-    // 🎯 Event Mode: lock Daily Queue to the *current* tag
-    if (eventBtn) {
-      eventBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-
-        if (!tagSelect) {
-          alert('Set a Tag filter first (e.g. AFP Event or IOFM Event).');
-          return;
-        }
-
-        const value = tagSelect.value || '';
-        const trimmed = value.trim();
-
-        if (!trimmed || trimmed.toLowerCase() === 'all') {
-          alert('Choose a specific Tag (e.g. AFP Event or IOFM Event) before starting Event Mode.');
-          return;
-        }
-
-        const url = '/daily-queue?autostart=1&tag=' + encodeURIComponent(trimmed);
-        window.location.href = url;
-      });
-    }
-
-    // 🏟 AFP Event Mode: hard-lock to "AFP Event" tag, regardless of current filter
-    if (afpBtn) {
-      afpBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const afpTag = 'AFP Event';
-        const url = '/daily-queue?autostart=1&tag=' + encodeURIComponent(afpTag);
-        window.location.href = url;
       });
     }
   });

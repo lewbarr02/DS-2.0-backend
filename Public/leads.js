@@ -95,6 +95,32 @@ window.refreshLeads = async function refreshLeads() {
     _default:    'marker-icon-gold.png'
   };
 
+  // Cache Leaflet icons so we don't recreate them for every marker
+  const ICON_CACHE = {};
+
+  // Return the correct Leaflet icon for a given lead status (used by map pins + updates)
+  function iconForStatus(status) {
+    const key = statusKey(status);
+    if (ICON_CACHE[key]) return ICON_CACHE[key];
+
+    const iconFile = STATUS_ICON[key] || STATUS_ICON._default;
+    const iconUrl = ICON_BASE + iconFile;
+
+    // NOTE: We intentionally do NOT set a shadowUrl.
+    // Your local build does not include images/marker-shadow.png, and Leaflet will spam 404s.
+    // If you later add marker-shadow.png, you can re-enable it here.
+
+    ICON_CACHE[key] = L.icon({
+      iconUrl,
+      iconSize: [25, 41],
+      iconAnchor: [12, 41],
+      popupAnchor: [1, -34],
+    });
+
+    return ICON_CACHE[key];
+  }
+
+
   // ------- Dropdown option sets (for edit popup) -------
   const INDUSTRY_OPTIONS = [
     'FinTech','Manufacturing','Healthcare','Logistics','Construction','Retail',
@@ -231,60 +257,62 @@ window.findLeadById = function findLeadById(id) {
 
 
 // Normalize state names / codes into a single, clean label
-function normalizeStateLabel(raw) {
+function normalizeStateCode(raw) {
   if (!raw) return '';
   const s = String(raw).trim();
   if (!s) return '';
 
-  const lower = s.toLowerCase();
+  // Already a 2-letter code?
+  if (/^[A-Za-z]{2}$/.test(s)) return s.toUpperCase();
 
-  // Special-case DC
-  if (lower === 'dc' || lower === 'd.c.' || lower === 'district of columbia') {
-    return 'District of Columbia';
-  }
+  const lower = s.toLowerCase().replace(/\./g, '').trim();
 
-  // Simple title-case fallback: "florida" → "Florida", "new york" → "New York"
-  return lower.replace(/\b\w/g, (c) => c.toUpperCase());
+  // Common variants
+  if (lower === 'dc' || lower === 'district of columbia') return 'DC';
+
+  // US States (name -> code)
+  const NAME_TO_CODE = {
+    'alabama':'AL','alaska':'AK','arizona':'AZ','arkansas':'AR','california':'CA',
+    'colorado':'CO','connecticut':'CT','delaware':'DE','florida':'FL','georgia':'GA',
+    'hawaii':'HI','idaho':'ID','illinois':'IL','indiana':'IN','iowa':'IA','kansas':'KS',
+    'kentucky':'KY','louisiana':'LA','maine':'ME','maryland':'MD','massachusetts':'MA',
+    'michigan':'MI','minnesota':'MN','mississippi':'MS','missouri':'MO','montana':'MT',
+    'nebraska':'NE','nevada':'NV','new hampshire':'NH','new jersey':'NJ','new mexico':'NM',
+    'new york':'NY','north carolina':'NC','north dakota':'ND','ohio':'OH','oklahoma':'OK',
+    'oregon':'OR','pennsylvania':'PA','rhode island':'RI','south carolina':'SC',
+    'south dakota':'SD','tennessee':'TN','texas':'TX','utah':'UT','vermont':'VT',
+    'virginia':'VA','washington':'WA','west virginia':'WV','wisconsin':'WI','wyoming':'WY',
+    'district of columbia':'DC'
+  };
+
+  // Basic Canadian support seen in your dropdowns
+  const CANADA_NAME_TO_CODE = {
+    'british columbia':'BC','ontario':'ON','quebec':'QC','alberta':'AB','manitoba':'MB',
+    'saskatchewan':'SK','nova scotia':'NS','new brunswick':'NB','newfoundland and labrador':'NL',
+    'prince edward island':'PE','northwest territories':'NT','nunavut':'NU','yukon':'YT'
+  };
+
+  return NAME_TO_CODE[lower] || CANADA_NAME_TO_CODE[lower] || '';
+}
+
+function getStateOptions(current) {
+  const currentCode = normalizeStateCode(current);
+
+  // Keep this list intentionally simple and aligned with Lead 360 (2-letter codes)
+  const codes = [
+    '','AL','AK','AZ','AR','CA','CO','CT','DC','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA',
+    'ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR',
+    'PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','BC','AB','ON','QC'
+  ];
+
+  return codes.map((c) => {
+    const label = c ? c : 'Select';
+    const sel = (c && c === currentCode) || (!c && !currentCode);
+    return `<option value="${c}" ${sel ? 'selected' : ''}>${label}</option>`;
+  }).join('');
 }
 
 
-  
-    // Expose for other scripts (Presentation Mode, etc.)
-  DS.statusKey = statusKey;
-
-
-  window.iconForStatus = function iconForStatus(status){
-    const file = STATUS_ICON[statusKey(status)] || STATUS_ICON._default;
-    return L.icon({
-      iconUrl: ICON_BASE + file,
-      iconSize: [25,41],
-      iconAnchor: [12,41],
-      popupAnchor: [1,-34],
-      shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-      shadowSize: [41,41],
-      shadowAnchor: [12,41]
-    });
-  }
-
-  function escapeHtml(s) {
-    return String(s ?? '')
-      .replaceAll('&','&amp;').replaceAll('<','&lt;')
-      .replaceAll('>','&gt;').replaceAll('"','&quot;')
-      .replaceAll("'","&#039;");
-  }
-
-  function prettyStatus(s) {
-    const k = statusKey(s);
-    return {
-      'converted':  '🏆 Converted',
-      'hot':        '🔥 Hot',
-      'warm':       '🌞 Warm',
-      'cold':       '🧊 Cold',
-      'research':   '🔍 Research',
-      'follow-up':  '⏳ Follow-Up',
-      'unspecified':'• Unspecified'
-    }[k];
-  }
 
 function unwrapData(payload){
   if (Array.isArray(payload)) return payload;
@@ -489,10 +517,11 @@ if (
       ) continue;
 
       // -------- STATE FILTER --------
-      if (
-        !(stateSel === 'All' ||
-          (get('state') || '').toLowerCase() === stateSel.toLowerCase())
-      ) continue;
+      {
+        const want = (stateSel === 'All') ? '' : normalizeStateCode(stateSel);
+        const have = normalizeStateCode(get('state'));
+        if (want && have !== want) continue;
+      }
 
       // -------- INDUSTRY FILTER --------
       if (
@@ -741,7 +770,7 @@ if (els.pinCount()) {
     // 🔁 State uses normalized labels so we don’t get FLORIDA + Florida, etc.
     setOpts(
       els.stateFilter(),
-      uniqueFrom('state', { normalize: normalizeStateLabel })
+      uniqueFrom('state', { normalize: normalizeStateCode })
     );
 
     setOpts(els.industryFilter(), uniqueFrom('industry'));
@@ -1021,16 +1050,20 @@ function normalizeWebsite(url) {
 </label>
 
 
-          <div style="display:grid;grid-template-columns:1fr 80px;gap:.5rem;align-items:end">
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
   <label style="display:grid;gap:.25rem">
     <span style="color:#555">City</span>
-    <input name="city" style="width:100%" value="${esc(lead.city || "")}" />
+    <input name="city" value="${esc(lead.city || "")}" />
   </label>
+
   <label style="display:grid;gap:.25rem">
     <span style="color:#555">State</span>
-    <input name="state" style="width:100%;text-transform:uppercase;text-align:center" maxlength="2" value="${esc(lead.state || "")}" />
+    <select name="state">
+      ${getStateOptions(lead.state)}
+    </select>
   </label>
 </div>
+
 
           <label style="display:grid;gap:.25rem">
             <span style="color:#555">Status</span>
@@ -1177,8 +1210,14 @@ if (e.target && e.target.id === "listAddLeadBtn") {
 if (node.classList?.contains("ds-btn-add-to-queue")) {
   e.preventDefault();
 
-  const leadId = node.dataset.id || (DS_CURRENT_LEAD && DS_CURRENT_LEAD.id);
-  if (!leadId) return;
+const leadId =
+  node.dataset.id ||
+  node.dataset.leadId ||
+  node.getAttribute("data-lead-id") ||
+  (DS_CURRENT_LEAD && DS_CURRENT_LEAD.id);
+
+if (!leadId) return;
+
 
   const original = node.textContent;
   node.disabled = true;
@@ -1349,7 +1388,7 @@ if (node.classList?.contains("ds-btn-add-to-queue")) {
 
     const fd = new FormData(form);
 	const rawState = (fd.get("state") || "").trim();
-    const normalizedState = normalizeStateLabel(rawState);
+    const normalizedState = normalizeStateCode(rawState);
 	
     const payload = {
       name: fd.get("name")?.trim() || null,
