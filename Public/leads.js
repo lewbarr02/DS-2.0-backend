@@ -1146,7 +1146,16 @@ function normalizeWebsite(url) {
   function openLeadPopup(mode, latlng) {
     if (!DS_CURRENT_LEAD) return;
     const html = mode === "edit" ? renderEditPopup(DS_CURRENT_LEAD) : renderPreviewPopup(DS_CURRENT_LEAD);
-    dsPopup.setLatLng(latlng).setContent(html).openOn(window.map); // window.map is set in boot()
+    dsPopup.setLatLng(latlng).setContent(html).openOn(window.map);
+
+    // Notes Sync: capture original notes so saving other fields can't overwrite notes
+    try {
+      setTimeout(() => {
+        const form = document.querySelector('.ds-edit-form');
+        if (form) form.dataset.originalNotes = String((DS_CURRENT_LEAD && DS_CURRENT_LEAD.notes) || '');
+      }, 0);
+    } catch (_) {}
+ // window.map is set in boot()
   }
   
 // After popup renders, check if lead is already in queue
@@ -1403,8 +1412,22 @@ if (!leadId) return;
       arr: toNum(fd.get("arr")),
       ap_spend: toNum(fd.get("ap_spend")),
       tags: (fd.get("tags") || "").trim() || null,
-      notes: fd.get("notes") || null
     };
+
+    // Notes Sync: only send notes if the user actually changed it.
+    // This prevents notes from being overwritten when saving other fields.
+    try {
+      const originalNotes = String(form.dataset.originalNotes || (DS_CURRENT_LEAD && DS_CURRENT_LEAD.notes) || '');
+      const currentNotesRaw = String(fd.get("notes") || "");
+      const norm = (s) => String(s ?? '').replace(/\s+$/g, '');
+      const changed = norm(currentNotesRaw) !== norm(originalNotes);
+
+      if (changed) {
+        const trimmed = currentNotesRaw.trim();
+        payload.notes = trimmed.length ? trimmed : ""; // allow intentional clear
+        payload.notesTouched = true;
+      }
+    } catch (_) {}
 
     const id = DS_CURRENT_LEAD.id;
     const saveBtn = form.querySelector(".ds-btn-save");
@@ -1431,6 +1454,13 @@ if (!leadId) return;
       const updated = await res.json().catch(()=> ({}));
       const freshLead = updated.lead || updated || {};
       Object.assign(DS_CURRENT_LEAD, payload, freshLead);
+
+      // Notes Sync: refresh originalNotes baseline after a successful save
+      try {
+        const formEl = document.querySelector('.ds-edit-form');
+        if (formEl) formEl.dataset.originalNotes = String((freshLead && Object.prototype.hasOwnProperty.call(freshLead, 'notes')) ? (freshLead.notes || '') : (DS_CURRENT_LEAD.notes || ''));
+      } catch (_) {}
+
 
       // Update marker UI and position if needed
       const markerKey = leadKey(
@@ -1524,6 +1554,37 @@ window.focusLeadOnMap = function focusLeadOnMap(id) {
   }
 };
 
+// ======================================================
+// 🔄 Cross-view sync (Daily Queue → Lead 360 / List View)
+// ======================================================
+window.addEventListener('deli:lead-updated', (e) => {
+  const { id, patch } = e.detail || {};
+  if (!id || !patch) return;
+
+  // Update shared state (rawRows + filtered)
+  if (typeof window.patchLeadInState === 'function') {
+    window.patchLeadInState(id, patch);
+  }
+
+  // If the popup is open on this lead, update it live
+  if (window.DS_CURRENT_LEAD && leadKey(window.DS_CURRENT_LEAD.id) === leadKey(id)) {
+    Object.assign(window.DS_CURRENT_LEAD, patch);
+
+    try {
+      const latlng = dsPopup.getLatLng();
+      openLeadPopup("preview", latlng);
+    } catch (_) {}
+  }
+
+  // Keep map + list + stats in sync
+  computeFiltered();
+  renderMarkers();
+  updateStats();
+
+  if (typeof window.renderListView === 'function') {
+    window.renderListView();
+  }
+});
 
 
 
@@ -1588,6 +1649,7 @@ setTimeout(() => {
         console.error("DS boot failed:", err);
       }
     };
+
 
     // If DOM is already parsed, run immediately
     if (document.readyState === 'interactive' || document.readyState === 'complete') {

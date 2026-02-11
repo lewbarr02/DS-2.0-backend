@@ -158,6 +158,138 @@ if (doneToggleBtn) {
       .replace(/'/g, '&#039;');
   }
   
+
+
+  // ------------------------------
+  // Contact Rhythm (Daily Queue)
+  // ------------------------------
+  const DQ_CR_META = {
+    office_call_no_contact: { icon: '📞', label: 'Office call (no contact)' },
+    office_gatekeeper:      { icon: '🧑‍💼', label: 'Office gatekeeper' },
+    cell_call_no_answer:    { icon: '📱', label: 'Cell call (no answer)' },
+    cell_voicemail:         { icon: '📱💬', label: 'Cell voicemail' },
+  };
+
+  function dqCrFormatTs(ts) {
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleString([], { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+  }
+
+  async function dqCrFetchLast(leadId) {
+    const res = await fetch(`/api/leads/${encodeURIComponent(leadId)}/contact-rhythm?limit=1`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `contact_rhythm_read_failed (${res.status})`);
+    const events = Array.isArray(data.events) ? data.events : [];
+    return events[0] || null;
+  }
+
+  async function dqCrLogEvent(leadId, touch_type) {
+    const res = await fetch(`/api/leads/${encodeURIComponent(leadId)}/contact-rhythm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ touch_type })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `contact_rhythm_write_failed (${res.status})`);
+    return data.event || null;
+  }
+
+  function dqCrUpdateCardUI(cardEl, evt) {
+    if (!cardEl) return;
+    const lastEl = cardEl.querySelector('[data-dq-cr-last]');
+    if (!lastEl) return;
+
+    if (!evt) {
+      lastEl.textContent = '—';
+      lastEl.title = 'No Contact Rhythm yet';
+      return;
+    }
+
+    const meta = DQ_CR_META[evt.touch_type] || { icon: '•', label: evt.touch_type };
+    const when = dqCrFormatTs(evt.touched_at);
+    lastEl.textContent = `${meta.icon} ${when}`;
+    lastEl.title = `${meta.label} — ${when}`;
+  }
+
+  function dqCrRefreshCard(cardEl) {
+    const leadId = cardEl?.dataset?.leadId;
+    if (!leadId) return;
+
+    dqCrFetchLast(leadId)
+      .then(evt => dqCrUpdateCardUI(cardEl, evt))
+      .catch(err => {
+        console.error(err);
+        dqCrUpdateCardUI(cardEl, null);
+      });
+  }
+
+  // ------------------------------
+  // Toasts (Daily Queue)
+  // ------------------------------
+  function ensureDqToastHost() {
+    let host = document.getElementById('dq-toast-host');
+    if (host) return host;
+
+    host = document.createElement('div');
+    host.id = 'dq-toast-host';
+    host.style.position = 'fixed';
+    host.style.right = '16px';
+    host.style.bottom = '16px';
+    host.style.zIndex = '9999';
+    host.style.display = 'flex';
+    host.style.flexDirection = 'column';
+    host.style.gap = '8px';
+    host.style.pointerEvents = 'none';
+    document.body.appendChild(host);
+    return host;
+  }
+
+  function showDqToast(message, type) {
+    const host = ensureDqToastHost();
+    const el = document.createElement('div');
+    el.textContent = message || '';
+    el.style.pointerEvents = 'none';
+    el.style.padding = '10px 12px';
+    el.style.borderRadius = '12px';
+    el.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)';
+    el.style.fontSize = '13px';
+    el.style.fontWeight = '600';
+    el.style.maxWidth = '320px';
+    el.style.lineHeight = '1.2';
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(6px)';
+    el.style.transition = 'opacity 160ms ease, transform 160ms ease';
+
+    // Type styling
+    if (type === 'error') {
+      el.style.background = '#fee2e2'; // red-100
+      el.style.border = '1px solid #fecaca'; // red-200
+      el.style.color = '#7f1d1d'; // red-900
+    } else {
+      el.style.background = '#dcfce7'; // green-100
+      el.style.border = '1px solid #bbf7d0'; // green-200
+      el.style.color = '#14532d'; // green-900
+    }
+
+    host.appendChild(el);
+
+    // animate in
+    requestAnimationFrame(() => {
+      el.style.opacity = '1';
+      el.style.transform = 'translateY(0)';
+    });
+
+    // remove after
+    window.setTimeout(() => {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(6px)';
+      window.setTimeout(() => {
+        try { el.remove(); } catch (_) {}
+      }, 180);
+    }, 1400);
+  }
+
 function normalizeWebsite(url) {
   if (!url) return '';
   let cleaned = String(url).trim();
@@ -190,142 +322,6 @@ function fmtMillions(v) {
   if (!Number.isFinite(n)) return '—';
   const m = Math.round(n / 1_000_000);
   return `$${m}M`;
-}
-
-
-// ———————————————————————
-// AP Snapshot helpers (Midpoint row)
-// ———————————————————————
-function getApSnapshotFromItem(item) {
-  const src = item && item.lead ? item.lead : item;
-
-  return {
-    status: src?.ap_snapshot_status ?? null,
-    run_at: src?.ap_snapshot_run_at ?? null,
-    arr: src?.ap_snapshot_arr ?? null,
-    arr_confidence: src?.ap_snapshot_arr_confidence ?? null,
-    suppliers: src?.ap_snapshot_suppliers ?? null,
-    ap_spend: src?.ap_snapshot_ap_spend ?? null,
-    source: src?.ap_snapshot_source ?? null,
-    notes: src?.ap_snapshot_notes ?? null,
-  };
-}
-
-function fmtInt(v) {
-  const n = Number(v);
-  if (!Number.isFinite(n)) return '—';
-  return Math.round(n).toLocaleString();
-}
-
-function renderApSnapshotBadges(item) {
-  const snap = getApSnapshotFromItem(item);
-
-  // Distinct “not found”
-  if (snap.status === 'not_found' ||
-      (snap.status && String(snap.status).toLowerCase() === 'not_found')) {
-    return `
-      <span class="dq-ap-snap-badge not-found">ARR: Not found</span>
-      <span class="dq-ap-snap-badge">Suppliers: —</span>
-      <span class="dq-ap-snap-badge">AP Spend: —</span>
-    `;
-  }
-
-  const conf = snap.arr_confidence
-    ? String(snap.arr_confidence).toUpperCase()
-    : null;
-
-// ARR as $XM
-const arrLabel =
-  snap.arr != null ? `${fmtMillions(snap.arr)}${conf ? ` (${conf})` : ''}` : '—';
-
-// Suppliers keep exact integer formatting
-const suppliersLabel = snap.suppliers != null ? fmtInt(snap.suppliers) : '—';
-
-// AP Spend as $XM
-const apSpendLabel = snap.ap_spend != null ? fmtMillions(snap.ap_spend) : '—';
-
-
-  return `
-    <span class="dq-ap-snap-badge">ARR: ${escapeHtml(arrLabel)}</span>
-    <span class="dq-ap-snap-badge">Suppliers: ${escapeHtml(suppliersLabel)}</span>
-    <span class="dq-ap-snap-badge">AP Spend: ${escapeHtml(apSpendLabel)}</span>
-  `;
-}
-
-function setApSnapshotOnItem(item, leadPayload) {
-  if (!item || !leadPayload) return;
-
-  const apply = (obj) => {
-    if (!obj) return;
-    obj.ap_snapshot_status = leadPayload.ap_snapshot_status ?? obj.ap_snapshot_status ?? null;
-    obj.ap_snapshot_run_at = leadPayload.ap_snapshot_run_at ?? obj.ap_snapshot_run_at ?? null;
-    obj.ap_snapshot_arr = leadPayload.ap_snapshot_arr ?? obj.ap_snapshot_arr ?? null;
-    obj.ap_snapshot_arr_confidence = leadPayload.ap_snapshot_arr_confidence ?? obj.ap_snapshot_arr_confidence ?? null;
-    obj.ap_snapshot_suppliers = leadPayload.ap_snapshot_suppliers ?? obj.ap_snapshot_suppliers ?? null;
-    obj.ap_snapshot_ap_spend = leadPayload.ap_snapshot_ap_spend ?? obj.ap_snapshot_ap_spend ?? null;
-    obj.ap_snapshot_source = leadPayload.ap_snapshot_source ?? obj.ap_snapshot_source ?? null;
-    obj.ap_snapshot_notes = leadPayload.ap_snapshot_notes ?? obj.ap_snapshot_notes ?? null;
-  };
-
-  apply(item);
-  if (item.lead) apply(item.lead);
-}
-
-function refreshApSnapshotRow(cardEl, item) {
-  if (!cardEl) return;
-  const row = cardEl.querySelector('.dq-ap-snap');
-  if (!row) return;
-
-  const valuesEl = row.querySelector('.dq-ap-snap-values');
-  if (valuesEl) valuesEl.innerHTML = renderApSnapshotBadges(item);
-
-  const btn = row.querySelector('button[data-action="ap-snapshot"]');
-  if (btn) {
-    const snap = getApSnapshotFromItem(item);
-    btn.textContent = snap.run_at ? 'Re-run' : 'Run';
-  }
-}
-
-async function runApSnapshot(leadId, cardEl) {
-  if (!leadId) return;
-
-  const btn = cardEl?.querySelector('button[data-action="ap-snapshot"]');
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Running...';
-  }
-
-  try {
-    const res = await fetch(`/api/leads/${encodeURIComponent(leadId)}/ap-snapshot`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    });
-
-    if (!res.ok) {
-      console.error('AP Snapshot failed:', await res.text());
-      alert('AP Snapshot failed. Check console for details.');
-      return;
-    }
-
-    const data = await res.json();
-    const leadPayload = data?.lead || null;
-
-    const itemId = cardEl?.dataset?.itemId;
-    const item = items.find((i) => String(i.item_id || i.id) === String(itemId));
-
-    if (item && leadPayload) {
-      setApSnapshotOnItem(item, leadPayload);
-      refreshApSnapshotRow(cardEl, item);
-    } else if (cardEl && leadPayload) {
-      refreshApSnapshotRow(cardEl, { lead: leadPayload });
-    }
-  } catch (err) {
-    console.error('AP Snapshot error:', err);
-    alert('AP Snapshot error. Check console for details.');
-  } finally {
-    if (btn) btn.disabled = false;
-  }
 }
 
 
@@ -413,6 +409,88 @@ function mapStatusClass(statusRaw) {
     const s = raw.toString().toLowerCase().replace(/_/g, ' ');
     return s.replace(/\b\w/g, (c) => c.toUpperCase());
   }
+
+
+// ———————————————————————
+// Inline Role/Status edit helpers (kept aligned with List View + Lead 360)
+// ———————————————————————
+function normalizeStatusValue(raw) {
+  if (!raw) return '';
+  return String(raw)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/-/g, '_');
+}
+
+function normalizeRoleValue(raw) {
+  if (!raw) return '';
+  return String(raw).trim();
+}
+
+function renderRoleOptions(item) {
+  const current = normalizeRoleValue(item.role || item.title || '');
+  const roles = ['', 'CFO', 'Controller', 'Finance', 'Treasury', 'AP'];
+  return roles.map((r) => {
+    const label = r ? r : '—';
+    const sel = current === r ? 'selected' : '';
+    return `<option value="${escapeHtml(r)}" ${sel}>${escapeHtml(label)}</option>`;
+  }).join('');
+}
+
+function renderStatusOptions(item) {
+  const current = normalizeStatusValue(item.status || item.lead_status || 'unspecified') || 'unspecified';
+  const options = [
+    { v: 'unspecified', label: 'Unspecified' },
+    { v: 'converted',   label: 'Converted' },
+    { v: 'hot',         label: 'Hot' },
+    { v: 'warm',        label: 'Warm' },
+    { v: 'follow_up',   label: 'Follow-Up' },
+    { v: 'cold',        label: 'Cold' },
+    { v: 'research',    label: 'Research' },
+    { v: 'no_fit',      label: 'No Fit' },
+  ];
+  return options.map((o) => {
+    const sel = current === o.v ? 'selected' : '';
+    return `<option value="${o.v}" ${sel}>${escapeHtml(o.label)}</option>`;
+  }).join('');
+}
+
+async function inlineUpdateLead(leadId, patch) {
+  const res = await fetch(`/update-lead/${encodeURIComponent(leadId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch || {}),
+  });
+
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(txt || 'update_failed');
+  }
+
+  const data = await res.json().catch(() => null);
+  return data && data.lead ? data.lead : data;
+}
+
+function dispatchLeadUpdated(leadId, patch) {
+  try {
+    window.dispatchEvent(new CustomEvent('deli:lead-updated', {
+      detail: { id: leadId, patch: patch || {} },
+    }));
+  } catch (_) {}
+}
+
+// Cross-page broadcast (Daily Queue is a different page than index.html)
+// storage events DO fire across tabs/windows.
+const DS_LEAD_PATCH_BROADCAST_KEY = 'DS_LEAD_PATCH_BROADCAST_V1';
+
+function broadcastLeadPatch(leadId, patch) {
+  try {
+    const payload = { id: String(leadId), patch: patch || {}, ts: Date.now() };
+    localStorage.setItem(DS_LEAD_PATCH_BROADCAST_KEY, JSON.stringify(payload));
+  } catch (_) {}
+}
+
 
   function focusFirstActiveCard() {
     const cards = activeListEl.querySelectorAll('.dq-queue-card');
@@ -525,6 +603,46 @@ if (doneItems.length > 0) {
     const cardEl = event.currentTarget;
     if (!cardEl) return;
 
+    // Contact Rhythm buttons (one-click)
+    const crBtn = event.target.closest('.dq-cr-btn');
+    if (crBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const touch = crBtn.getAttribute('data-cr-touch');
+      const leadId =
+        crBtn.closest('[data-lead-id]')?.getAttribute('data-lead-id') ||
+        cardEl.dataset.leadId;
+
+      if (!touch || !leadId) return;
+
+      crBtn.disabled = true;
+      const oldText = crBtn.textContent;
+      crBtn.textContent = 'Logging…';
+
+      dqCrLogEvent(leadId, touch)
+        .then((evt) => {
+          dqCrUpdateCardUI(cardEl, evt);
+
+          // Optimistic: update "Last touch" if present
+          try {
+            const lastSpan = cardEl.querySelector('[data-dq-last-touch]');
+            if (lastSpan) lastSpan.textContent = formatDate(new Date().toISOString());
+          } catch (_) {}
+        })
+        .catch((err) => {
+          console.error(err);
+          alert('Contact Rhythm log failed.');
+        })
+        .finally(() => {
+          crBtn.disabled = false;
+          crBtn.textContent = oldText;
+        });
+
+      return;
+    }
+
+
     // If the click was on a Done / Skip button, handle that first
     const actionButton = event.target.closest('button[data-action]');
     if (actionButton) {
@@ -545,35 +663,6 @@ if (doneItems.length > 0) {
         markItemSkip(itemId, cardEl);
         return;
       }
-	  
-	  // ⭐ NEW: AP Snapshot button
-if (action === 'ap-snapshot') {
-  event.preventDefault();
-  event.stopPropagation();
-
-  // Prefer dataset lead_id → fallback → lookup item model
-  let leadId =
-    cardEl.dataset.leadId ||
-    (cardEl.querySelector('.dq-ap-snap')?.dataset?.leadId) ||
-    null;
-
-  if (!leadId) {
-    const item = items.find((i) =>
-      String(i.item_id || i.id) === String(itemId)
-    );
-    leadId = item?.lead_id || item?.id || (item?.lead && item.lead.id) || null;
-  }
-
-  if (!leadId) {
-    console.error('AP Snapshot: no valid leadId for card', cardEl);
-    return;
-  }
-
-  runApSnapshot(leadId, cardEl);
-  return;   // important: stop further click processing
-}
-
-	  
     }
 
     // Otherwise, just set this card as the active card
@@ -636,6 +725,21 @@ card.classList.add(`dq-tzcard-${_dqTz}`);
     <span>🏷️ ${escapeHtml(item.industry || item.Industry || 'No industry')}</span>
   </div>
 
+
+  <div class="dq-meta-line dq-inline-edits">
+    <span>
+      <span class="dq-control-label" style="margin-right:6px;">Role</span>
+      <select class="dq-inline-role" data-prev-role="${escapeHtml(normalizeRoleValue(item.role || item.title || ''))}" ${isDone ? 'disabled' : ''} style="padding:3px 6px; font-size:12px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+        ${renderRoleOptions(item)}
+      </select>
+    </span>
+    <span>
+      <span class="dq-control-label" style="margin-right:6px;">Status</span>
+      <select class="dq-inline-status" data-prev-status="${escapeHtml(normalizeStatusValue(item.status || item.lead_status || 'unspecified') || 'unspecified')}" ${isDone ? 'disabled' : ''} style="padding:3px 6px; font-size:12px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+        ${renderStatusOptions(item)}
+      </select>
+    </span>
+  </div>
   <div class="dq-meta-line">
     <span>
       🌐 ${
@@ -652,31 +756,29 @@ card.classList.add(`dq-tzcard-${_dqTz}`);
   </div>
 
   <div class="dq-meta-line">
-    <span>Last touch: ${escapeHtml(formatLastTouch(item))}</span>
+    <span>Last touch: <span data-dq-last-touch>${escapeHtml(formatLastTouch(item))}</span></span>
     <span>Next touch: ${escapeHtml(formatNextTouch(item))}</span>
   </div>
 </div>
 	  
-<!-- ⭐ AP SNAPSHOT MIDPOINT ROW -->
-<div class="dq-ap-snap"
-     data-lead-id="${escapeHtml(
+<!-- ⭐ CONTACT RHYTHM STRIP -->
+<div class="dq-cr-strip" data-lead-id="${escapeHtml(
        String(item.lead_id || item.id || (item.lead && item.lead.id) || '')
      )}">
-  
-  <div class="dq-ap-snap-left">
-    <div class="dq-ap-snap-title">AP Snapshot</div>
-    <div class="dq-ap-snap-values">
-      ${renderApSnapshotBadges(item)}
-    </div>
+  <div class="dq-cr-left">
+    <div class="dq-cr-title">Contact Rhythm</div>
+    <div class="dq-cr-last" data-dq-cr-last title="Last Contact Rhythm log">—</div>
   </div>
 
-  <button class="dq-ap-snap-btn"
-          type="button"
-          data-action="ap-snapshot">
-    ${getApSnapshotFromItem(item).run_at ? 'Re-run' : 'Run'}
-  </button>
+  <div class="dq-cr-btns">
+    <button class="dq-cr-btn" type="button" data-cr-touch="office_call_no_contact" title="Office call (no contact)">📞</button>
+    <button class="dq-cr-btn" type="button" data-cr-touch="office_gatekeeper" title="Office gatekeeper">🧑‍💼</button>
+    <button class="dq-cr-btn" type="button" data-cr-touch="cell_call_no_answer" title="Cell call (no answer)">📱</button>
+    <button class="dq-cr-btn" type="button" data-cr-touch="cell_voicemail" title="Cell voicemail">📱💬</button>
+  </div>
 </div>
-<!-- ⭐ END AP SNAPSHOT ROW -->
+<!-- ⭐ END CONTACT RHYTHM STRIP -->
+
 
 
 
@@ -737,6 +839,15 @@ card.classList.add(`dq-tzcard-${_dqTz}`);
         </div>
       </div>
     `;
+
+
+    // Disable Contact Rhythm buttons for done cards
+    if (isDone) {
+      card.querySelectorAll('.dq-cr-btn').forEach((btn) => { btn.disabled = true; });
+    }
+
+    // Load last Contact Rhythm event for this lead
+    dqCrRefreshCard(card);
 
     card.addEventListener('click', onCardClick);
     return card;
@@ -886,7 +997,7 @@ const t = (
 
     let activity_type = null;
     let new_status = null;
-    let notes = '';
+    let notes = null;
     let next_touch_choice = null;
     let next_touch_at = null;
 
@@ -904,9 +1015,11 @@ const t = (
       new_status = statusSelect.value; // e.g. "warm", "follow-up", "converted"
     }
 
-    if (notesInput && notesInput.value.trim() !== '') {
-      notes = notesInput.value.trim();
+    if (notesInput) {
+      const v = String(notesInput.value || '').trim();
+      if (v) notes = v;
     }
+
 
     if (nextTouchSelect && nextTouchSelect.value) {
       const choice = nextTouchSelect.value;
@@ -928,7 +1041,7 @@ const t = (
         body: JSON.stringify({
           new_status,
           action_type: activity_type, // Activity Type (Call/Email/Social)
-          notes,
+          notes, // ✅ Daily Queue touch note (append-only; backend no-ops on blank)
           next_touch_choice,
           next_touch_at,
         }),
@@ -939,6 +1052,20 @@ const t = (
         alert('Could not mark this item as done. Check console for details.');
         return;
       }
+
+      const data = await res.json().catch(() => ({}));
+      const updatedLead = data && data.lead ? data.lead : null;
+
+      // 🔄 Notify other views (Lead 360 / List View) that this lead changed
+      dispatchLeadUpdated(cardEl.dataset.leadId, {
+        status: new_status || undefined,
+        notes: (updatedLead && Object.prototype.hasOwnProperty.call(updatedLead, 'notes')) ? (updatedLead.notes || '') : (notes || undefined),
+      });
+
+      // Cross-page broadcast (so index.html updates immediately)
+      try { broadcastLeadPatch(cardEl.dataset.leadId, { status: new_status || undefined, notes: (updatedLead && Object.prototype.hasOwnProperty.call(updatedLead, 'notes')) ? (updatedLead.notes || '') : undefined }); } catch(_) {}
+
+
 
       // Update local data model and status pill
       const item = items.find((i) => String(i.item_id || i.id) === String(itemId));
@@ -1159,7 +1286,9 @@ function getQueueCards() {
     if (!card) return;
 
     const customDateInput = card.querySelector('.dq-done-custom-date');
-    if (!customDateInput) return;
+    if (!customDateInput) {
+      return;
+    }
 
     if (select.value === 'custom') {
       customDateInput.style.display = 'inline-block';
@@ -1168,6 +1297,103 @@ function getQueueCards() {
       customDateInput.value = '';
     }
   });
+
+
+
+// Inline Role/Status edits (save immediately + keep UI in sync)
+document.addEventListener('change', async (event) => {
+  const roleSel = event.target.closest('.dq-inline-role');
+  const statusSel = event.target.closest('.dq-inline-status');
+  const sel = roleSel || statusSel;
+  if (!sel) return;
+
+  const card = sel.closest('.dq-queue-card');
+  if (!card) return;
+
+  const leadId = card.dataset.leadId;
+  if (!leadId) return;
+
+  // Prevent double-submits (lock per-card)
+  if (card.dataset.inlineSaving === '1') return;
+
+  const patch = {};
+  if (roleSel) {
+    const next = normalizeRoleValue(roleSel.value);
+    const prev = normalizeRoleValue(roleSel.dataset.prevRole || '');
+    if (next === prev) return;
+    patch.role = next || null;
+  }
+
+  if (statusSel) {
+    const next = normalizeStatusValue(statusSel.value || '');
+    const prev = normalizeStatusValue(statusSel.dataset.prevStatus || '');
+    if (next === prev) return;
+    patch.status = next || 'unspecified';
+  }
+
+  if (!Object.keys(patch).length) return;
+
+  card.dataset.inlineSaving = '1';
+
+  // Disable BOTH inline dropdowns while saving (prevents double edits / race)
+  const roleEl = card.querySelector('.dq-inline-role');
+  const statusEl = card.querySelector('.dq-inline-status');
+  const roleWasDisabled = roleEl ? roleEl.disabled : null;
+  const statusWasDisabled = statusEl ? statusEl.disabled : null;
+  if (roleEl) roleEl.disabled = true;
+  if (statusEl) statusEl.disabled = true;
+
+  try {
+    await inlineUpdateLead(leadId, patch);
+
+    // Update local data model (so the Daily Queue UI won't "snap back")
+    const itemId = card.dataset.itemId;
+    const item = items.find((i) => String(i.item_id || i.id) === String(itemId))
+      || items.find((i) => String(i.lead_id || i.id) === String(leadId));
+
+    if (item) {
+      if ('role' in patch) item.role = patch.role;
+      if ('status' in patch) item.status = patch.status;
+    }
+
+    // Update pill immediately if status changed
+    if ('status' in patch) {
+      const pill = card.querySelector('.dq-status-pill');
+      if (pill) {
+        const displayLabel = formatStatusLabelForDisplay(patch.status);
+        pill.textContent = displayLabel;
+        pill.className = 'dq-status-pill ' + mapStatusClass(patch.status);
+      }
+      if (statusEl) statusEl.dataset.prevStatus = patch.status;
+    }
+
+    if ('role' in patch) {
+      if (roleEl) roleEl.dataset.prevRole = patch.role || '';
+    }
+
+    // Broadcast for any other open UI that cares (List View / Lead 360)
+    dispatchLeadUpdated(leadId, patch);
+
+    showDqToast('Saved', 'success');
+
+  } catch (err) {
+    console.error('Inline update failed', err);
+
+    // Revert UI selection
+    if (roleEl) roleEl.value = roleEl.dataset.prevRole || '';
+    if (statusEl) statusEl.value = statusEl.dataset.prevStatus || 'unspecified';
+
+    showDqToast('Failed — reverted', 'error');
+  } finally {
+    card.dataset.inlineSaving = '0';
+
+    // Restore prior disabled state (unless card is done, in which case keep disabled)
+    const isDone = card.classList.contains('dq-queue-card--done');
+    if (roleEl) roleEl.disabled = isDone ? true : (roleWasDisabled === true ? true : false);
+    if (statusEl) statusEl.disabled = isDone ? true : (statusWasDisabled === true ? true : false);
+  }
+});
+
 
   // ———————————————————————
   // API calls

@@ -796,6 +796,128 @@ body:has(#presentation-overlay:not(.hidden)) #logo { display: none !important; }
   gap: 8px;
 }
 
+/* --- CONTACT RHYTHM (Lead 360) --- */
+.cr-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px;
+  background: #fff;
+  margin: 10px 0 12px;
+}
+
+.cr-title {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.cr-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.cr-btn {
+  border: 1px solid #ddd;
+  background: #f8fafc;
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+
+.cr-btn:active { transform: translateY(1px); }
+.cr-btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+
+.cr-list {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.cr-row {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 10px;
+  align-items: start;
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fff;
+}
+
+.cr-icon {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid #eee;
+  background: #fafafa;
+  font-size: 14px;
+}
+
+.cr-time {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.cr-label {
+  font-size: 12px;
+  color: #555;
+  margin-top: 2px;
+}
+
+.cr-muted {
+  font-size: 12px;
+  color: #777;
+}
+
+
+/* --- CONTACT RHYTHM STRIP (List View + Daily Queue) --- */
+.cr-strip {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.cr-pill {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.cr-pill:hover { background: #f8fafc; }
+.cr-pill:active { transform: translateY(1px); }
+.cr-pill[disabled] { opacity: 0.6; cursor: not-allowed; }
+
+/* A slightly tighter variant (for table rows) */
+.cr-strip.compact .cr-pill {
+  padding: 2px 7px;
+  font-size: 10.5px;
+}
+
+/* Utility: keep row layout clean */
+.cr-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+
+
       /* --- DAILY QUEUE PANEL --- */
       #dailyQueuePanel {
         position: absolute;
@@ -2926,6 +3048,8 @@ window.LIST_STATUS_OPTIONS = [
           else { try { dsUpsertLeadPatch(id, patch); } catch(_e2){} }
         } catch (_e) {}
 
+        dsSetSaving(select, true);
+
         try {
           const API_BASE = window.DELI_API_BASE || '';
           const res = await fetch(`${API_BASE}/update-lead/${encodeURIComponent(id)}`, {
@@ -2968,6 +3092,7 @@ window.LIST_STATUS_OPTIONS = [
 
           alert('Error saving LinkedIn status — network or server issue.');
         }
+        finally { dsSetSaving(select, false); }
       });
     });
 
@@ -3277,6 +3402,7 @@ $$('#leadTbody .preview-btn').forEach(btn => {
 
           if (!res.ok) {
             console.error('Role update failed', res.status);
+            dsToastErr('Could not save role');
             alert('Could not save role – please try again.');
 
             // revert UI + in-memory
@@ -3291,6 +3417,7 @@ $$('#leadTbody .preview-btn').forEach(btn => {
 
           // Update the "prev" value so future failures revert correctly
           select.setAttribute('data-prev-role', newRole);
+          dsToastOK('Role saved');
 
           // Refresh list (keeps filters)
           window.renderListView?.();
@@ -3309,6 +3436,7 @@ $$('#leadTbody .preview-btn').forEach(btn => {
 
         } catch (err) {
           console.error('Error updating role', err);
+          dsToastErr('Error saving role');
           alert('Error saving role – network or server issue.');
 
           // revert UI + in-memory
@@ -3414,6 +3542,22 @@ function closeAccount360() {
           ID: ${esc(id)}
           ${websiteUrl ? ` • <a href="${websiteUrl}" target="_blank" rel="noopener noreferrer">Website</a>` : ''}
         </div>
+		
+		        <div class="cr-section" data-cr-lead-id="${esc(id)}">
+          <div class="cr-title">Contact Rhythm</div>
+
+          <div class="cr-actions">
+            <button type="button" class="cr-btn" data-cr-touch="office_call_no_contact">📞 Office call (no contact)</button>
+            <button type="button" class="cr-btn" data-cr-touch="office_gatekeeper">🧑‍💼 Office gatekeeper</button>
+            <button type="button" class="cr-btn" data-cr-touch="cell_call_no_answer">📱 Cell call (no answer)</button>
+            <button type="button" class="cr-btn" data-cr-touch="cell_voicemail">📱💬 Cell voicemail</button>
+          </div>
+
+          <div class="cr-list" data-cr-list>
+            <div class="cr-muted">Loading…</div>
+          </div>
+        </div>
+
 
         <form class="acc360-form" data-id="${esc(id)}" style="display:grid;gap:10px;">
             <div style="display:grid;gap:6px;">
@@ -3634,6 +3778,77 @@ if (panelIsOpen && typeof openAccount360 === 'function') {
   }, 100);
 })();;
  
+ // ================================
+// CONTACT RHYTHM (Lead 360 UI)
+// ================================
+const CR_META = {
+  office_call_no_contact: { icon: '📞', label: 'Office call (no contact)' },
+  office_gatekeeper:      { icon: '🧑‍💼', label: 'Office gatekeeper' },
+  cell_call_no_answer:    { icon: '📱', label: 'Cell call (no answer)' },
+  cell_voicemail:         { icon: '📱💬', label: 'Cell voicemail' }
+};
+
+function crFormatTs(ts) {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return '';
+  // visible time (no hover)
+  return d.toLocaleString([], { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+
+function crRenderList(events) {
+  if (!Array.isArray(events) || events.length === 0) {
+    return `<div class="cr-muted">No contact rhythm yet.</div>`;
+  }
+  return events.map(e => {
+    const meta = CR_META[e.touch_type] || { icon: '•', label: e.touch_type };
+    return `
+      <div class="cr-row">
+        <div class="cr-icon">${meta.icon}</div>
+        <div>
+          <div class="cr-time">${crFormatTs(e.touched_at)}</div>
+          <div class="cr-label">${meta.label}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function crFetchEvents(leadId, limit = 20) {
+  const API_BASE = window.DELI_API_BASE || '';
+  const res = await fetch(`${API_BASE}/api/leads/${encodeURIComponent(leadId)}/contact-rhythm?limit=${limit}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Contact rhythm read failed (${res.status})`);
+  return data.events || [];
+}
+
+async function crLogEvent(leadId, touch_type) {
+  const API_BASE = window.DELI_API_BASE || '';
+  const res = await fetch(`${API_BASE}/api/leads/${encodeURIComponent(leadId)}/contact-rhythm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ touch_type })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Contact rhythm write failed (${res.status})`);
+  return data.event;
+}
+
+async function crRefreshLead360(leadId) {
+  const panel = document.getElementById('account360Panel');
+  if (!panel) return;
+
+  const listEl = panel.querySelector('[data-cr-list]');
+  if (!listEl) return;
+
+  try {
+    const events = await crFetchEvents(leadId, 20);
+    listEl.innerHTML = crRenderList(events);
+  } catch (err) {
+    console.error(err);
+    listEl.innerHTML = `<div class="cr-muted">Could not load Contact Rhythm.</div>`;
+  }
+}
+
 
   function openAccount360(id) {
     if (!account360Panel) return;
@@ -3649,6 +3864,17 @@ if (panelIsOpen && typeof openAccount360 === 'function') {
     account360Panel.innerHTML = renderAccount360Panel(lead);
     account360Panel.classList.remove('hidden');
 
+    // Notes Sync: capture original notes baseline (prevents accidental wipe on save)
+    try {
+      const f = account360Panel.querySelector('.acc360-form');
+      if (f) f.dataset.originalNotes = String((lead && lead.notes) || '');
+    } catch (_) {}
+
+	
+	    // Load Contact Rhythm (Lead 360)
+    crRefreshLead360(id);
+
+
     // ✅ Option A: push list view over
     document.getElementById('listView')?.classList.add('with-panel');
 
@@ -3658,7 +3884,62 @@ if (panelIsOpen && typeof openAccount360 === 'function') {
   }
 
   // ✅ Account 360 open handlers (event delegation — survives re-renders)
-  document.addEventListener('click', (e) => {
+  document.addEventListener('click', async (e) => {
+
+// Contact Rhythm logging buttons (one-click)
+// Works in:
+//  - Lead 360 panel (buttons live inside .acc360-form)
+//  - List View row (buttons should include data-lead-id OR live inside an element with data-lead-id)
+//  - Daily Queue card (same rule as above)
+const crBtn = e.target.closest('.cr-btn');
+if (crBtn) {
+  e.preventDefault();
+
+  const touch = crBtn.getAttribute('data-cr-touch');
+
+  // Prefer explicit lead id on the button/card; fall back to Lead 360 open panel id.
+  const leadId =
+    crBtn.getAttribute('data-lead-id') ||
+    crBtn.closest('[data-lead-id]')?.getAttribute('data-lead-id') ||
+    account360Panel?.querySelector('.acc360-form')?.dataset?.id;
+
+  if (!touch || !leadId) return;
+
+  crBtn.disabled = true;
+  const oldText = crBtn.textContent;
+  crBtn.textContent = 'Logging…';
+
+  try {
+    await crLogEvent(leadId, touch);
+
+    // If the Lead 360 panel is open for this lead, refresh it.
+    const openId = account360Panel?.querySelector('.acc360-form')?.dataset?.id;
+    if (openId && String(openId) === String(leadId)) {
+      await crRefreshLead360(leadId);
+    }
+
+    // If other views want to refresh after a touch, let them.
+    // (safe no-ops if functions don't exist)
+    try {
+      if (typeof window.renderListView === 'function') window.renderListView();
+    } catch (e) {}
+    try {
+      if (typeof window.renderDailyQueue === 'function') window.renderDailyQueue();
+    } catch (e) {}
+    try {
+      if (typeof window.refreshLeads === 'function') await window.refreshLeads();
+    } catch (e) {}
+
+  } catch (err) {
+    console.error(err);
+    alert('Contact Rhythm log failed.');
+  } finally {
+    crBtn.disabled = false;
+    crBtn.textContent = oldText;
+  }
+  return;
+}
+
     // Row click (ignore controls)
     const row = e.target.closest('#leadTbody tr.lead-row');
     if (row && !e.target.closest('button, a, input, select, textarea')) {
@@ -3747,8 +4028,23 @@ if (panelIsOpen && typeof openAccount360 === 'function') {
         competitor: (fd.get('competitor') || '').trim() || null,
         objection: (fd.get('objection') || '').trim() || null,
         entry_point: (fd.get('entry_point') || '').trim() || null,
-        notes: (fd.get('notes') || '') || null
+        // notes handled below (notes is special)
+
       };
+
+      // Notes Sync: only send notes if user actually changed it.
+      try {
+        const originalNotes = String(form.dataset.originalNotes || '');
+        const currentNotesRaw = String(fd.get('notes') || '');
+        const norm = (s) => String(s ?? '').replace(/\s+$/g, '');
+        const changed = norm(currentNotesRaw) !== norm(originalNotes);
+
+        if (changed) {
+          const trimmed = currentNotesRaw.trim();
+          payload.notes = trimmed.length ? trimmed : ''; // allow intentional clear
+          payload.notesTouched = true;
+        }
+      } catch (_) {}
 
       // Keep backward compatibility: some backends/store may still use `title`
       if (payload.role && !payload.title) payload.title = payload.role;
@@ -3785,6 +4081,13 @@ if (panelIsOpen && typeof openAccount360 === 'function') {
         // re-render panel with fresh memory
         const fresh = findLeadById(id) || {};
         account360Panel.innerHTML = renderAccount360Panel(fresh);
+
+        // Notes Sync: refresh baseline after save
+        try {
+          const f2 = account360Panel.querySelector('.acc360-form');
+          if (f2) f2.dataset.originalNotes = String(((data.lead || data || {}).notes) || merged.notes || '');
+        } catch (_) {}
+
         account360Panel.classList.remove('hidden');
 
         if (window.refreshLeads) await window.refreshLeads();
@@ -3845,6 +4148,60 @@ function dsUpsertLeadPatch(id, partial) {
   patches[rid] = next;
   dsSetLeadPatches(patches);
 }
+
+// --------------------------------------------
+// Cross-page lead patch listener (Daily Queue → Map/List/Lead360)
+// --------------------------------------------
+(function bindLeadPatchBroadcast() {
+  const KEY = 'DS_LEAD_PATCH_BROADCAST_V1';
+
+  function applyPatch(id, patch) {
+    if (!id || !patch) return;
+
+    try { dsUpsertLeadPatch(id, patch); } catch(_) {}
+
+    // Prefer global patcher if present (keeps Account views in sync too)
+    if (typeof window.patchLeadEverywhere === 'function') {
+      try { window.patchLeadEverywhere(id, patch); } catch(_) {}
+    } else {
+      try { patchLeadInState(id, patch); } catch(_) {}
+    }
+
+    // If Lead 360 is open for this lead, reflect notes immediately in the textarea (no refresh)
+    try {
+      const openId = account360Panel?.querySelector('.acc360-form')?.dataset?.id;
+      if (openId && String(openId) === String(id)) {
+        const notesEl = account360Panel.querySelector('textarea[name="notes"]');
+        if (notesEl && Object.prototype.hasOwnProperty.call(patch, 'notes')) {
+          notesEl.value = patch.notes || '';
+        }
+      }
+    } catch (_) {}
+
+    // Re-render list rows so the notes row appears/updates
+    try { if (typeof window.renderList === 'function') window.renderList(); } catch(_) {}
+  }
+
+  // Same-window events (if any)
+  try {
+    window.addEventListener('deli:lead-updated', (e) => {
+      const d = e?.detail || {};
+      if (!d.id || !d.patch) return;
+      applyPatch(d.id, d.patch);
+    });
+  } catch (_) {}
+
+  // Cross-window events (Daily Queue)
+  try {
+    window.addEventListener('storage', (e) => {
+      if (!e || e.key !== KEY || !e.newValue) return;
+      const msg = JSON.parse(e.newValue);
+      if (!msg || !msg.id || !msg.patch) return;
+      applyPatch(msg.id, msg.patch);
+    });
+  } catch (_) {}
+})();
+
 
 function dsGetDeletedLeadIds() {
   try {
@@ -3910,6 +4267,35 @@ function dsNormStatus(s) {
   if (v === 'research') return 'Research';
   if (v === 'follow-up' || v === 'followup') return 'Follow-Up';
   return 'Unspecified';
+}
+
+
+function dsSetSaving(el, isSaving) {
+  if (!el) return;
+  const saving = !!isSaving;
+  try {
+    if (saving) {
+      if (el.dataset) el.dataset.dsSaving = '1';
+      el.disabled = true;
+      el.style.opacity = '0.6';
+      el.style.cursor = 'progress';
+    } else {
+      if (el.dataset) delete el.dataset.dsSaving;
+      el.disabled = false;
+      el.style.opacity = '';
+      el.style.cursor = '';
+    }
+  } catch (e) {}
+}
+
+function dsToastOK(message) {
+  try { dsShowToast(message, { tone: 'ok', ms: 1400 }); }
+  catch (e) { try { console.log(message); } catch(_e) {} }
+}
+
+function dsToastErr(message) {
+  try { dsShowToast(message, { tone: 'bad', ms: 2200 }); }
+  catch (e) { try { console.warn(message); } catch(_e) {} }
 }
 
 function dsTodayISO() {

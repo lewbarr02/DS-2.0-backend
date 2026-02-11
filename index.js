@@ -253,21 +253,11 @@ function qpBool(val, defaultVal = false) {
   return defaultVal;
 }
 
-
 function qpCountMode(val) {
   const v = String(val || 'leads').trim().toLowerCase();
   if (v === 'account' || v === 'accounts') return 'accounts';
   return 'leads';
 }
-
-// ✅ Company normalizer: strips "/ State" or any trailing segment after "/"
-function normalizeCompany(company) {
-  if (!company) return company;
-  return String(company).split('/')[0].trim();
-}
-
-
-
 
 // === END: DB_POOL_AND_QP_HELPERS ===
 
@@ -286,8 +276,7 @@ app.post('/leads', async (req, res) => {
 
     // Require at least something meaningful
     const name = (b.name || '').trim();
-    const company = normalizeCompany((b.company || '').trim());
-
+    const company = (b.company || '').trim();
 
     if (!name && !company) {
       return res.status(400).json({ error: 'Please provide at least a Name or Company.' });
@@ -1252,77 +1241,31 @@ function normalizeBatchSize(raw) {
 }
 
 app.get('/api/daily-queue/check/:leadId', async (req, res) => {
-  const raw = req.params.leadId;
-  const leadId = parseInt(raw, 10);
+  const { leadId } = req.params;
 
-  if (!Number.isFinite(leadId) || leadId <= 0) {
-    return res.status(400).json({ ok: false, error: 'invalid_lead_id' });
-  }
-
-  const client = await pool.connect();
   try {
-    // 1) Find the current active batch (latest incomplete)
-    const batchSql = `
-      SELECT id, created_at, batch_size, is_completed
-      FROM daily_batches
-      WHERE COALESCE(is_completed, false) = false
-      ORDER BY created_at DESC
-      LIMIT 1;
-    `;
-    const { rows: batchRows } = await client.query(batchSql);
-
-    if (!batchRows.length) {
-      return res.json({
-        ok: true,
-        in_queue: false,
-        batch: null,
-        item: null
-      });
-    }
-
-    const batch = batchRows[0];
-
-    // 2) Check if this lead exists in that batch
-    const itemSql = `
-      SELECT id, batch_id, lead_id, position, is_completed, is_skipped
-      FROM daily_batch_items
-      WHERE batch_id = $1 AND lead_id = $2
-      LIMIT 1;
-    `;
-    const { rows: itemRows } = await client.query(itemSql, [batch.id, leadId]);
-
-    if (!itemRows.length) {
-      return res.json({
-        ok: true,
-        in_queue: false,
-        batch: { id: batch.id, created_at: batch.created_at, batch_size: batch.batch_size },
-        item: null
-      });
-    }
-
-    return res.json({
-      ok: true,
-      in_queue: true,
-      batch: { id: batch.id, created_at: batch.created_at, batch_size: batch.batch_size },
-      item: itemRows[0]
-    });
-
+    throw new Error('daily_queue check disabled: db client not configured');
   } catch (err) {
-    console.error('GET /api/daily-queue/check error:', err);
-    return res.status(500).json({ ok: false, error: 'daily_queue_check_failed' });
-  } finally {
-    client.release();
+    console.error('Check error:', err.message);
+    res.status(501).json({ error: 'daily_queue check disabled' });
   }
 });
-
 
 
 
 // POST /api/daily-queue/generate
 // Body: { batch_size?: number, industries?: string[], tag?: string }
 app.post('/api/daily-queue/generate', async (req, res) => {
-  const rawSize = req.body?.batch_size;
+	
+	  return res.json({
+    ok: true,
+    batch: null,
+    items: [],
+    message: 'auto_generation_disabled'
+  });
 
+	
+  const rawSize = req.body?.batch_size;
   const size = normalizeBatchSize(rawSize);
 
   const industries = Array.isArray(req.body?.industries)
@@ -1927,6 +1870,44 @@ app.post('/api/daily-queue/item/:id/done', async (req, res) => {
       item.lead_id,
     ]);
 
+    // ------------------------------
+    // Notes Sync (Daily Queue -> Lead Notes)
+    // If notes is non-empty, append it to leads.notes with a timestamp + source label.
+    // This MUST never wipe existing notes.
+    // ------------------------------
+    const dqNotesRaw = (typeof notes === 'string') ? notes : '';
+    const dqNotesTrim = dqNotesRaw.trim();
+
+    let updatedLead = { id: item.lead_id };
+
+    if (dqNotesTrim) {
+      const now = new Date();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mi = String(now.getMinutes()).padStart(2, '0');
+      const stamp = `${mm}/${dd} ${hh}:${mi}`;
+
+      const line = `[DQ ${stamp}] ${dqNotesTrim}`;
+
+      const appendSql = `
+        UPDATE leads
+        SET
+          notes = CASE
+            WHEN COALESCE(notes, '') = '' THEN $2
+            ELSE notes || E'\n\n' || $2
+          END,
+          updated_at = NOW()
+        WHERE id = $1
+        RETURNING notes;
+      `;
+
+      const { rows: noteRows } = await client.query(appendSql, [item.lead_id, line]);
+      if (noteRows && noteRows[0]) {
+        updatedLead.notes = noteRows[0].notes;
+      }
+    }
+
     if (action_type) {
       activityPayload = {
         lead_id: item.lead_id,
@@ -2041,7 +2022,7 @@ app.post('/api/daily-queue/item/:id/done', async (req, res) => {
       }
     }
 
-    return res.json({ ok: true });
+    return res.json({ ok: true, lead: updatedLead });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('POST /api/daily-queue/item/:id/done error:', err);
@@ -2138,40 +2119,26 @@ function normalizeStatus(raw) {
     .replace(/-/g, '_');
 }
 
+// Take a raw CSV row with arbitrary header casing and map into our DB shape
 function normalizeRow(rowRaw) {
   const row = {};
-
-  // Normalize headers to be resilient to casing + underscores
   for (const [k, v] of Object.entries(rowRaw)) {
-    const k0 = String(k).trim().toLowerCase();
-    row[k0] = v;
-
-    const k1 = k0.replace(/_/g, ' ');
-    if (!(k1 in row)) row[k1] = v;
-
-    const k2 = k1.replace(/\s+/g, ' ').trim();
-    if (!(k2 in row)) row[k2] = v;
+    row[String(k).toLowerCase()] = v;
   }
+
+  const mustExist = (key) => {
+    const val = row[key];
+    if (val == null || String(val).trim() === '') {
+      throw new Error(`Missing required field: ${key}`);
+    }
+    return String(val).trim();
+  };
 
   const pick = (key) => {
     const val = row[key];
     if (val == null) return null;
     const s = String(val).trim();
     return s === '' ? null : s;
-  };
-
-  const pickFirst = (keys) => {
-    for (const key of keys) {
-      const v = pick(key);
-      if (v) return v;
-    }
-    return null;
-  };
-
-  const mustExistAny = (keys, labelForError) => {
-    const val = pickFirst(keys);
-    if (!val) throw new Error(`Missing required field: ${labelForError}`);
-    return val;
   };
 
   const toNumber = (key) => {
@@ -2198,55 +2165,39 @@ function normalizeRow(rowRaw) {
     return Number.isNaN(d.getTime()) ? null : d;
   };
 
-  // ---- Name: accept Name OR (First Name + Last Name) ----
-  const nameDirect = pickFirst(['name', 'full name', 'contact name', 'lead name', 'person', 'person name']);
-  const first = pickFirst(['first name', 'firstname', 'first_name', 'given name', 'given_name']);
-  const last  = pickFirst(['last name', 'lastname', 'last_name', 'surname', 'family name', 'family_name']);
+  // Required base fields
+  const name    = mustExist('name');
+  const company = mustExist('company');
 
-  const name = (nameDirect || `${first || ''} ${last || ''}`.trim());
-  if (!name) throw new Error('Missing required field: name');
-
-  // ---- Company: accept Company OR Account Name variants ----
-  const company = mustExistAny(
-    [
-      'company',
-      'company name',
-      'account',
-      'account name',
-      'account_name',
-      'organization',
-      'organisation',
-      'org',
-      'business',
-      'business name'
-    ],
-    'company'
-  );
-
-  // Tags
+  // Tags: either comma-separated string or already an array-ish
   let tags = [];
   const rawTags = row['tags'];
   if (Array.isArray(rawTags)) {
-    tags = rawTags.map((t) => String(t).trim()).filter(Boolean);
+    tags = rawTags
+      .map((t) => String(t).trim())
+      .filter(Boolean);
   } else if (typeof rawTags === 'string') {
-    tags = rawTags.split(',').map((t) => t.trim()).filter(Boolean);
+    tags = rawTags
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
   }
 
   return {
-    zoominfo_id: pickFirst(['zoominfo_id', 'zoominfo id']) || null,
+    zoominfo_id: pick('zoominfo_id') || pick('zoominfo id') || null,
     name,
     email: pick('email'),
-    company: normalizeCompany(company),
+    company,
     industry: pick('industry'),
     owner: pick('owner'),
     city: pick('city'),
     state: pick('state'),
     status: normalizeStatus(pick('status')),
     tags,
-    cadence_name: pickFirst(['cadence name', 'cadence_name']),
+    cadence_name: pick('cadence name'),
     source: pick('source'),
-    source_channel: pickFirst(['source channel', 'source_channel']),
-    conversion_stage: pickFirst(['conversion stage', 'conversion_stage']),
+    source_channel: pick('source channel'),
+    conversion_stage: pick('conversion stage'),
     arr: toNumber('arr'),
     ap_spend: toNumber('ap spend'),
     size: pick('size'),
@@ -2260,13 +2211,11 @@ function normalizeRow(rowRaw) {
     notes: pick('notes'),
     latitude: toNumber('latitude'),
     longitude: toNumber('longitude'),
-    forecast_month: pickFirst(['forecast month', 'forecast_month']),
-    lead_type: pickFirst(['lead type', 'lead_type']),
+    forecast_month: pick('forecast month'),
+    lead_type: pick('lead type'),
     website: pick('website'),
   };
 }
-
-
 
 // Template download (keeps Notes near end; Lat/Lon last-ish)
 app.get('/import/template', (_req, res) => {
@@ -2325,58 +2274,6 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
     }
 
     // Normalize & validate rows
-    // ---- Pre-validate required COLUMNS (so we can return a helpful message) ----
-    const headerSet = new Set();
-    for (const k of Object.keys(rows[0] || {})) headerSet.add(String(k).toLowerCase().trim());
-
-    const hasAnyHeader = (keys) => keys.some((k) => headerSet.has(String(k).toLowerCase().trim()));
-
-    // Required field groups:
-    //  - Name OR (First Name + Last Name)
-    //  - Company OR common variants (Account Name, Account, etc.)
-    const NAME_HEADERS_ANY = ['name', 'full name', 'contact name', 'lead name', 'person', 'person name'];
-    const FIRST_HEADERS_ANY = ['first name', 'firstname', 'first_name', 'given name', 'given_name'];
-    const LAST_HEADERS_ANY  = ['last name', 'lastname', 'last_name', 'surname', 'family name', 'family_name'];
-
-    const COMPANY_HEADERS_ANY = [
-      'company',
-      'company name',
-      'account',
-      'account name',
-      'account_name',
-      'organization',
-      'organisation',
-      'org',
-      'business',
-      'business name'
-    ];
-
-    const missing = [];
-
-    const hasName = hasAnyHeader(NAME_HEADERS_ANY);
-    const hasFirst = hasAnyHeader(FIRST_HEADERS_ANY);
-    const hasLast  = hasAnyHeader(LAST_HEADERS_ANY);
-    if (!(hasName || (hasFirst && hasLast))) {
-      missing.push('Name (or First Name + Last Name)');
-    }
-
-    if (!hasAnyHeader(COMPANY_HEADERS_ANY)) {
-      missing.push('Company/Account Name');
-    }
-
-    if (missing.length) {
-      return res.status(400).json({
-        error: `Missing required column(s): ${missing.join(', ')}`,
-        missing_columns: missing,
-        expected: {
-          name_any_of: NAME_HEADERS_ANY,
-          first_name_any_of: FIRST_HEADERS_ANY,
-          last_name_any_of: LAST_HEADERS_ANY,
-          company_any_of: COMPANY_HEADERS_ANY
-        }
-      });
-    }
-
     const normalized = [];
     let bad = 0;
     const badExamples = [];
@@ -2393,7 +2290,6 @@ app.post('/import/csv', upload.single('file'), async (req, res) => {
     if (!normalized.length) {
       return res.status(400).json({ error: 'All rows failed validation.', examples: badExamples });
     }
-
 
     // 🔹 NEW: defaults from query string
     const defaultSource = (req.query.default_source || '').trim();
@@ -3027,7 +2923,7 @@ app.put('/update-lead/:id', async (req, res) => {
   const payload = {
     name: strOrNull(req.body.name),
     email: strOrNull(req.body.email),
-    company: normalizeCompany(strOrNull(req.body.company)),
+    company: strOrNull(req.body.company),
     website: strOrNull(req.body.website),
     city: strOrNull(req.body.city),
     state: strOrNull(req.body.state),
@@ -3037,8 +2933,6 @@ app.put('/update-lead/:id', async (req, res) => {
     lead_type: strOrNull(req.body.lead_type),
     arr: numOrNull(req.body.arr),
     ap_spend: numOrNull(req.body.ap_spend),
-    role: strOrNull(req.body.role),
-    title: strOrNull(req.body.title),
     notes: strOrNull(req.body.notes),
     latitude: numOrNull(req.body.latitude),
     longitude: numOrNull(req.body.longitude),
@@ -3060,11 +2954,9 @@ app.put('/update-lead/:id', async (req, res) => {
       arr             = COALESCE($12, arr),
       ap_spend        = COALESCE($13, ap_spend),
       tags            = COALESCE($14, tags),
-      role            = COALESCE($15, role),
-      title           = COALESCE($16, title),
-      notes           = COALESCE($17, notes),
-      latitude        = COALESCE($18, latitude),
-      longitude       = COALESCE($19, longitude),
+      notes           = COALESCE($15, notes),
+      latitude        = COALESCE($16, latitude),
+      longitude       = COALESCE($17, longitude),
       updated_at      = NOW()
     WHERE id = $1
     RETURNING *;
@@ -3085,11 +2977,9 @@ app.put('/update-lead/:id', async (req, res) => {
     payload.arr,                           // $12
     payload.ap_spend,                      // $13
     payload.tags,                          // $14
-    payload.role,                          // $15
-    payload.title,                         // $16
-    payload.notes,                         // $17
-    payload.latitude,                      // $18
-    payload.longitude,                     // $19
+    payload.notes,                         // $15
+    payload.latitude,                      // $16
+    payload.longitude,                     // $17
   ];
 
   try {
@@ -3408,6 +3298,7 @@ app.post('/leads/:id/geocode', async (req, res) => {
     });
   }
 });
+
 
 
 // === ON-DEMAND GEO-CODER ROUTE ===
