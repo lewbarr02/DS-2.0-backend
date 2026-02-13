@@ -864,8 +864,7 @@ notesViewWrapper.className = 'dq-current-notes-wrapper';
 
 const safeHtml =
   currentNotesRaw
-    ? escapeHtml(String(currentNotesRaw)).replace(/
-/g, '<br>')
+    ? escapeHtml(String(currentNotesRaw)).replace(/\n/g, '<br>')
     : '<span style="color:#9ca3af;">No notes yet.</span>';
 
 notesViewWrapper.innerHTML = `
