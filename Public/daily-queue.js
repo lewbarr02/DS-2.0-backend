@@ -823,6 +823,9 @@ card.classList.add(`dq-tzcard-${_dqTz}`);
             <input type="date" class="dq-done-custom-date" />
           </div>
 
+
+
+
           <div class="dq-control-notes">
             <input
               type="text"
@@ -839,6 +842,68 @@ card.classList.add(`dq-tzcard-${_dqTz}`);
         </div>
       </div>
     `;
+	
+	// ===== CURRENT NOTES VIEW (READ-ONLY) =====
+// Pull canonical notes (same notes field used by Lead 360 / List View)
+const currentNotesRaw =
+  (item && (item.notes || (item.lead && item.lead.notes))) || '';
+
+const controlsMainEl =
+  card.querySelector('.dq-controls-main') ||
+  card.querySelector('.dq-controls') ||
+  card; // final fallback
+
+// In some builds the notes input isn't wrapped in .dq-control-notes.
+// We anchor off the actual input so this survives markup drift.
+const notesInputEl = card.querySelector('.dq-done-notes');
+if (!controlsMainEl || !notesInputEl) return;
+
+// Pull canonical notes (same notes field used by Lead 360 / List View).
+// Support multiple shapes from the /api/daily-queue/current payload.
+const currentNotesRaw =
+  (item && (
+    item.notes ||
+    item.lead_notes ||
+    item.leadNotes ||
+    (item.lead && (item.lead.notes || item.lead.lead_notes || item.lead.leadNotes))
+  )) || '';
+
+const notesViewWrapper = document.createElement('div');
+notesViewWrapper.className = 'dq-current-notes-wrapper';
+
+const safeHtml =
+  currentNotesRaw
+    ? escapeHtml(String(currentNotesRaw)).replace(/
+/g, '<br>')
+    : '<span style="color:#9ca3af;">No notes yet.</span>';
+
+notesViewWrapper.innerHTML = `
+  <div class="dq-current-notes-header">
+    <button type="button" class="dq-current-notes-toggle">📄 Show Current Notes</button>
+  </div>
+  <div class="dq-current-notes-body" style="display:none;">
+    <div class="dq-current-notes-content">${safeHtml}</div>
+  </div>
+`;
+
+const toggleBtn = notesViewWrapper.querySelector('.dq-current-notes-toggle');
+const notesBody = notesViewWrapper.querySelector('.dq-current-notes-body');
+
+if (toggleBtn && notesBody) {
+  toggleBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const isOpen = notesBody.style.display === 'block';
+    notesBody.style.display = isOpen ? 'none' : 'block';
+    toggleBtn.textContent = isOpen ? '📄 Show Current Notes' : '📄 Hide Current Notes';
+  });
+}
+
+// Insert viewer right above the Notes input (or its wrapper if present)
+const notesAnchor = notesInputEl.closest('.dq-control-notes') || notesInputEl;
+controlsMainEl.insertBefore(notesViewWrapper, notesAnchor);
+
 
 
     // Disable Contact Rhythm buttons for done cards
