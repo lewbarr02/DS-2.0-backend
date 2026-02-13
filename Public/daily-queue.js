@@ -858,15 +858,6 @@ const controlsMainEl =
 const notesInputEl = card.querySelector('.dq-done-notes');
 if (!controlsMainEl || !notesInputEl) return;
 
-// Pull canonical notes (same notes field used by Lead 360 / List View).
-// Support multiple shapes from the /api/daily-queue/current payload.
-const currentNotesRaw =
-  (item && (
-    item.notes ||
-    item.lead_notes ||
-    item.leadNotes ||
-    (item.lead && (item.lead.notes || item.lead.lead_notes || item.lead.leadNotes))
-  )) || '';
 
 const notesViewWrapper = document.createElement('div');
 notesViewWrapper.className = 'dq-current-notes-wrapper';
