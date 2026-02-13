@@ -3343,7 +3343,12 @@ app.get('/api/leads/:id/contact-rhythm', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `
-      SELECT id, lead_id, happened_at, type, summary
+      SELECT
+        id,
+        lead_id,
+        happened_at AS touched_at,
+        type        AS touch_type,
+        summary
       FROM activities
       WHERE lead_id = $1
       ORDER BY happened_at DESC
@@ -3361,7 +3366,6 @@ app.get('/api/leads/:id/contact-rhythm', async (req, res) => {
     return res.status(500).json({ error: 'contact_rhythm_read_failed' });
   }
 });
-
 
 // POST /api/leads/:id/contact-rhythm
 app.post('/api/leads/:id/contact-rhythm', async (req, res) => {
@@ -3388,7 +3392,12 @@ app.post('/api/leads/:id/contact-rhythm', async (req, res) => {
         summary
       )
       VALUES ($1, NOW(), $2, $3)
-      RETURNING *;
+      RETURNING
+        id,
+        lead_id,
+        happened_at AS touched_at,
+        type        AS touch_type,
+        summary;
       `,
       [id, touch_type, summary]
     );
