@@ -3327,6 +3327,83 @@ app.post('/geocode/missing', async (req, res) => {
   }
 });
 
+// =============================================
+// CONTACT RHYTHM API
+// =============================================
+
+// GET /api/leads/:id/contact-rhythm?limit=1
+app.get('/api/leads/:id/contact-rhythm', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const limit = parseInt(req.query.limit, 10) || 10;
+
+  if (!Number.isInteger(id)) {
+    return res.status(400).json({ error: 'invalid_lead_id' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `
+      SELECT id, lead_id, happened_at, type, summary
+      FROM activities
+      WHERE lead_id = $1
+      ORDER BY happened_at DESC
+      LIMIT $2;
+      `,
+      [id, limit]
+    );
+
+    return res.json({
+      ok: true,
+      events: rows
+    });
+  } catch (err) {
+    console.error('GET contact rhythm failed:', err);
+    return res.status(500).json({ error: 'contact_rhythm_read_failed' });
+  }
+});
+
+
+// POST /api/leads/:id/contact-rhythm
+app.post('/api/leads/:id/contact-rhythm', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const { touch_type } = req.body || {};
+
+  if (!Number.isInteger(id)) {
+    return res.status(400).json({ error: 'invalid_lead_id' });
+  }
+
+  if (!touch_type) {
+    return res.status(400).json({ error: 'touch_type_required' });
+  }
+
+  try {
+    const summary = String(touch_type).toUpperCase();
+
+    const { rows } = await pool.query(
+      `
+      INSERT INTO activities (
+        lead_id,
+        happened_at,
+        type,
+        summary
+      )
+      VALUES ($1, NOW(), $2, $3)
+      RETURNING *;
+      `,
+      [id, touch_type, summary]
+    );
+
+    return res.json({
+      ok: true,
+      event: rows[0]
+    });
+  } catch (err) {
+    console.error('POST contact rhythm failed:', err);
+    return res.status(500).json({ error: 'contact_rhythm_write_failed' });
+  }
+});
+
+
 // === END: ROUTES ===
 
 // === BEGIN: SERVER_START ===
